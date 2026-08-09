@@ -10,13 +10,8 @@ const BIRDIE_OS_BASE =
   "https://script.google.com/macros/s/AKfycbwzYXUsn0uJTeJJTmf3sWZ36KrriZg8XgLtV0N9bOmQkJ2NXI1xGmJfabocQCd5UMtSpg/exec";
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 
-if (!OPENAI_API_KEY) {
-  throw new Error("OPENAI_API_KEY is missing.");
-}
-
-if (!BIRDIE_OS_API_KEY) {
-  throw new Error("BIRDIE_OS_API_KEY is missing.");
-}
+if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY is missing.");
+if (!BIRDIE_OS_API_KEY) throw new Error("BIRDIE_OS_API_KEY is missing.");
 
 const client = new OpenAI({ apiKey: OPENAI_API_KEY });
 
@@ -36,8 +31,7 @@ function normalize(text = "") {
 
 function isNextTaskIntent(text) {
   const t = normalize(text);
-
-  const patterns = [
+  return [
     /gib mir (meinen|den) nächsten task/,
     /was ist mein nächster task/,
     /was soll ich als nächstes machen/,
@@ -50,25 +44,34 @@ function isNextTaskIntent(text) {
     /what should i do next/,
     /what is my next task/,
     /today.?s priority/,
-  ];
-
-  return patterns.some((p) => p.test(t));
+  ].some((p) => p.test(t));
 }
 
-async function birdieOS(path) {
-  const url = new URL(`${BIRDIE_OS_BASE}/${path}`);
+async function birdieOS(action) {
+  const url = new URL(BIRDIE_OS_BASE);
+  url.searchParams.set("action", action);
   url.searchParams.set("api_key", BIRDIE_OS_API_KEY);
 
-  const response = await fetch(url, {
+  const response = await fetch(url.toString(), {
     method: "GET",
     headers: { Accept: "application/json" },
+    redirect: "follow",
   });
 
   if (!response.ok) {
     throw new Error(`Birdie OS HTTP ${response.status}`);
   }
 
-  const data = await response.json();
+  const raw = await response.text();
+
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(
+      `Birdie OS returned non-JSON response: ${raw.slice(0, 120)}`
+    );
+  }
 
   if (!data.success) {
     throw new Error(
@@ -80,12 +83,12 @@ async function birdieOS(path) {
 }
 
 async function getAuthoritativeNextTask() {
-  const result = await birdieOS("next-task");
+  const result = await birdieOS("nextTask");
   return result.data;
 }
 
 async function phraseNextTask(task) {
-  if (!task?.found) {
+  if (!task?.found && !task?.taskId) {
     return task?.message || "Birdie OS hat aktuell keinen ausführbaren OPEN-Task gefunden.";
   }
 
@@ -190,7 +193,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, {
         success: true,
         service: "Birdie Agent",
-        version: "1.0",
+        version: "1.1",
         status: "ONLINE",
         writeAccess: "DISABLED",
       });
