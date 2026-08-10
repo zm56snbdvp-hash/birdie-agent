@@ -14,6 +14,7 @@
   "dependencies": {
     "imapflow": "^1.0.195",
     "mailparser": "^3.9.15",
-    "nodemailer": "^9.0.5"
+    "nodemailer": "^9.0.5",
+    "openai": "^5.23.2"
   }
 }
