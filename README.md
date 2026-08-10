@@ -1,5 +1,7 @@
 # Birdie Agent
 
+Current service version: **2.1.0**
+
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
 ## Architecture
@@ -96,6 +98,29 @@ Creates an idea in Birdie OS through the controlled write path.
 ### `POST /tasks/{taskId}`
 
 Updates allowed operational task fields only. The server restricts task writes to a whitelist and contains founder-approval protection for sensitive completion flows.
+
+## Birdie Coin API
+
+Sprint 01 adds an internal, authenticated API for Birdie ID profiles, action claims, the append-only Coin Ledger and Reward Shop reservations. Birdie OS remains the persistent source of truth; Cloud Run validates and routes requests but does not keep an ephemeral balance.
+
+Routes:
+
+- `GET /coin/config`
+- `POST /coin/profiles`
+- `GET /coin/profiles/{birdieId}`
+- `GET /coin/profiles/{birdieId}/ledger`
+- `POST /coin/profiles/{birdieId}/badges`
+- `POST /coin/claims`
+- `POST /coin/claims/{claimId}/decision`
+- `GET /coin/rewards?accountType=PRIVATE`
+- `GET /coin/admin/queue`
+- `POST /coin/redemptions`
+- `POST /coin/redemptions/{redemptionId}/decision`
+- `POST /coin/opening-balances`
+
+All Coin write requests require an idempotency key. Supporters cannot provide their own point amount. Opening balance migrations additionally require explicit founder approval.
+
+See [`docs/birdie-coin-sprint-01.md`](docs/birdie-coin-sprint-01.md) for Apps Script integration and deployment steps.
 
 ## Local run
 
