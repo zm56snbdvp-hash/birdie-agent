@@ -5,7 +5,7 @@ import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.2.0";
+const BIRDIE_AGENT_VERSION = "2.3.0";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
@@ -23,7 +23,7 @@ function json(res, status, body) {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key",
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
   });
   res.end(JSON.stringify(body));
 }
@@ -211,6 +211,14 @@ const routes = [
   "POST /chat",
   "GET /mail/health",
   "GET /mail/messages",
+  "GET /mail/messages/{uid}",
+  "GET /mail/messages/{uid}/attachments/{index}",
+  "GET /mail/folders",
+  "POST /mail/folders/bootstrap",
+  "PATCH /mail/messages/{uid}",
+  "POST /mail/messages/{uid}/move",
+  "DELETE /mail/messages/{uid}",
+  "POST /mail/send",
   "GET /coin/config",
   "POST /coin/profiles",
   "GET /coin/profiles/{birdieId}",
@@ -231,7 +239,7 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
         "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key",
-        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+        "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
       });
       return res.end();
     }
@@ -246,7 +254,7 @@ const server = http.createServer(async (req, res) => {
         status: "ONLINE",
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
-        mail: "READ_ONLY_OPTIONAL"
+        mail: "FULL_CONTROL_GOVERNED"
       });
     }
 
@@ -255,7 +263,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
-    if (await routeMailRequest({ req, res, url, json })) return;
+    if (await routeMailRequest({ req, res, url, json, readBody })) return;
 
     if (req.method === "GET" && url.pathname === "/health") {
       const birdie = await birdieOSGet("health");

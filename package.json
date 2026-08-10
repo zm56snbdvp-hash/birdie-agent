@@ -1,6 +1,6 @@
 {
   "name": "birdie-agent",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "imapflow": "^1.0.195",
-    "openai": "^5.0.0"
+    "mailparser": "^3.9.15",
+    "nodemailer": "^9.0.5"
   }
 }

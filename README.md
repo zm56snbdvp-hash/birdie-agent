@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.1.0**
+Current service version: **2.3.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -31,6 +31,10 @@ Birdie OS is the source of truth for live company state. The Birdie Agent may ph
 - `BIRDIE_OS_API_KEY` — secret used by the Birdie Agent to authenticate to Birdie OS.
 - `BIRDIE_OS_BASE` — Birdie OS Google Apps Script Web App URL. A default is currently present in `server.mjs`; production should still set this explicitly in Cloud Run.
 - `PORT` — supplied by Cloud Run; defaults to `8080` locally.
+- `MAIL_USER` — IONOS mailbox login and enforced sender address.
+- `MAIL_PASSWORD` — IONOS mailbox password, supplied only through Secret Manager.
+- `MAIL_IMAP_HOST` / `MAIL_IMAP_PORT` — optional; default to `imap.ionos.de:993`.
+- `MAIL_SMTP_HOST` / `MAIL_SMTP_PORT` — optional; default to `smtp.ionos.de:465`.
 
 Never commit real secret values to GitHub.
 
@@ -98,6 +102,29 @@ Creates an idea in Birdie OS through the controlled write path.
 ### `POST /tasks/{taskId}`
 
 Updates allowed operational task fields only. The server restricts task writes to a whitelist and contains founder-approval protection for sensitive completion flows.
+
+## Governed Mail API
+
+Version 2.3 adds authenticated IONOS IMAP/SMTP access:
+
+- `GET /mail/health`
+- `GET /mail/messages?limit=20&unread=true&mailbox=INBOX`
+- `GET /mail/messages/{uid}`
+- `GET /mail/messages/{uid}/attachments/{index}`
+- `GET /mail/folders`
+- `POST /mail/folders/bootstrap`
+- `PATCH /mail/messages/{uid}`
+- `POST /mail/messages/{uid}/move`
+- `DELETE /mail/messages/{uid}`
+- `POST /mail/send`
+
+Reading, folder bootstrap, moving and flag updates are authenticated operational actions. Sending and deletion additionally require explicit founder approval in every request:
+
+- send: `{"founderApproved":true,"confirmation":"SEND_EMAIL"}`
+- move to trash: `{"founderApproved":true,"confirmation":"MOVE_TO_TRASH"}`
+- permanent deletion: `{"founderApproved":true,"confirmation":"DELETE_PERMANENTLY","mode":"permanent"}`
+
+The From address is fixed to `MAIL_USER`. Secrets, message bodies and attachment data are never written to repository logs. Action logs contain metadata only.
 
 ## Birdie Coin API
 
