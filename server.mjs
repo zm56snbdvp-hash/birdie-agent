@@ -3,13 +3,17 @@ import OpenAI from "openai";
 import { createCoinService } from "./src/coin/service.mjs";
 import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
+import { sendSupporterLoginCode } from "./src/mail-service.mjs";
+import { createSupporterAuthService } from "./src/supporter/auth-service.mjs";
+import { routeSupporterRequest } from "./src/supporter/router.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.3.0";
+const BIRDIE_AGENT_VERSION = "2.4.0";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
 const BIRDIE_AGENT_API_KEY = process.env.BIRDIE_AGENT_API_KEY;
+const SUPPORTER_AUTH_SECRET = process.env.SUPPORTER_AUTH_SECRET;
 const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE || "https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec";
 
 for (const [name, value] of Object.entries({ OPENAI_API_KEY, BIRDIE_OS_API_KEY, BIRDIE_AGENT_API_KEY })) {
@@ -21,16 +25,28 @@ const client = new OpenAI({ apiKey: OPENAI_API_KEY });
 function json(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key, X-Birdie-CSRF",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
   });
   res.end(JSON.stringify(body));
 }
 
-async function readBody(req) {
+async function readBody(req, maximumBytes = 15 * 1024 * 1024) {
   let body = "";
-  for await (const chunk of req) body += chunk;
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maximumBytes) {
+      req.resume();
+      const error = new Error("Request body is too large");
+      error.code = "PAYLOAD_TOO_LARGE";
+      error.status = 413;
+      throw error;
+    }
+    body += chunk;
+  }
   if (!body) return {};
   try {
     return JSON.parse(body);
@@ -57,7 +73,12 @@ async function parseBirdieResponse(response, label) {
   } catch {
     throw new Error(`${label} returned non-JSON response: ${raw.slice(0, 200)}`);
   }
-  if (!data.success) throw new Error(`${label} error: ${data.error || data.message || "unknown error"}`);
+  if (!data.success) {
+    const error = new Error(`${label} error: ${data.error || data.message || "unknown error"}`);
+    error.code = data.error || "UPSTREAM_ERROR";
+    error.upstream = label;
+    throw error;
+  }
   return data;
 }
 
@@ -86,6 +107,11 @@ async function birdieOSPost(payload) {
 }
 
 const coinService = createCoinService({ birdieOSPost });
+const supporterAuthService = createSupporterAuthService({
+  birdieOSPost,
+  sendLoginCode: sendSupporterLoginCode,
+  secret: SUPPORTER_AUTH_SECRET
+});
 
 async function getLiveBriefing() {
   return (await birdieOSGet("briefing")).data;
@@ -230,7 +256,14 @@ const routes = [
   "GET /coin/admin/queue",
   "POST /coin/redemptions",
   "POST /coin/redemptions/{redemptionId}/decision",
-  "POST /coin/opening-balances"
+  "POST /coin/opening-balances",
+  "GET /supporter",
+  "POST /supporter/api/auth/request-code",
+  "POST /supporter/api/auth/verify-code",
+  "POST /supporter/api/auth/logout",
+  "GET /supporter/api/bootstrap",
+  "POST /supporter/api/claims",
+  "POST /supporter/api/redemptions"
 ];
 
 const server = http.createServer(async (req, res) => {
@@ -238,7 +271,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key, X-Birdie-CSRF",
         "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
       });
       return res.end();
@@ -254,9 +287,20 @@ const server = http.createServer(async (req, res) => {
         status: "ONLINE",
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
-        mail: "FULL_CONTROL_GOVERNED"
+        mail: "FULL_CONTROL_GOVERNED",
+        supporterApp: SUPPORTER_AUTH_SECRET?.length >= 32 ? "PILOT_READY" : "CONFIG_REQUIRED"
       });
     }
+
+    if (await routeSupporterRequest({
+      req,
+      res,
+      url,
+      json,
+      readBody,
+      authService: supporterAuthService,
+      coinService
+    })) return;
 
     if (!isAgentAuthorized(req)) {
       return json(res, 401, { success: false, error: "UNAUTHORIZED" });

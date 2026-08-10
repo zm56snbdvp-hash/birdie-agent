@@ -393,3 +393,65 @@ export async function sendMail(body = {}) {
     response: info.response || ""
   };
 }
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;"
+  })[character]);
+}
+
+/**
+ * Sends the one fixed transactional template used by Supporter authentication.
+ * The caller cannot control subject, body, sender, CC/BCC or attachments. The
+ * recipient must already have been resolved by Birdie OS from an active profile.
+ */
+export async function sendSupporterLoginCode({ to, displayName, code, expiresMinutes = 10 }) {
+  const recipients = normalizeRecipients(to, "to");
+  if (recipients.length !== 1) {
+    throw httpError("INVALID_AUTH_RECIPIENT", 400, "Exactly one auth recipient is required");
+  }
+  const safeCode = String(code || "");
+  if (!/^\d{6}$/.test(safeCode)) {
+    throw httpError("INVALID_AUTH_CODE", 400, "Auth code must contain six digits");
+  }
+  const ttl = Number(expiresMinutes);
+  if (!Number.isInteger(ttl) || ttl < 1 || ttl > 30) {
+    throw httpError("INVALID_AUTH_EXPIRY", 400, "Auth expiry must be between 1 and 30 minutes");
+  }
+
+  const name = String(displayName || "Birdie").trim().slice(0, 100) || "Birdie";
+  const sender = requireEnv("MAIL_USER");
+  const transporter = nodemailer.createTransport(getSmtpConfig());
+  const info = await transporter.sendMail({
+    from: { name: "Birdie & Breakfast", address: sender },
+    to: recipients,
+    subject: "Dein Login zu Birdie & Breakfast",
+    text: [
+      `Moin ${name},`,
+      "",
+      `dein Login-Code lautet: ${safeCode}`,
+      `Er ist ${ttl} Minuten gültig und kann nur einmal verwendet werden.`,
+      "",
+      "Wenn du den Code nicht angefordert hast, kannst du diese E-Mail ignorieren.",
+      "",
+      "A good day starts with a Birdie & Breakfast"
+    ].join("\n"),
+    html: `<!doctype html><html><body style="margin:0;background:#f7f3eb;font-family:Arial,sans-serif;color:#2f2f2f"><div style="max-width:560px;margin:0 auto;padding:38px 22px"><div style="background:#234734;border-radius:24px;padding:34px;color:#fff"><p style="margin:0 0 24px;color:#eadbaf;font-size:12px;letter-spacing:2px">BIRDIE ID</p><h1 style="margin:0;font-family:Georgia,serif;font-size:32px;font-weight:500">Moin ${escapeHtml(name)}.</h1><p style="margin:18px 0 8px;color:#dbe5df">Dein einmaliger Login-Code:</p><div style="margin:0 0 18px;font-family:Georgia,serif;font-size:44px;letter-spacing:8px;color:#eadbaf">${safeCode}</div><p style="margin:0;color:#bfcfc5;font-size:13px">${ttl} Minuten gültig · einmal verwendbar</p></div><p style="margin:20px 4px;color:#6c716d;font-size:12px;line-height:1.6">Wenn du den Code nicht angefordert hast, kannst du diese E-Mail ignorieren. Teile ihn niemals mit anderen.</p></div></body></html>`
+  });
+
+  audit("SUPPORTER_LOGIN_CODE_SEND", {
+    messageId: info.messageId,
+    acceptedCount: info.accepted?.length || 0,
+    rejectedCount: info.rejected?.length || 0,
+    recipientCount: 1
+  });
+  return {
+    messageId: info.messageId,
+    accepted: info.accepted || [],
+    rejected: info.rejected || []
+  };
+}

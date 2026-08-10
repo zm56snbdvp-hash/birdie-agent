@@ -13,7 +13,9 @@ var BIRDIE_COIN_SHEETS_ = {
   REWARDS: "REWARDS",
   REDEMPTIONS: "REDEMPTIONS",
   BADGES: "USER_BADGES",
-  AUDIT: "AUDIT_EVENTS"
+  AUDIT: "AUDIT_EVENTS",
+  AUTH_CHALLENGES: "SUPPORTER_AUTH_CHALLENGES",
+  SESSIONS: "SUPPORTER_SESSIONS"
 };
 
 var BIRDIE_COIN_HEADERS_ = {};
@@ -47,6 +49,14 @@ BIRDIE_COIN_HEADERS_[BIRDIE_COIN_SHEETS_.BADGES] = [
 BIRDIE_COIN_HEADERS_[BIRDIE_COIN_SHEETS_.AUDIT] = [
   "auditId", "eventType", "entityType", "entityId", "actor", "createdAt",
   "detailsJson", "idempotencyKey"
+];
+BIRDIE_COIN_HEADERS_[BIRDIE_COIN_SHEETS_.AUTH_CHALLENGES] = [
+  "challengeId", "birdieId", "email", "emailBucketHash", "codeHash", "status", "attempts",
+  "expiresAt", "createdAt", "verifiedAt", "consumedAt", "idempotencyKey"
+];
+BIRDIE_COIN_HEADERS_[BIRDIE_COIN_SHEETS_.SESSIONS] = [
+  "sessionId", "birdieId", "tokenHash", "status", "createdAt", "expiresAt",
+  "lastSeenAt", "revokedAt", "idempotencyKey"
 ];
 
 var BIRDIE_COIN_ACTIONS_ = {
@@ -118,6 +128,11 @@ function handleBirdieCoinAction_(request) {
     case "coinCreateRedemption": return birdieCoinCreateRedemption_(request);
     case "coinDecideRedemption": return birdieCoinDecideRedemption_(request);
     case "coinImportOpeningBalance": return birdieCoinImportOpeningBalance_(request);
+    case "coinCreateLoginChallenge": return birdieCoinCreateLoginChallenge_(request);
+    case "coinVerifyLoginChallenge": return birdieCoinVerifyLoginChallenge_(request);
+    case "coinCreateSupporterSession": return birdieCoinCreateSupporterSession_(request);
+    case "coinAuthorizeSupporterSession": return birdieCoinAuthorizeSupporterSession_(request);
+    case "coinRevokeSupporterSession": return birdieCoinRevokeSupporterSession_(request);
     default: throw new Error("UNKNOWN_BIRDIE_COIN_ACTION");
   }
 }
@@ -499,6 +514,273 @@ function birdieCoinImportOpeningBalance_(request) {
   }
 }
 
+function birdieCoinCreateLoginChallenge_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var challengeSheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUTH_CHALLENGES);
+    var key = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
+    var duplicate = birdieCoinFind_(challengeSheet, "idempotencyKey", key);
+    if (duplicate) {
+      var duplicateResult = {
+        accepted: true,
+        deliverable: false,
+        challengeId: duplicate.object.challengeId,
+        expiresAt: duplicate.object.expiresAt
+      };
+      if (duplicate.object.birdieId) {
+        var duplicateProfile = birdieCoinRequireProfile_(duplicate.object.birdieId);
+        duplicateResult.deliverable = String(duplicate.object.status) === "ISSUED";
+        duplicateResult.deliveryEmail = duplicateProfile.email;
+        duplicateResult.displayName = duplicateProfile.displayName;
+      }
+      return birdieCoinSuccess_(duplicateResult);
+    }
+
+    var email = birdieCoinEmail_(request.email);
+    var emailBucketHash = birdieCoinHash_(request.emailBucketHash, "emailBucketHash");
+    var profileFound = birdieCoinFind_(birdieCoinSheet_(BIRDIE_COIN_SHEETS_.PROFILES), "email", email);
+    var deliverable = Boolean(profileFound && String(profileFound.object.status) === "ACTIVE");
+
+    var now = Date.now();
+    var existingChallenges = birdieCoinObjects_(challengeSheet);
+    var recent = existingChallenges.filter(function (row) {
+      var created = Date.parse(String(row.createdAt || ""));
+      return String(row.emailBucketHash) === emailBucketHash &&
+        isFinite(created) && created >= now - 15 * 60 * 1000;
+    });
+    var cooldown = recent.some(function (row) {
+      return Date.parse(String(row.createdAt || "")) >= now - 60 * 1000;
+    });
+    if (recent.length >= 3 || cooldown) {
+      var latest = recent[recent.length - 1];
+      return birdieCoinSuccess_({
+        accepted: true,
+        deliverable: false,
+        challengeId: latest.challengeId,
+        expiresAt: latest.expiresAt
+      });
+    }
+
+    existingChallenges.forEach(function (row, index) {
+      if (String(row.emailBucketHash) === emailBucketHash &&
+          ["ISSUED", "UNDELIVERABLE"].indexOf(String(row.status)) !== -1) {
+        row.status = "SUPERSEDED";
+        birdieCoinWriteObject_(challengeSheet, index + 2, row);
+      }
+    });
+
+    var expiresAt = birdieCoinExpiry_(request.expiresAt, 1, 15);
+    var challenge = {
+      challengeId: birdieCoinRequired_(request.challengeId, "challengeId"),
+      birdieId: deliverable ? profileFound.object.birdieId : "",
+      email: deliverable ? profileFound.object.email : "",
+      emailBucketHash: emailBucketHash,
+      codeHash: birdieCoinHash_(request.codeHash, "codeHash"),
+      status: deliverable ? "ISSUED" : "UNDELIVERABLE",
+      attempts: 0,
+      expiresAt: expiresAt,
+      createdAt: birdieCoinNow_(),
+      verifiedAt: "",
+      consumedAt: "",
+      idempotencyKey: key
+    };
+    birdieCoinAppendObject_(challengeSheet, challenge);
+    if (deliverable) {
+      birdieCoinAudit_(
+        "LOGIN_CHALLENGE_CREATED",
+        "AUTH_CHALLENGE",
+        challenge.challengeId,
+        request.source,
+        { challengeId: challenge.challengeId, birdieId: challenge.birdieId, expiresAt: expiresAt },
+        "audit:" + key
+      );
+    }
+    var result = {
+      accepted: true,
+      deliverable: deliverable,
+      challengeId: challenge.challengeId,
+      expiresAt: expiresAt
+    };
+    if (deliverable) {
+      result.deliveryEmail = profileFound.object.email;
+      result.displayName = profileFound.object.displayName;
+    }
+    return birdieCoinSuccess_(result);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function birdieCoinVerifyLoginChallenge_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUTH_CHALLENGES);
+    var found = birdieCoinFind_(sheet, "challengeId", birdieCoinRequired_(request.challengeId, "challengeId"));
+    if (!found) throw new Error("LOGIN_CHALLENGE_NOT_FOUND");
+    var challenge = found.object;
+    if (String(challenge.status) === "LOCKED") throw new Error("LOGIN_CHALLENGE_LOCKED");
+    if (["VERIFIED", "CONSUMED"].indexOf(String(challenge.status)) !== -1) {
+      throw new Error("INVALID_LOGIN_CODE");
+    }
+    if (String(challenge.status) !== "ISSUED") throw new Error("INVALID_LOGIN_CODE");
+    if (Date.parse(String(challenge.expiresAt)) <= Date.now()) {
+      challenge.status = "EXPIRED";
+      birdieCoinWriteObject_(sheet, found.row, challenge);
+      throw new Error("LOGIN_CHALLENGE_EXPIRED");
+    }
+
+    var suppliedHash = birdieCoinHash_(request.codeHash, "codeHash");
+    if (String(challenge.codeHash) !== suppliedHash) {
+      challenge.attempts = Number(challenge.attempts || 0) + 1;
+      if (challenge.attempts >= 5) challenge.status = "LOCKED";
+      birdieCoinWriteObject_(sheet, found.row, challenge);
+      throw new Error(challenge.status === "LOCKED" ? "LOGIN_CHALLENGE_LOCKED" : "INVALID_LOGIN_CODE");
+    }
+
+    challenge.status = "VERIFIED";
+    challenge.verifiedAt = birdieCoinNow_();
+    birdieCoinWriteObject_(sheet, found.row, challenge);
+    birdieCoinAudit_(
+      "LOGIN_CHALLENGE_VERIFIED",
+      "AUTH_CHALLENGE",
+      challenge.challengeId,
+      request.source,
+      { challengeId: challenge.challengeId, birdieId: challenge.birdieId },
+      "verified:" + challenge.challengeId
+    );
+    return birdieCoinSuccess_({
+      challengeId: challenge.challengeId,
+      birdieId: challenge.birdieId
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function birdieCoinCreateSupporterSession_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sessionSheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.SESSIONS);
+    var key = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
+    var duplicate = birdieCoinFind_(sessionSheet, "idempotencyKey", key);
+    if (duplicate) {
+      return birdieCoinSuccess_({
+        sessionId: duplicate.object.sessionId,
+        expiresAt: duplicate.object.expiresAt,
+        profile: birdieCoinProfileView_(birdieCoinRequireProfile_(duplicate.object.birdieId))
+      });
+    }
+
+    var challengeSheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUTH_CHALLENGES);
+    var challengeFound = birdieCoinFind_(
+      challengeSheet,
+      "challengeId",
+      birdieCoinRequired_(request.challengeId, "challengeId")
+    );
+    if (!challengeFound || String(challengeFound.object.status) !== "VERIFIED") {
+      throw new Error("LOGIN_CHALLENGE_NOT_VERIFIED");
+    }
+    var birdieId = birdieCoinRequired_(request.birdieId, "birdieId");
+    if (String(challengeFound.object.birdieId) !== birdieId) {
+      throw new Error("LOGIN_CHALLENGE_PROFILE_MISMATCH");
+    }
+    var profile = birdieCoinRequireProfile_(birdieId);
+    var expiresAt = birdieCoinExpiry_(request.expiresAt, 60, 8 * 24 * 60);
+    var now = birdieCoinNow_();
+    var session = {
+      sessionId: birdieCoinRequired_(request.sessionId, "sessionId"),
+      birdieId: birdieId,
+      tokenHash: birdieCoinHash_(request.tokenHash, "tokenHash"),
+      status: "ACTIVE",
+      createdAt: now,
+      expiresAt: expiresAt,
+      lastSeenAt: now,
+      revokedAt: "",
+      idempotencyKey: key
+    };
+    birdieCoinAppendObject_(sessionSheet, session);
+
+    challengeFound.object.status = "CONSUMED";
+    challengeFound.object.consumedAt = now;
+    birdieCoinWriteObject_(challengeSheet, challengeFound.row, challengeFound.object);
+    birdieCoinAudit_(
+      "SUPPORTER_SESSION_CREATED",
+      "SESSION",
+      session.sessionId,
+      request.source,
+      { sessionId: session.sessionId, birdieId: birdieId, expiresAt: expiresAt },
+      "audit:" + key
+    );
+    return birdieCoinSuccess_({
+      sessionId: session.sessionId,
+      expiresAt: expiresAt,
+      profile: birdieCoinProfileView_(profile)
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function birdieCoinAuthorizeSupporterSession_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.SESSIONS);
+    var found = birdieCoinFind_(sheet, "tokenHash", birdieCoinHash_(request.tokenHash, "tokenHash"));
+    if (!found) throw new Error("SESSION_NOT_FOUND");
+    var session = found.object;
+    if (String(session.status) === "REVOKED") throw new Error("SESSION_REVOKED");
+    if (String(session.status) !== "ACTIVE") throw new Error("INVALID_SESSION");
+    if (Date.parse(String(session.expiresAt)) <= Date.now()) {
+      session.status = "EXPIRED";
+      birdieCoinWriteObject_(sheet, found.row, session);
+      throw new Error("SESSION_EXPIRED");
+    }
+
+    var lastSeen = Date.parse(String(session.lastSeenAt || session.createdAt));
+    if (!isFinite(lastSeen) || lastSeen < Date.now() - 5 * 60 * 1000) {
+      session.lastSeenAt = birdieCoinNow_();
+      birdieCoinWriteObject_(sheet, found.row, session);
+    }
+    return birdieCoinSuccess_({
+      sessionId: session.sessionId,
+      expiresAt: session.expiresAt,
+      profile: birdieCoinProfileView_(birdieCoinRequireProfile_(session.birdieId))
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function birdieCoinRevokeSupporterSession_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.SESSIONS);
+    var found = birdieCoinFind_(sheet, "tokenHash", birdieCoinHash_(request.tokenHash, "tokenHash"));
+    if (!found) return birdieCoinSuccess_({ revoked: true });
+    if (String(found.object.status) !== "REVOKED") {
+      found.object.status = "REVOKED";
+      found.object.revokedAt = birdieCoinNow_();
+      birdieCoinWriteObject_(sheet, found.row, found.object);
+      birdieCoinAudit_(
+        "SUPPORTER_SESSION_REVOKED",
+        "SESSION",
+        found.object.sessionId,
+        request.source,
+        { sessionId: found.object.sessionId, birdieId: found.object.birdieId },
+        "revoked:" + found.object.sessionId
+      );
+    }
+    return birdieCoinSuccess_({ revoked: true });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function birdieCoinAppendTransaction_(input) {
   var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.TRANSACTIONS);
   var duplicate = birdieCoinFind_(sheet, "idempotencyKey", input.idempotencyKey);
@@ -690,6 +972,30 @@ function birdieCoinAccountType_(value) {
   var accountType = birdieCoinRequired_(value, "accountType").toUpperCase();
   if (["PRIVATE", "B2B", "TEAM"].indexOf(accountType) === -1) throw new Error("INVALID_ACCOUNT_TYPE");
   return accountType;
+}
+
+function birdieCoinEmail_(value) {
+  var email = birdieCoinRequired_(value, "email").toLowerCase();
+  if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new Error("INVALID_EMAIL");
+  }
+  return email;
+}
+
+function birdieCoinHash_(value, field) {
+  var hash = birdieCoinRequired_(value, field);
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("INVALID_HASH:" + field);
+  return hash;
+}
+
+function birdieCoinExpiry_(value, minimumMinutes, maximumMinutes) {
+  var expiresAt = birdieCoinRequired_(value, "expiresAt");
+  var timestamp = Date.parse(expiresAt);
+  var remaining = timestamp - Date.now();
+  if (!isFinite(timestamp) || remaining < minimumMinutes * 60 * 1000 || remaining > maximumMinutes * 60 * 1000) {
+    throw new Error("INVALID_EXPIRY");
+  }
+  return new Date(timestamp).toISOString();
 }
 
 function birdieCoinId_(prefix) {

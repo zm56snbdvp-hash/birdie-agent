@@ -76,7 +76,25 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const baseUrl = `http://127.0.0.1:${agentPort}`;
   const rootResponse = await fetch(`${baseUrl}/`);
   const root = await rootResponse.json();
-  assert.equal(root.version, "2.1.0");
+  assert.equal(root.version, "2.4.0");
+  assert.equal(root.supporterApp, "CONFIG_REQUIRED");
+
+  const supporterResponse = await fetch(`${baseUrl}/supporter`);
+  const supporterHtml = await supporterResponse.text();
+  assert.equal(supporterResponse.status, 200);
+  assert.match(supporterHtml, /Deine Birdie ID/);
+
+  const disabledLoginResponse = await fetch(`${baseUrl}/supporter/api/auth/request-code`, {
+    method: "POST",
+    headers: {
+      Origin: baseUrl,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ email: "pilot@example.com" })
+  });
+  const disabledLogin = await disabledLoginResponse.json();
+  assert.equal(disabledLoginResponse.status, 503);
+  assert.equal(disabledLogin.error, "SUPPORTER_AUTH_NOT_CONFIGURED");
 
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);

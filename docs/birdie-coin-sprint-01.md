@@ -101,4 +101,4 @@ Do not run the migration until Kevin has confirmed the final supporter list, spe
 
 ## Next sprint
 
-Sprint 02 should add user authentication, the mobile supporter dashboard, the claim form and the admin review queue. The internal API built here is the backend contract for those screens.
+Sprint 02 is implemented in service version 2.4.0: passwordless supporter authentication, the mobile Birdie ID dashboard, claim form and Reward Shop now sit on this internal backend contract. See [`supporter-sprint-02.md`](supporter-sprint-02.md) for the gated rollout.
