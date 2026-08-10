@@ -1,6 +1,6 @@
 {
   "name": "birdie-agent",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "private": true,
   "scripts": {
@@ -12,6 +12,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "imapflow": "^1.0.195",
     "openai": "^5.0.0"
   }
 }
