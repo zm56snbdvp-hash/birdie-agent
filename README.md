@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.3.0**
+Current service version: **2.4.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -35,6 +35,7 @@ Birdie OS is the source of truth for live company state. The Birdie Agent may ph
 - `MAIL_PASSWORD` — IONOS mailbox password, supplied only through Secret Manager.
 - `MAIL_IMAP_HOST` / `MAIL_IMAP_PORT` — optional; default to `imap.ionos.de:993`.
 - `MAIL_SMTP_HOST` / `MAIL_SMTP_PORT` — optional; default to `smtp.ionos.de:465`.
+- `SUPPORTER_AUTH_SECRET` — at least 32 random characters used only to HMAC login codes, sessions and CSRF tokens. Keep it in Secret Manager. If missing, the existing Agent/Mail/Coin APIs stay online while supporter login reports `CONFIG_REQUIRED`.
 
 Never commit real secret values to GitHub.
 
@@ -149,6 +150,37 @@ All Coin write requests require an idempotency key. Supporters cannot provide th
 
 See [`docs/birdie-coin-sprint-01.md`](docs/birdie-coin-sprint-01.md) for Apps Script integration and deployment steps.
 
+## Mobile Supporter App
+
+Version 2.4 delivers the closed Coin Sprint 02 pilot at:
+
+```text
+GET /supporter
+```
+
+It includes:
+
+- passwordless six-digit login codes sent through a fixed IONOS transactional template;
+- Birdie OS-persisted, revocable seven-day sessions;
+- own Birdie ID, available/reserved/lifetime balances, level and badges;
+- own append-only ledger;
+- claim submission with server-controlled Birdie values;
+- account-type-filtered Reward Shop and secure reward reservation;
+- a mobile-first Birdie & Breakfast interface.
+
+Public supporter routes never accept a Birdie ID selector. Cloud Run always derives the profile from the `Secure`, `HttpOnly`, `SameSite=Strict` session cookie. State-changing requests also require an exact same-origin request and a session-bound CSRF token. The browser never receives the Agent API key, Birdie OS key, mail password, raw session hash or general mail-send capability.
+
+Routes:
+
+- `POST /supporter/api/auth/request-code`
+- `POST /supporter/api/auth/verify-code`
+- `POST /supporter/api/auth/logout`
+- `GET /supporter/api/bootstrap`
+- `POST /supporter/api/claims`
+- `POST /supporter/api/redemptions`
+
+See [`docs/supporter-sprint-02.md`](docs/supporter-sprint-02.md) for the rollout and rollback runbook and [`docs/supporter-sprint-02-security-acceptance.md`](docs/supporter-sprint-02-security-acceptance.md) for the security contract.
+
 ## Local run
 
 ```bash
@@ -183,6 +215,8 @@ After deployment, verify in this order:
 3. Authenticated `GET /next-task` returns `source: BIRDIE_OS` and `authoritative: true`.
 4. Authenticated `POST /chat` successfully handles both a next-task request and a general company-state request.
 5. Only then connect the endpoint as the production Chatty/Birdie action.
+
+The supporter pilot has its own gated rollout. Do not advertise `/supporter` until the Sprint 02 Apps Script actions are deployed, `SUPPORTER_AUTH_SECRET` is configured and confirmed supporter emails have been migrated.
 
 ## Governance
 

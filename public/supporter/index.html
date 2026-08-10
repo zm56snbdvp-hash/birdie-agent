@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#173c2b">
+  <meta name="description" content="Deine Birdie ID, Birdies und Rewards bei Birdie & Breakfast.">
+  <title>Birdie ID · Birdie & Breakfast</title>
+  <link rel="stylesheet" href="/supporter/styles.css">
+  <script src="/supporter/app.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
+  <main class="shell">
+    <header class="site-header">
+      <a class="brand" href="/supporter" aria-label="Birdie & Breakfast Supporter Home">
+        <span class="brand-name">Birdie</span>
+        <span class="ampersand" aria-hidden="true">&amp;<i class="logo-ball"></i></span>
+        <span class="brand-name">Breakfast</span>
+      </a>
+      <span class="pilot-pill">FOUNDING PILOT</span>
+    </header>
+
+    <section id="login-view" class="auth-layout" aria-labelledby="login-title">
+      <div class="auth-copy">
+        <p class="eyebrow">DEIN PLATZ IM FLOCK</p>
+        <h1 id="login-title">Deine Birdie ID.<br>Deine Geschichte.</h1>
+        <p class="intro">Sammle Birdies, halte deine Community-Momente fest und löse exklusive Rewards ein.</p>
+        <div class="feature-row" aria-label="Funktionen">
+          <span>Birdie Ledger</span>
+          <span>Badges</span>
+          <span>Rewards</span>
+        </div>
+      </div>
+
+      <div class="auth-card">
+        <div id="email-step">
+          <p class="card-kicker">Willkommen zurück</p>
+          <h2>Mit Birdie ID anmelden</h2>
+          <p class="muted">Wir senden dir einen einmaligen 6-stelligen Code. Kein Passwort nötig.</p>
+          <form id="email-form" novalidate>
+            <label for="email">E-Mail-Adresse</label>
+            <input id="email" name="email" type="email" autocomplete="email" inputmode="email" placeholder="du@beispiel.de" required>
+            <button class="button button-primary" type="submit">
+              <span>Code anfordern</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </form>
+        </div>
+
+        <div id="code-step" hidden>
+          <button id="back-to-email" class="text-button" type="button">← Andere E-Mail</button>
+          <p class="card-kicker">Fast auf dem Fairway</p>
+          <h2>Code eingeben</h2>
+          <p id="code-help" class="muted">Dein Code ist 10 Minuten gültig.</p>
+          <form id="code-form" novalidate>
+            <label for="code">6-stelliger Login-Code</label>
+            <input id="code" name="code" class="code-input" type="text" autocomplete="one-time-code" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="000000" required>
+            <button class="button button-primary" type="submit">
+              <span>Birdie ID öffnen</span>
+              <span aria-hidden="true">→</span>
+            </button>
+          </form>
+        </div>
+
+        <p id="auth-status" class="form-status" role="status" aria-live="polite"></p>
+        <p class="privacy-note">Dein Code und deine Sitzung werden sicher geprüft. Birdies haben keinen Geldwert und sind nicht übertragbar.</p>
+      </div>
+    </section>
+
+    <section id="app-view" class="app-layout" hidden aria-label="Birdie ID Dashboard">
+      <div class="welcome-row">
+        <div>
+          <p class="eyebrow">BIRDIE ID · <span id="birdie-id">—</span></p>
+          <h1>Moin, <span id="display-name">Birdie</span>.</h1>
+          <p class="muted">Schön, dass du wieder im Flock bist.</p>
+        </div>
+        <button id="logout-button" class="icon-button" type="button" aria-label="Abmelden">↗</button>
+      </div>
+
+      <section class="balance-card" aria-labelledby="balance-title">
+        <div class="balance-main">
+          <p id="balance-title" class="card-kicker light">DEIN BIRDIE BALANCE</p>
+          <div class="balance-value"><span id="available-balance">0</span><small>Birdies</small></div>
+          <p id="reserved-balance" class="balance-note"></p>
+        </div>
+        <div class="level-panel">
+          <div class="level-mark" aria-hidden="true">B</div>
+          <div>
+            <p class="level-label">Aktuelles Level</p>
+            <strong id="level-name">Tee Starter</strong>
+          </div>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-meta">
+            <span id="lifetime-label">0 Lifetime Birdies</span>
+            <span id="next-level-label">Nächstes Level</span>
+          </div>
+          <div class="progress-track"><span id="level-progress"></span></div>
+        </div>
+      </section>
+
+      <nav class="section-tabs" aria-label="Dashboard Bereiche">
+        <button class="tab is-active" type="button" data-section="overview">Übersicht</button>
+        <button class="tab" type="button" data-section="earn">Birdies sammeln</button>
+        <button class="tab" type="button" data-section="rewards">Rewards</button>
+      </nav>
+
+      <section id="overview-section" class="dashboard-section">
+        <div class="two-column">
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="card-kicker">DEINE ABZEICHEN</p>
+                <h2>Badges</h2>
+              </div>
+              <span id="badge-count" class="count-pill">0</span>
+            </div>
+            <div id="badge-list" class="badge-list empty-state">Noch kein Badge – dein erstes wartet schon.</div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-heading">
+              <div>
+                <p class="card-kicker">LETZTE BEWEGUNGEN</p>
+                <h2>Birdie Ledger</h2>
+              </div>
+              <button id="refresh-button" class="text-button" type="button">Aktualisieren</button>
+            </div>
+            <div id="ledger-list" class="ledger-list empty-state">Noch keine Bewegungen vorhanden.</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="earn-section" class="dashboard-section" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">MACH DEIN SPIEL SICHTBAR</p>
+          <h2>Birdies sammeln</h2>
+          <p class="muted">Reiche eine Community-Aktion ein. Das Birdie-Team prüft sie fair und schreibt den festen Wert nach Freigabe gut.</p>
+        </div>
+        <form id="claim-form" class="panel form-grid" novalidate>
+          <div class="field-wide">
+            <label for="action-code">Was hast du gemacht?</label>
+            <select id="action-code" name="actionCode" required></select>
+          </div>
+          <div>
+            <label for="source-type">Wo?</label>
+            <select id="source-type" name="sourceType" required>
+              <option value="INSTAGRAM">Instagram</option>
+              <option value="TIKTOK">TikTok</option>
+              <option value="FACEBOOK">Facebook</option>
+              <option value="COMMUNITY">Community</option>
+              <option value="PURCHASE">Kauf / Bestellung</option>
+              <option value="OTHER">Andere Quelle</option>
+            </select>
+          </div>
+          <div>
+            <label for="source-reference">Beitrag, Bestellung oder Referenz</label>
+            <input id="source-reference" name="sourceReference" type="text" maxlength="500" placeholder="Link, Bestellnummer oder kurze Referenz" required>
+          </div>
+          <div class="field-wide">
+            <label for="evidence-url">Beleg-Link <span>(optional)</span></label>
+            <input id="evidence-url" name="evidenceUrl" type="url" maxlength="1000" placeholder="https://…">
+          </div>
+          <div class="field-wide">
+            <label for="claim-note">Kurze Notiz <span>(optional)</span></label>
+            <textarea id="claim-note" name="note" maxlength="1000" rows="4" placeholder="Was sollten wir dazu wissen?"></textarea>
+          </div>
+          <div class="field-wide form-action-row">
+            <p id="claim-status" class="form-status" role="status" aria-live="polite"></p>
+            <button class="button button-primary" type="submit">Zur Prüfung einreichen →</button>
+          </div>
+        </form>
+      </section>
+
+      <section id="rewards-section" class="dashboard-section" hidden>
+        <div class="section-intro">
+          <p class="eyebrow">A GOOD DAY STARTS WITH A BIRDIE</p>
+          <h2>Reward Shop</h2>
+          <p class="muted">Deine verfügbaren Birdies reservieren einen Reward. Das Team bestätigt anschließend die Einlösung.</p>
+        </div>
+        <div id="reward-list" class="reward-grid empty-state">Rewards werden geladen.</div>
+      </section>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
