@@ -1,7 +1,10 @@
 import http from "node:http";
 import OpenAI from "openai";
+import { createCoinService } from "./src/coin/service.mjs";
+import { routeCoinRequest } from "./src/coin/router.mjs";
 
 const PORT = process.env.PORT || 8080;
+const BIRDIE_AGENT_VERSION = "2.1.0";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
@@ -66,7 +69,14 @@ async function readBody(req) {
     return {};
   }
 
-  return JSON.parse(body);
+  try {
+    return JSON.parse(body);
+  } catch {
+    const error = new Error("Request body must contain valid JSON");
+    error.code = "INVALID_JSON";
+    error.status = 400;
+    throw error;
+  }
 }
 
 
@@ -227,6 +237,8 @@ async function birdieOSPost(payload) {
 
   return data;
 }
+
+const coinService = createCoinService({ birdieOSPost });
 
 
 // ==================================================
@@ -668,7 +680,7 @@ const server =
               service:
                 "Birdie Agent",
               version:
-                "2.0",
+                BIRDIE_AGENT_VERSION,
               status:
                 "ONLINE",
               birdieOS:
@@ -697,6 +709,24 @@ const server =
                 "UNAUTHORIZED"
             }
           );
+        }
+
+
+        // ------------------------------------------
+        // BIRDIE COIN
+        // ------------------------------------------
+
+        if (
+          await routeCoinRequest({
+            req,
+            res,
+            url,
+            json,
+            readBody,
+            service: coinService
+          })
+        ) {
+          return;
         }
 
 
@@ -907,7 +937,19 @@ const server =
               "GET /next-task",
               "POST /ideas",
               "POST /tasks/{taskId}",
-              "POST /chat"
+              "POST /chat",
+              "GET /coin/config",
+              "POST /coin/profiles",
+              "GET /coin/profiles/{birdieId}",
+              "GET /coin/profiles/{birdieId}/ledger",
+              "POST /coin/profiles/{birdieId}/badges",
+              "POST /coin/claims",
+              "POST /coin/claims/{claimId}/decision",
+              "GET /coin/rewards",
+              "GET /coin/admin/queue",
+              "POST /coin/redemptions",
+              "POST /coin/redemptions/{redemptionId}/decision",
+              "POST /coin/opening-balances"
             ]
           }
         );
@@ -919,10 +961,14 @@ const server =
 
         return json(
           res,
-          500,
+          Number(error.status) || 500,
           {
             success: false,
             error:
+              error.code ||
+              error.message ||
+              String(error),
+            message:
               error.message ||
               String(error)
           }

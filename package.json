@@ -1,11 +1,12 @@
 {
   "name": "birdie-agent",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "node server.mjs",
-    "smoke": "node scripts/smoke-test.mjs"
+    "smoke": "node scripts/smoke-test.mjs",
+    "test": "node --test test/*.test.mjs"
   },
   "engines": {
     "node": ">=20"
