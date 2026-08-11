@@ -1,0 +1,98 @@
+openapi: 3.1.0
+info:
+  title: Birdie OS Read Action
+  description: Secure read-only startup access to the Birdie Agent and authoritative Birdie OS data.
+  version: 2.6.1
+servers:
+  - url: https://birdie-agent-893591677320.europe-west3.run.app
+security:
+  - bearerAuth: []
+paths:
+  /startup:
+    get:
+      operationId: startBirdieOS
+      summary: Load Birdie OS startup context
+      description: Checks Birdie OS health and returns the current live briefing in one size-bounded response. Use at the start of a new Birdie chat.
+      responses:
+        "200":
+          description: Verified Birdie OS status and live briefing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BirdieResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /health:
+    get:
+      operationId: getBirdieHealth
+      summary: Check Birdie OS connection
+      description: Returns the authenticated Birdie Agent and upstream Birdie OS health state.
+      responses:
+        "200":
+          description: Current connection status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BirdieResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /briefing:
+    get:
+      operationId: getBirdieLiveBriefing
+      summary: Load the current live briefing
+      description: Returns authoritative Birdie OS live-briefing data in a size-bounded response.
+      responses:
+        "200":
+          description: Current authoritative live briefing.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BirdieResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /next-task:
+    get:
+      operationId: getBirdieNextTask
+      summary: Load Kevin's next Birdie task
+      description: Returns the authoritative next task selected by Birdie OS.
+      responses:
+        "200":
+          description: Current authoritative next task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BirdieResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  schemas:
+    BirdieResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        authoritative:
+          type: boolean
+        source:
+          type: string
+        truncated:
+          type: boolean
+        data:
+          description: Verified Birdie OS response data.
+  responses:
+    Unauthorized:
+      description: Missing or invalid Birdie Agent API key.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              success:
+                type: boolean
+              error:
+                type: string

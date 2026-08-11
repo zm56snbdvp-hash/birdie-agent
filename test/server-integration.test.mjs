@@ -51,8 +51,20 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const payload = raw ? JSON.parse(raw) : {};
+    const url = new URL(req.url, "http://127.0.0.1");
+    const action = url.searchParams.get("action");
+    let data = payload;
+    if (action === "health") data = { status: "ONLINE", version: "test" };
+    if (action === "briefing") {
+      data = {
+        sections: Array.from({ length: 200 }, (_, index) => ({
+          id: index + 1,
+          content: "x".repeat(1000)
+        }))
+      };
+    }
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ success: true, data: payload }));
+    res.end(JSON.stringify({ success: true, data }));
   });
   const upstreamPort = await listen(upstream);
   context.after(() => close(upstream));
@@ -76,10 +88,27 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const baseUrl = `http://127.0.0.1:${agentPort}`;
   const rootResponse = await fetch(`${baseUrl}/`);
   const root = await rootResponse.json();
-  assert.equal(root.version, "2.6.0");
+  assert.equal(root.version, "2.6.1");
 
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);
+
+  const startupResponse = await fetch(`${baseUrl}/startup`, {
+    headers: { Authorization: "Bearer test-agent-key" }
+  });
+  const startup = await startupResponse.json();
+  assert.equal(startupResponse.status, 200);
+  assert.equal(startup.authoritative, true);
+  assert.equal(startup.truncated, true);
+  assert.ok(JSON.stringify(startup).length < 100_000);
+
+  const briefingResponse = await fetch(`${baseUrl}/briefing`, {
+    headers: { Authorization: "Bearer test-agent-key" }
+  });
+  const briefing = await briefingResponse.json();
+  assert.equal(briefingResponse.status, 200);
+  assert.equal(briefing.truncated, true);
+  assert.ok(JSON.stringify(briefing).length < 100_000);
 
   const configResponse = await fetch(`${baseUrl}/coin/config`, {
     headers: { Authorization: "Bearer test-agent-key" }

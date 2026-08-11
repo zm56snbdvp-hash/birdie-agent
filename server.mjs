@@ -12,7 +12,8 @@ import {
 } from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.6.0";
+const BIRDIE_AGENT_VERSION = "2.6.1";
+const ACTION_RESPONSE_MAX_CHARS = 60_000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
@@ -35,6 +36,82 @@ function json(res, status, body, extraHeaders = {}) {
     ...extraHeaders
   });
   res.end(JSON.stringify(body));
+}
+
+function jsonChars(value) {
+  return JSON.stringify(value).length;
+}
+
+function compactJson(value, options, depth = 0, seen = new WeakSet()) {
+  if (value === null || value === undefined || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    if (value.length <= options.maxStringChars) return value;
+    return `${value.slice(0, options.maxStringChars)}… [truncated ${value.length - options.maxStringChars} chars]`;
+  }
+
+  if (typeof value !== "object") return String(value);
+  if (depth >= options.maxDepth) return "[truncated: max depth]";
+  if (seen.has(value)) return "[truncated: circular reference]";
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    const result = value
+      .slice(0, options.maxArrayItems)
+      .map((item) => compactJson(item, options, depth + 1, seen));
+    if (value.length > options.maxArrayItems) {
+      result.push({
+        _truncated: true,
+        omittedItems: value.length - options.maxArrayItems
+      });
+    }
+    return result;
+  }
+
+  const entries = Object.entries(value);
+  const result = {};
+  for (const [key, item] of entries.slice(0, options.maxObjectKeys)) {
+    result[key] = compactJson(item, options, depth + 1, seen);
+  }
+  if (entries.length > options.maxObjectKeys) {
+    result._truncated = true;
+    result._omittedKeys = entries.length - options.maxObjectKeys;
+  }
+  return result;
+}
+
+function boundActionData(value, maxChars = ACTION_RESPONSE_MAX_CHARS) {
+  const originalChars = jsonChars(value);
+  if (originalChars <= maxChars) {
+    return { data: value, truncated: false, originalChars };
+  }
+
+  const profiles = [
+    { maxDepth: 8, maxArrayItems: 40, maxObjectKeys: 80, maxStringChars: 3000 },
+    { maxDepth: 6, maxArrayItems: 20, maxObjectKeys: 50, maxStringChars: 1500 },
+    { maxDepth: 5, maxArrayItems: 10, maxObjectKeys: 30, maxStringChars: 750 }
+  ];
+
+  for (const options of profiles) {
+    const data = compactJson(value, options);
+    if (jsonChars(data) <= maxChars) {
+      return { data, truncated: true, originalChars };
+    }
+  }
+
+  return {
+    data: {
+      _truncated: true,
+      message: "Birdie OS returned more data than a GPT Action may safely consume. Request a narrower resource.",
+      topLevelKeys: value && typeof value === "object" && !Array.isArray(value)
+        ? Object.keys(value).slice(0, 100)
+        : []
+    },
+    truncated: true,
+    originalChars
+  };
 }
 
 async function readBody(req) {
@@ -213,6 +290,7 @@ async function updateTask(taskId, body) {
 const routes = [
   "GET /",
   "GET /health",
+  "GET /startup",
   "GET /briefing",
   "GET /next-task",
   "POST /ideas",
@@ -310,12 +388,38 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && url.pathname === "/health") {
       const birdie = await birdieOSGet("health");
-      return json(res, 200, { success: true, agent: "ONLINE", birdieOS: birdie });
+      const bounded = boundActionData(birdie, 10_000);
+      return json(res, 200, {
+        success: true,
+        agent: "ONLINE",
+        birdieOS: bounded.data,
+        truncated: bounded.truncated
+      });
+    }
+
+    if (req.method === "GET" && url.pathname === "/startup") {
+      const birdie = await birdieOSGet("health");
+      const briefing = await getLiveBriefing();
+      const bounded = boundActionData({ health: birdie, liveBriefing: briefing });
+      return json(res, 200, {
+        success: true,
+        authoritative: true,
+        source: "BIRDIE_OS",
+        truncated: bounded.truncated,
+        data: bounded.data
+      });
     }
 
     if (req.method === "GET" && url.pathname === "/briefing") {
       const briefing = await getLiveBriefing();
-      return json(res, 200, { success: true, authoritative: true, source: "BIRDIE_OS", data: briefing });
+      const bounded = boundActionData(briefing);
+      return json(res, 200, {
+        success: true,
+        authoritative: true,
+        source: "BIRDIE_OS",
+        truncated: bounded.truncated,
+        data: bounded.data
+      });
     }
 
     if (req.method === "GET" && url.pathname === "/next-task") {
