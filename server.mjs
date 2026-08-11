@@ -150,10 +150,15 @@ async function parseBirdieResponse(response, label) {
   return data;
 }
 
-async function birdieOSGet(action) {
+async function birdieOSGet(action, params = {}) {
   const url = new URL(BIRDIE_OS_BASE);
   url.searchParams.set("action", action);
   url.searchParams.set("api_key", BIRDIE_OS_API_KEY);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
   const response = await fetch(url.toString(), {
     method: "GET",
     redirect: "follow",

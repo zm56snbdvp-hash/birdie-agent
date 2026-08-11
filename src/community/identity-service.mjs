@@ -9,7 +9,8 @@ export function createCommunityIdentityService({ birdieOSGet, birdieOSPost }) {
     if (!id) throw new Error("workItemId is required");
 
     const queueResponse = await birdieOSGet(
-      `communityWorkItem&workItemId=${encodeURIComponent(id)}`
+      "communityWorkItem",
+      { workItemId: id }
     );
 
     const workItem = queueResponse?.data?.workItem || queueResponse?.data;
