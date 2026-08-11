@@ -5,6 +5,8 @@ import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
 import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
+import { createCommunityIdentityService } from "./src/community/identity-service.mjs";
+import { routeCommunityIdentityRequest } from "./src/community/identity-router.mjs";
 import {
   authenticateMcpRequest,
   createMcpAuthConfig,
@@ -173,6 +175,7 @@ async function birdieOSPost(payload) {
 }
 
 const coinService = createCoinService({ birdieOSPost });
+const communityIdentityService = createCommunityIdentityService({ birdieOSGet, birdieOSPost });
 
 async function getLiveBriefing() {
   return (await birdieOSGet("briefing")).data;
@@ -297,6 +300,7 @@ const routes = [
   "POST /ideas",
   "POST /tasks/{taskId}",
   "POST /chat",
+  "POST /community/identity/resolve",
   "POST /mcp",
   "GET /mail/health",
   "GET /mail/messages",
@@ -392,6 +396,14 @@ const server = http.createServer(async (req, res) => {
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
     if (await routeFramerRequest({ req, res, url, json, readBody })) return;
+    if (await routeCommunityIdentityRequest({
+      req,
+      res,
+      url,
+      json,
+      readBody,
+      service: communityIdentityService
+    })) return;
 
     if (req.method === "GET" && url.pathname === "/health") {
       const birdie = await birdieOSGet("health");
