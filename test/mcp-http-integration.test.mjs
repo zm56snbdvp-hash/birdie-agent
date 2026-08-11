@@ -4,6 +4,8 @@ import http from "node:http";
 import net from "node:net";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -26,13 +28,8 @@ async function freePort() {
 function waitForServer(child) {
   return new Promise((resolve, reject) => {
     let stderr = "";
-    const timeout = setTimeout(() => {
-      reject(new Error(`Birdie Agent did not start in time: ${stderr}`));
-    }, 5000);
-
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
+    const timeout = setTimeout(() => reject(new Error(`Server start timed out: ${stderr}`)), 5000);
+    child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     child.stdout.on("data", (chunk) => {
       if (chunk.toString().includes("Birdie Agent listening")) {
         clearTimeout(timeout);
@@ -46,13 +43,10 @@ function waitForServer(child) {
   });
 }
 
-test("Birdie Coin HTTP contract runs through the real server", async (context) => {
-  const upstream = http.createServer(async (req, res) => {
-    let raw = "";
-    for await (const chunk of req) raw += chunk;
-    const payload = raw ? JSON.parse(raw) : {};
+test("real HTTP server protects and advertises the Birdie Mail MCP tools", async (context) => {
+  const upstream = http.createServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ success: true, data: payload }));
+    res.end(JSON.stringify({ success: true, data: {} }));
   });
   const upstreamPort = await listen(upstream);
   context.after(() => close(upstream));
@@ -73,37 +67,24 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   context.after(() => child.kill("SIGTERM"));
   await waitForServer(child);
 
-  const baseUrl = `http://127.0.0.1:${agentPort}`;
-  const rootResponse = await fetch(`${baseUrl}/`);
-  const root = await rootResponse.json();
-  assert.equal(root.version, "2.4.0");
-
-  const unauthorized = await fetch(`${baseUrl}/coin/config`);
+  const endpoint = `http://127.0.0.1:${agentPort}/mcp`;
+  const unauthorized = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
+  });
   assert.equal(unauthorized.status, 401);
 
-  const configResponse = await fetch(`${baseUrl}/coin/config`, {
-    headers: { Authorization: "Bearer test-agent-key" }
+  const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
+    requestInit: { headers: { Authorization: "Bearer test-agent-key" } }
   });
-  const config = await configResponse.json();
-  assert.equal(configResponse.status, 200);
-  assert.equal(config.data.unit.singular, "Birdie");
+  const client = new Client({ name: "birdie-http-test", version: "1.0.0" });
+  context.after(() => client.close());
+  await client.connect(transport);
 
-  const profileResponse = await fetch(`${baseUrl}/coin/profiles`, {
-    method: "POST",
-    headers: {
-      Authorization: "Bearer test-agent-key",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      displayName: "Lee-Ann",
-      email: "lee@example.com",
-      accountType: "PRIVATE",
-      idempotencyKey: "profile:lee"
-    })
-  });
-  const profile = await profileResponse.json();
-  assert.equal(profileResponse.status, 201);
-  assert.equal(profile.source, "BIRDIE_OS");
-  assert.equal(profile.data.action, "coinCreateProfile");
-  assert.equal(profile.data.email, "lee@example.com");
+  const { tools } = await client.listTools();
+  assert.deepEqual(
+    tools.map((tool) => tool.name).sort(),
+    ["birdie_mail_folders", "birdie_mail_get", "birdie_mail_health", "birdie_mail_list"]
+  );
 });
