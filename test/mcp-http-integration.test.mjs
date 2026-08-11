@@ -6,6 +6,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -44,14 +45,23 @@ function waitForServer(child) {
 }
 
 test("real HTTP server protects and advertises the Birdie Mail MCP tools", async (context) => {
-  const upstream = http.createServer((_req, res) => {
+  const { publicKey, privateKey } = await generateKeyPair("RS256");
+  const publicJwk = await exportJWK(publicKey);
+  Object.assign(publicJwk, { kid: "birdie-test-key", alg: "RS256", use: "sig" });
+
+  const upstream = http.createServer((req, res) => {
     res.writeHead(200, { "Content-Type": "application/json" });
+    if (req.url === "/.well-known/jwks.json") {
+      return res.end(JSON.stringify({ keys: [publicJwk] }));
+    }
     res.end(JSON.stringify({ success: true, data: {} }));
   });
   const upstreamPort = await listen(upstream);
   context.after(() => close(upstream));
 
   const agentPort = await freePort();
+  const issuer = `http://127.0.0.1:${upstreamPort}/`;
+  const resource = `http://127.0.0.1:${agentPort}`;
   const serverPath = fileURLToPath(new URL("../server.mjs", import.meta.url));
   const child = spawn(process.execPath, [serverPath], {
     env: {
@@ -60,7 +70,10 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
       OPENAI_API_KEY: "test-openai-key",
       BIRDIE_OS_API_KEY: "test-birdie-os-key",
       BIRDIE_AGENT_API_KEY: "test-agent-key",
-      BIRDIE_OS_BASE: `http://127.0.0.1:${upstreamPort}`
+      BIRDIE_OS_BASE: `http://127.0.0.1:${upstreamPort}`,
+      BIRDIE_OAUTH_ISSUER: issuer,
+      BIRDIE_OAUTH_JWKS_URL: `${issuer}.well-known/jwks.json`,
+      BIRDIE_MCP_RESOURCE: resource
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -68,12 +81,30 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
   await waitForServer(child);
 
   const endpoint = `http://127.0.0.1:${agentPort}/mcp`;
+  const metadataResponse = await fetch(
+    `http://127.0.0.1:${agentPort}/.well-known/oauth-protected-resource`
+  );
+  const metadata = await metadataResponse.json();
+  assert.equal(metadataResponse.status, 200);
+  assert.equal(metadata.resource, resource);
+  assert.deepEqual(metadata.authorization_servers, [issuer]);
+  assert.deepEqual(metadata.scopes_supported, [
+    "mail.read",
+    "mail.write",
+    "mail.send",
+    "mail.delete"
+  ]);
+
   const unauthorized = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} })
   });
   assert.equal(unauthorized.status, 401);
+  assert.match(
+    unauthorized.headers.get("www-authenticate"),
+    /oauth-protected-resource/
+  );
 
   const transport = new StreamableHTTPClientTransport(new URL(endpoint), {
     requestInit: { headers: { Authorization: "Bearer test-agent-key" } }
@@ -96,4 +127,58 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
       "birdie_mail_update_flags"
     ]
   );
+
+  const oauthToken = await new SignJWT({
+    scope: "mail.read",
+    permissions: ["mail.read"]
+  })
+    .setProtectedHeader({ alg: "RS256", kid: "birdie-test-key" })
+    .setIssuer(issuer)
+    .setAudience(resource)
+    .setSubject("auth0|kevin")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(privateKey);
+
+  const oauthTransport = new StreamableHTTPClientTransport(new URL(endpoint), {
+    requestInit: { headers: { Authorization: `Bearer ${oauthToken}` } }
+  });
+  const oauthClient = new Client({ name: "birdie-oauth-test", version: "1.0.0" });
+  context.after(() => oauthClient.close());
+  await oauthClient.connect(oauthTransport);
+
+  const oauthTools = await oauthClient.listTools();
+  assert.equal(oauthTools.tools.length, 8);
+
+  const deniedSend = await oauthClient.callTool({
+    name: "birdie_mail_send",
+    arguments: {
+      to: ["mama@example.com"],
+      subject: "Test",
+      text: "This must not be sent.",
+      founderApproved: true,
+      confirmation: "SEND_EMAIL"
+    }
+  });
+  assert.equal(deniedSend.isError, true);
+  assert.equal(deniedSend.content[0].text, "INSUFFICIENT_SCOPE");
+  assert.match(deniedSend._meta["mcp/www_authenticate"][0], /mail\.send/);
+
+  const wrongAudienceToken = await new SignJWT({ scope: "mail.read" })
+    .setProtectedHeader({ alg: "RS256", kid: "birdie-test-key" })
+    .setIssuer(issuer)
+    .setAudience("https://wrong.example.com")
+    .setSubject("auth0|kevin")
+    .setIssuedAt()
+    .setExpirationTime("5m")
+    .sign(privateKey);
+  const wrongAudience = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${wrongAudienceToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 2, method: "initialize", params: {} })
+  });
+  assert.equal(wrongAudience.status, 401);
 });

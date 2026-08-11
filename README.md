@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.5.0**
+Current service version: **2.6.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -35,6 +35,9 @@ Birdie OS is the source of truth for live company state. The Birdie Agent may ph
 - `MAIL_PASSWORD` — IONOS mailbox password, supplied only through Secret Manager.
 - `MAIL_IMAP_HOST` / `MAIL_IMAP_PORT` — optional; default to `imap.ionos.de:993`.
 - `MAIL_SMTP_HOST` / `MAIL_SMTP_PORT` — optional; default to `smtp.ionos.de:465`.
+- `BIRDIE_OAUTH_ISSUER` — optional Auth0 issuer override; defaults to the Birdie EU tenant.
+- `BIRDIE_MCP_RESOURCE` — optional OAuth audience/resource override; defaults to the Cloud Run origin.
+- `BIRDIE_OAUTH_JWKS_URL` — optional JWKS endpoint override for tests or a non-standard identity provider.
 
 Never commit real secret values to GitHub.
 
@@ -97,13 +100,13 @@ For general messages the agent loads the current Birdie OS live briefing before 
 
 ## Chatty MCP Mail Bridge
 
-Version 2.5 exposes a streamable HTTP MCP endpoint at:
+Version 2.6 exposes a streamable HTTP MCP endpoint at:
 
 ```text
 https://birdie-agent-893591677320.europe-west3.run.app/mcp
 ```
 
-It uses the existing `BIRDIE_AGENT_API_KEY` Bearer authentication for direct MCP clients and exposes these tools:
+It accepts the existing `BIRDIE_AGENT_API_KEY` for trusted direct clients and Auth0 OAuth 2.1 access tokens for ChatGPT Plugins. It exposes these tools:
 
 - `birdie_mail_health`
 - `birdie_mail_list`
@@ -118,7 +121,22 @@ Reading is automatic. Flag updates and folder moves are controlled mailbox chang
 
 For the ChatGPT desktop app, add the server as a **Streamable HTTP** MCP server and enter the Bearer token through the secure MCP settings UI. Never paste the token into a chat or commit it to the repository. Restart the app after saving the MCP server, then use `/mcp` to confirm that `birdie-mail` is connected.
 
-The hosted ChatGPT Plugins connection does not accept an arbitrary shared API key. Before using the OAuth option there, configure a standards-compliant OAuth 2.1 identity provider and server-side scope validation for `mail.read`, `mail.write`, `mail.send` and `mail.delete`.
+The server publishes OAuth protected-resource metadata at:
+
+```text
+https://birdie-agent-893591677320.europe-west3.run.app/.well-known/oauth-protected-resource
+```
+
+Auth0 access tokens are verified against the configured issuer, JWKS signature, resource audience, expiration and per-tool permission. The production Auth0 issuer is `https://dev-dfveukr86fg3e8fr.eu.auth0.com/`; it can be overridden with `BIRDIE_OAUTH_ISSUER`. The canonical resource identifier defaults to the Cloud Run service origin and can be overridden with `BIRDIE_MCP_RESOURCE`.
+
+### Auth0 tenant configuration
+
+1. In **Settings → Advanced**, enable **Resource Parameter Compatibility Profile** and **Client ID Metadata Document Registration**.
+2. Create an Auth0 API named `Birdie Mail MCP` with identifier `https://birdie-agent-893591677320.europe-west3.run.app`, signing algorithm `RS256` and the RFC 9068 authorization access-token profile.
+3. Add permissions `mail.read`, `mail.write`, `mail.send` and `mail.delete`.
+4. Enable RBAC and **Add Permissions in the Access Token** for the API.
+5. Create a `Birdie Founder` role, grant all four permissions and assign the role only to the approved Birdie founder account.
+6. In the ChatGPT plugin OAuth settings, prefer **Client Identifier Metadata Document (CIMD)**. Never paste an Auth0 password or client secret into chat or the repository.
 
 ### `POST /ideas`
 

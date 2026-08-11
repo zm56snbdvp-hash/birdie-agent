@@ -4,14 +4,21 @@ import { createCoinService } from "./src/coin/service.mjs";
 import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
+import {
+  authenticateMcpRequest,
+  createMcpAuthConfig,
+  oauthChallenge,
+  protectedResourceMetadata
+} from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.5.0";
+const BIRDIE_AGENT_VERSION = "2.6.0";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
 const BIRDIE_AGENT_API_KEY = process.env.BIRDIE_AGENT_API_KEY;
 const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE || "https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec";
+const MCP_AUTH_CONFIG = createMcpAuthConfig();
 
 for (const [name, value] of Object.entries({ OPENAI_API_KEY, BIRDIE_OS_API_KEY, BIRDIE_AGENT_API_KEY })) {
   if (!value) throw new Error(`${name} is missing.`);
@@ -19,12 +26,13 @@ for (const [name, value] of Object.entries({ OPENAI_API_KEY, BIRDIE_OS_API_KEY, 
 
 const client = new OpenAI({ apiKey: OPENAI_API_KEY });
 
-function json(res, status, body) {
+function json(res, status, body, extraHeaders = {}) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key, Mcp-Session-Id, Last-Event-ID",
-    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
+    "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS",
+    ...extraHeaders
   });
   res.end(JSON.stringify(body));
 }
@@ -257,15 +265,46 @@ const server = http.createServer(async (req, res) => {
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
         mail: "FULL_CONTROL_GOVERNED",
-        mcp: "GOVERNED_FULL_MAIL_TOOLS"
+        mcp: "AUTH0_GOVERNED_FULL_MAIL_TOOLS"
       });
+    }
+
+    if (
+      req.method === "GET" &&
+      [
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/mcp"
+      ].includes(url.pathname)
+    ) {
+      return json(res, 200, protectedResourceMetadata(MCP_AUTH_CONFIG));
+    }
+
+    if (url.pathname === "/mcp") {
+      const authContext = await authenticateMcpRequest(req, {
+        apiKey: BIRDIE_AGENT_API_KEY,
+        config: MCP_AUTH_CONFIG
+      });
+      if (!authContext) {
+        return json(
+          res,
+          401,
+          { success: false, error: "UNAUTHORIZED" },
+          { "WWW-Authenticate": oauthChallenge(MCP_AUTH_CONFIG) }
+        );
+      }
+      if (await routeMcpRequest({
+        req,
+        res,
+        url,
+        authContext,
+        authConfig: MCP_AUTH_CONFIG
+      })) return;
     }
 
     if (!isAgentAuthorized(req)) {
       return json(res, 401, { success: false, error: "UNAUTHORIZED" });
     }
 
-    if (await routeMcpRequest({ req, res, url })) return;
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
 
