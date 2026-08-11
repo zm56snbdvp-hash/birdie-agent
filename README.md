@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.3.0**
+Current service version: **2.4.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -95,6 +95,25 @@ Response shape:
 
 For general messages the agent loads the current Birdie OS live briefing before generating an answer. For next-task intent it uses the dedicated Birdie OS `nextTask` action and does not substitute another task.
 
+## Chatty MCP Mail Bridge
+
+Version 2.4 exposes a streamable HTTP MCP endpoint at:
+
+```text
+https://birdie-agent-893591677320.europe-west3.run.app/mcp
+```
+
+It uses the existing `BIRDIE_AGENT_API_KEY` Bearer authentication and exposes only these read-only tools:
+
+- `birdie_mail_health`
+- `birdie_mail_list`
+- `birdie_mail_get`
+- `birdie_mail_folders`
+
+Sending, moving, flagging, folder creation and deletion remain outside the MCP surface. This prevents an unattended model call from changing mailbox state. The governed HTTP Mail API remains available for separately approved operational actions.
+
+For the ChatGPT desktop app, add the server as a **Streamable HTTP** MCP server and enter the Bearer token through the secure MCP settings UI. Never paste the token into a chat or commit it to the repository. Restart the app after saving the MCP server, then use `/mcp` to confirm that `birdie-mail` is connected.
+
 ### `POST /ideas`
 
 Creates an idea in Birdie OS through the controlled write path.
@@ -182,7 +201,8 @@ After deployment, verify in this order:
 2. Authenticated `GET /health` reaches Birdie OS successfully.
 3. Authenticated `GET /next-task` returns `source: BIRDIE_OS` and `authoritative: true`.
 4. Authenticated `POST /chat` successfully handles both a next-task request and a general company-state request.
-5. Only then connect the endpoint as the production Chatty/Birdie action.
+5. Authenticated MCP initialization at `POST /mcp` lists the four read-only Birdie Mail tools.
+6. Only then connect the endpoint as the production Chatty/Birdie MCP server or action.
 
 ## Governance
 

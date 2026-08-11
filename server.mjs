@@ -3,9 +3,10 @@ import OpenAI from "openai";
 import { createCoinService } from "./src/coin/service.mjs";
 import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
+import { routeMcpRequest } from "./src/mcp-server.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.3.0";
+const BIRDIE_AGENT_VERSION = "2.4.0";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
@@ -22,7 +23,7 @@ function json(res, status, body) {
   res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key, Mcp-Session-Id, Last-Event-ID",
     "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
   });
   res.end(JSON.stringify(body));
@@ -209,6 +210,7 @@ const routes = [
   "POST /ideas",
   "POST /tasks/{taskId}",
   "POST /chat",
+  "POST /mcp",
   "GET /mail/health",
   "GET /mail/messages",
   "GET /mail/messages/{uid}",
@@ -238,7 +240,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === "OPTIONS") {
       res.writeHead(204, {
         "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Birdie-Agent-Key, Mcp-Session-Id, Last-Event-ID",
         "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
       });
       return res.end();
@@ -254,7 +256,8 @@ const server = http.createServer(async (req, res) => {
         status: "ONLINE",
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
-        mail: "FULL_CONTROL_GOVERNED"
+        mail: "FULL_CONTROL_GOVERNED",
+        mcp: "READ_ONLY_MAIL_TOOLS"
       });
     }
 
@@ -262,6 +265,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, 401, { success: false, error: "UNAUTHORIZED" });
     }
 
+    if (await routeMcpRequest({ req, res, url })) return;
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
 
