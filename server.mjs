@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { createCoinService } from "./src/coin/service.mjs";
 import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
+import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
 import {
   authenticateMcpRequest,
@@ -12,7 +13,7 @@ import {
 } from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.6.2";
+const BIRDIE_AGENT_VERSION = "2.7.0";
 const ACTION_RESPONSE_MAX_CHARS = 60_000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
@@ -318,7 +319,11 @@ const routes = [
   "GET /coin/admin/queue",
   "POST /coin/redemptions",
   "POST /coin/redemptions/{redemptionId}/decision",
-  "POST /coin/opening-balances"
+  "POST /coin/opening-balances",
+  "GET /framer/config",
+  "GET /framer/status",
+  "POST /framer/preview",
+  "POST /framer/deploy"
 ];
 
 const server = http.createServer(async (req, res) => {
@@ -343,6 +348,7 @@ const server = http.createServer(async (req, res) => {
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
         mail: "FULL_CONTROL_GOVERNED",
+        framer: "GOVERNED_ADAPTER",
         mcp: "AUTH0_GOVERNED_FULL_MAIL_TOOLS"
       });
     }
@@ -385,6 +391,7 @@ const server = http.createServer(async (req, res) => {
 
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
+    if (await routeFramerRequest({ req, res, url, json, readBody })) return;
 
     if (req.method === "GET" && url.pathname === "/health") {
       const birdie = await birdieOSGet("health");
