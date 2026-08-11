@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.4.0**
+Current service version: **2.5.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -97,22 +97,28 @@ For general messages the agent loads the current Birdie OS live briefing before 
 
 ## Chatty MCP Mail Bridge
 
-Version 2.4 exposes a streamable HTTP MCP endpoint at:
+Version 2.5 exposes a streamable HTTP MCP endpoint at:
 
 ```text
 https://birdie-agent-893591677320.europe-west3.run.app/mcp
 ```
 
-It uses the existing `BIRDIE_AGENT_API_KEY` Bearer authentication and exposes only these read-only tools:
+It uses the existing `BIRDIE_AGENT_API_KEY` Bearer authentication for direct MCP clients and exposes these tools:
 
 - `birdie_mail_health`
 - `birdie_mail_list`
 - `birdie_mail_get`
 - `birdie_mail_folders`
+- `birdie_mail_update_flags`
+- `birdie_mail_move`
+- `birdie_mail_send`
+- `birdie_mail_delete`
 
-Sending, moving, flagging, folder creation and deletion remain outside the MCP surface. This prevents an unattended model call from changing mailbox state. The governed HTTP Mail API remains available for separately approved operational actions.
+Reading is automatic. Flag updates and folder moves are controlled mailbox changes. Sending requires `founderApproved=true` with the exact `SEND_EMAIL` confirmation. Deletion requires explicit approval and defaults to moving a message to trash; permanent deletion additionally requires the exact `DELETE_PERMANENTLY` confirmation. These checks are enforced by the mail service, not only by the model instructions.
 
 For the ChatGPT desktop app, add the server as a **Streamable HTTP** MCP server and enter the Bearer token through the secure MCP settings UI. Never paste the token into a chat or commit it to the repository. Restart the app after saving the MCP server, then use `/mcp` to confirm that `birdie-mail` is connected.
+
+The hosted ChatGPT Plugins connection does not accept an arbitrary shared API key. Before using the OAuth option there, configure a standards-compliant OAuth 2.1 identity provider and server-side scope validation for `mail.read`, `mail.write`, `mail.send` and `mail.delete`.
 
 ### `POST /ideas`
 
@@ -201,7 +207,7 @@ After deployment, verify in this order:
 2. Authenticated `GET /health` reaches Birdie OS successfully.
 3. Authenticated `GET /next-task` returns `source: BIRDIE_OS` and `authoritative: true`.
 4. Authenticated `POST /chat` successfully handles both a next-task request and a general company-state request.
-5. Authenticated MCP initialization at `POST /mcp` lists the four read-only Birdie Mail tools.
+5. Authenticated MCP initialization at `POST /mcp` lists all eight governed Birdie Mail tools.
 6. Only then connect the endpoint as the production Chatty/Birdie MCP server or action.
 
 ## Governance

@@ -85,6 +85,15 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
-    ["birdie_mail_folders", "birdie_mail_get", "birdie_mail_health", "birdie_mail_list"]
+    [
+      "birdie_mail_delete",
+      "birdie_mail_folders",
+      "birdie_mail_get",
+      "birdie_mail_health",
+      "birdie_mail_list",
+      "birdie_mail_move",
+      "birdie_mail_send",
+      "birdie_mail_update_flags"
+    ]
   );
 });
