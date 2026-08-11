@@ -6,7 +6,7 @@ import { routeMailRequest } from "./src/mail-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.4.0";
+const BIRDIE_AGENT_VERSION = "2.5.0";
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
@@ -257,7 +257,7 @@ const server = http.createServer(async (req, res) => {
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
         mail: "FULL_CONTROL_GOVERNED",
-        mcp: "READ_ONLY_MAIL_TOOLS"
+        mcp: "GOVERNED_FULL_MAIL_TOOLS"
       });
     }
 
