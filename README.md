@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.6.0**
+Current service version: **2.6.1**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -63,9 +63,13 @@ Public service status.
 
 Checks the Birdie Agent and the upstream Birdie OS connection.
 
+### `GET /startup`
+
+Returns the authenticated Birdie OS health state and current live briefing in one startup-safe response. The response is automatically compacted below the GPT Actions payload limit when the upstream result is unexpectedly large.
+
 ### `GET /briefing`
 
-Returns the current authoritative live briefing from Birdie OS.
+Returns the current authoritative live briefing from Birdie OS. Oversized upstream data is compacted and marked with `truncated: true` instead of failing with `ResponseTooLargeError`.
 
 ### `GET /next-task`
 
