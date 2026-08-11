@@ -12,7 +12,7 @@ import {
 } from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.6.1";
+const BIRDIE_AGENT_VERSION = "2.6.2";
 const ACTION_RESPONSE_MAX_CHARS = 60_000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
