@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.6.1**
+Current service version: **2.6.2**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -35,6 +35,7 @@ Birdie OS is the source of truth for live company state. The Birdie Agent may ph
 - `MAIL_PASSWORD` — IONOS mailbox password, supplied only through Secret Manager.
 - `MAIL_IMAP_HOST` / `MAIL_IMAP_PORT` — optional; default to `imap.ionos.de:993`.
 - `MAIL_SMTP_HOST` / `MAIL_SMTP_PORT` — optional; default to `smtp.ionos.de:465`.
+- `MAIL_SIGNATURE_TEXT` / `MAIL_SIGNATURE_HTML` — optional server-side signature overrides. When omitted, Birdie uses Kevin Stroop's standard Founder signature.
 - `BIRDIE_OAUTH_ISSUER` — optional Auth0 issuer override; defaults to the Birdie EU tenant.
 - `BIRDIE_MCP_RESOURCE` — optional OAuth audience/resource override; defaults to the Cloud Run origin.
 - `BIRDIE_OAUTH_JWKS_URL` — optional JWKS endpoint override for tests or a non-standard identity provider.
@@ -170,6 +171,8 @@ Reading, folder bootstrap, moving and flag updates are authenticated operational
 - send: `{"founderApproved":true,"confirmation":"SEND_EMAIL"}`
 - move to trash: `{"founderApproved":true,"confirmation":"MOVE_TO_TRASH"}`
 - permanent deletion: `{"founderApproved":true,"confirmation":"DELETE_PERMANENTLY","mode":"permanent"}`
+
+Every successful Birdie SMTP send receives the server-side Birdie & Breakfast signature and is appended as a read MIME copy to the IONOS `\\Sent` mailbox. A failed Sent-copy append is reported separately and never causes an already delivered message to be resent.
 
 The From address is fixed to `MAIL_USER`. Secrets, message bodies and attachment data are never written to repository logs. Action logs contain metadata only.
 

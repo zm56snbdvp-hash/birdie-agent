@@ -11,6 +11,18 @@ import {
 
 const MAX_MESSAGE_BYTES = 25 * 1024 * 1024;
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+const DEFAULT_SIGNATURE_TEXT = [
+  "Kevin Stroop",
+  "Founder | Birdie & Breakfast",
+  "www.birdieandbreakfast.de"
+].join("\n");
+const DEFAULT_SIGNATURE_HTML = [
+  "<div>",
+  "Kevin Stroop<br>",
+  "Founder | Birdie &amp; Breakfast<br>",
+  '<a href="https://www.birdieandbreakfast.de">www.birdieandbreakfast.de</a>',
+  "</div>"
+].join("");
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -45,6 +57,63 @@ function audit(action, details = {}) {
     action,
     ...details
   }));
+}
+
+function containsBirdieSignature(value = "") {
+  const normalized = String(value).replace(/<[^>]+>/g, " ");
+  return /Kevin\s+Stroop/i.test(normalized) && /Founder\s*\|\s*Birdie\s*(?:&|&amp;)\s*Breakfast/i.test(normalized);
+}
+
+export function appendBirdieSignature({ text = "", html } = {}) {
+  const signatureText = process.env.MAIL_SIGNATURE_TEXT || DEFAULT_SIGNATURE_TEXT;
+  const signatureHtml = process.env.MAIL_SIGNATURE_HTML || DEFAULT_SIGNATURE_HTML;
+  const cleanText = String(text || "").trimEnd();
+  const cleanHtml = html == null ? undefined : String(html).trimEnd();
+
+  return {
+    text: containsBirdieSignature(cleanText)
+      ? cleanText
+      : `${cleanText}${cleanText ? "\n\n" : ""}${signatureText}`,
+    html: cleanHtml == null
+      ? undefined
+      : containsBirdieSignature(cleanHtml)
+        ? cleanHtml
+        : `${cleanHtml}${cleanHtml ? "<br><br>" : ""}${signatureHtml}`
+  };
+}
+
+export function selectSentMailbox(folders = []) {
+  return folders.find((folder) => folder.specialUse === "\\Sent")?.path
+    || folders.find((folder) => /^(gesendete objekte|sent)$/i.test(folder.path || folder.name || ""))?.path
+    || null;
+}
+
+export async function compileOutgoingMessage(options) {
+  const compiler = nodemailer.createTransport({
+    streamTransport: true,
+    buffer: true,
+    newline: "unix"
+  });
+  const compiled = await compiler.sendMail(options);
+  return {
+    envelope: compiled.envelope,
+    message: compiled.message,
+    messageId: compiled.messageId
+  };
+}
+
+async function archiveSentMessage(message) {
+  return withClient(async (client) => {
+    const folders = await client.list();
+    const sentMailbox = selectSentMailbox(folders);
+    if (!sentMailbox) throw httpError("SENT_MAILBOX_NOT_FOUND", 503);
+    const appended = await client.append(sentMailbox, message, ["\\Seen"], new Date());
+    return {
+      saved: true,
+      mailbox: sentMailbox,
+      uid: appended?.uid ?? null
+    };
+  });
 }
 
 async function withClient(fn) {
@@ -368,28 +437,49 @@ export async function sendMail(body = {}) {
   });
 
   const sender = requireEnv("MAIL_USER");
-  const transporter = nodemailer.createTransport(getSmtpConfig());
-  const info = await transporter.sendMail({
+  const signed = appendBirdieSignature({ text, html });
+  const outgoing = await compileOutgoingMessage({
     from: { name: "Birdie & Breakfast", address: sender },
     to,
     cc,
     bcc,
     subject,
-    text: text || undefined,
-    html,
+    text: signed.text || undefined,
+    html: signed.html,
     attachments
   });
+  const transporter = nodemailer.createTransport(getSmtpConfig());
+  const info = await transporter.sendMail({
+    envelope: outgoing.envelope,
+    raw: outgoing.message
+  });
+
+  let sentCopy;
+  try {
+    sentCopy = await archiveSentMessage(outgoing.message);
+  } catch (error) {
+    sentCopy = {
+      saved: false,
+      error: error.code || "SENT_COPY_FAILED"
+    };
+    audit("MESSAGE_SENT_COPY_FAILED", {
+      messageId: info.messageId || outgoing.messageId,
+      error: sentCopy.error
+    });
+  }
 
   audit("MESSAGE_SEND", {
-    messageId: info.messageId,
+    messageId: info.messageId || outgoing.messageId,
     acceptedCount: info.accepted?.length || 0,
     rejectedCount: info.rejected?.length || 0,
-    recipientCount: to.length + cc.length + bcc.length
+    recipientCount: to.length + cc.length + bcc.length,
+    sentCopySaved: sentCopy.saved
   });
   return {
-    messageId: info.messageId,
+    messageId: info.messageId || outgoing.messageId,
     accepted: info.accepted || [],
     rejected: info.rejected || [],
-    response: info.response || ""
+    response: info.response || "",
+    sentCopy
   };
 }
