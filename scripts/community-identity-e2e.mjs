@@ -42,6 +42,22 @@ async function parseJson(response, label) {
   return body;
 }
 
+function findExactWorkItems(value, matches = []) {
+  if (!value || typeof value !== "object") return matches;
+
+  if (!Array.isArray(value) && value.workItemId === TARGET_WORK_ITEM_ID) {
+    matches.push(value);
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) findExactWorkItems(item, matches);
+  } else {
+    for (const child of Object.values(value)) findExactWorkItems(child, matches);
+  }
+
+  return matches;
+}
+
 async function getWorkItem() {
   const url = new URL(osBase);
   url.searchParams.set("action", "communityWorkItem");
@@ -49,11 +65,14 @@ async function getWorkItem() {
   url.searchParams.set("api_key", osKey);
   const response = await fetch(url, { headers: { Accept: "application/json" }, redirect: "follow" });
   const body = await parseJson(response, "Birdie OS communityWorkItem");
-  const workItem = body?.data?.workItem || body?.data;
-  if (!workItem || workItem.workItemId !== TARGET_WORK_ITEM_ID) {
-    throw new Error("Target work item was not returned exactly");
+  const matches = findExactWorkItems(body);
+  if (matches.length !== 1) {
+    const topLevelShape = Array.isArray(body)
+      ? `array(length=${body.length})`
+      : `object(keys=${Object.keys(body || {}).sort().join(",")})`;
+    throw new Error(`Expected exactly one target work item, found ${matches.length}; response shape ${topLevelShape}`);
   }
-  return workItem;
+  return matches[0];
 }
 
 function assertPrecondition(workItem) {
