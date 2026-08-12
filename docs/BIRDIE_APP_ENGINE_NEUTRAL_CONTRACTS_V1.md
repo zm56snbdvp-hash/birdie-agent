@@ -181,6 +181,8 @@ Multiplayer is explicitly **not implemented in V1**, but the following constrain
 
 The current React/Three.js vertical slice must consume a sandbox adapter that returns these DTO shapes. UI components may transform DTOs into view models, but must not reach directly into BirdieOS sheets or internal company APIs.
 
+The next implementation gate is to locate/materialize the archived client workspace, introduce this sandbox adapter there, and wire Golf History to the already verified Round Mode semantics. Until that workspace is available in the repository/runtime, the architecture lock is complete but the client integration portion of TASK-066 remains open.
+
 ## Acceptance for TASK-066 architecture gate
 
 PASS when:
