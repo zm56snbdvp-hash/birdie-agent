@@ -1,19 +1,22 @@
 /**
- * BIRDIE OS — Community Identity Resolution
+ * BIRDIE OS — Community Identity Resolution V1
  *
  * Add this file to the authoritative Birdie OS Apps Script project and route
- * actions beginning with `communityIdentity` plus the two read actions
- * `communityWorkItem` and `birdieProfiles`
+ * `communityWorkItem`, `birdieProfiles`, and `updateCommunityIdentityResolution`
  * to handleCommunityIdentityAction_(request).
  *
- * This module:
+ * Governance:
  * - reads COMMUNITY WORK QUEUE
  * - reads BIRDIE_PROFILES read-only
- * - writes ONLY J:O of the SAME eligible work item
+ * - writes ONLY resolver metadata on the SAME eligible work item
+ * - writes J:O and Q:T; P/sourceSnapshotKey is never changed
+ * - never touches COMMUNITY SYNC QUEUE, coins, claims, rewards or redemptions
  */
 
 var BIRDIE_COMMUNITY_WORK_QUEUE_ = "COMMUNITY WORK QUEUE";
 var BIRDIE_COMMUNITY_PROFILES_ = "BIRDIE_PROFILES";
+var BIRDIE_IDENTITY_PROCESSOR_ = "ZAPIER_IDENTITY_RESOLVER";
+var BIRDIE_IDENTITY_RESOLVER_VERSION_ = "v1";
 
 var BIRDIE_COMMUNITY_WORK_HEADERS_ = [
   "workItemId",
@@ -31,7 +34,11 @@ var BIRDIE_COMMUNITY_WORK_HEADERS_ = [
   "agentNotes",
   "processedBy",
   "processedAt",
-  "sourceSnapshotKey"
+  "sourceSnapshotKey",
+  "identityConfidence",
+  "identityReason",
+  "identityConflict",
+  "identityDecisionMode"
 ];
 
 function handleCommunityIdentityAction_(request) {
@@ -80,25 +87,27 @@ function birdieCommunityProfiles_() {
 
   var values = sheet.getDataRange().getValues();
   var headers = values.shift();
+  var required = [
+    "birdieId",
+    "displayName",
+    "email",
+    "accountType",
+    "instagramHandle",
+    "status"
+  ];
 
-  var birdieIdIndex = headers.indexOf("birdieId");
-  var instagramHandleIndex = headers.indexOf("instagramHandle");
-  var statusIndex = headers.indexOf("status");
-
-  if (
-    birdieIdIndex === -1 ||
-    instagramHandleIndex === -1 ||
-    statusIndex === -1
-  ) {
-    throw new Error("INVALID_BIRDIE_PROFILE_HEADERS");
-  }
+  required.forEach(function (header) {
+    if (headers.indexOf(header) === -1) {
+      throw new Error("INVALID_BIRDIE_PROFILE_HEADERS");
+    }
+  });
 
   var profiles = values.map(function (row) {
-    return {
-      birdieId: row[birdieIdIndex],
-      instagramHandle: row[instagramHandleIndex],
-      status: row[statusIndex]
-    };
+    var profile = {};
+    required.forEach(function (header) {
+      profile[header] = row[headers.indexOf(header)];
+    });
+    return profile;
   });
 
   return {
@@ -113,8 +122,24 @@ function birdieCommunityUpdateIdentity_(request) {
 
   try {
     var workItemId = birdieCommunityRequired_(request.workItemId, "workItemId");
-    var write = request.write || {};
+    var resolverVersion = birdieCommunityRequired_(
+      request.resolverVersion,
+      "resolverVersion"
+    );
+    var idempotencyKey = birdieCommunityRequired_(
+      request.idempotencyKey,
+      "idempotencyKey"
+    );
+    var expectedKey = "IDENTITY|" + workItemId + "|" + BIRDIE_IDENTITY_RESOLVER_VERSION_;
 
+    if (resolverVersion !== BIRDIE_IDENTITY_RESOLVER_VERSION_) {
+      throw new Error("UNSUPPORTED_IDENTITY_RESOLVER_VERSION");
+    }
+    if (idempotencyKey !== expectedKey) {
+      throw new Error("INVALID_IDENTITY_IDEMPOTENCY_KEY");
+    }
+
+    var write = request.write || {};
     var sheet = birdieCommunitySheet_(BIRDIE_COMMUNITY_WORK_QUEUE_);
     birdieCommunityValidateWorkQueueHeaders_(sheet);
 
@@ -127,97 +152,231 @@ function birdieCommunityUpdateIdentity_(request) {
       throw new Error("WORK_ITEM_NOT_INSTAGRAM");
     }
 
-    if (String(current.resolutionStatus) !== "PENDING_IDENTITY") {
-      throw new Error("WORK_ITEM_NOT_PENDING_IDENTITY");
+    if (String(current.resolutionStatus) !== "IDENTITY_PENDING") {
+      throw new Error("WORK_ITEM_NOT_IDENTITY_PENDING");
     }
 
     if (String(current.matchedBirdieId || "").trim() !== "") {
       throw new Error("WORK_ITEM_ALREADY_MATCHED");
     }
 
-    if (String(write.processedBy) !== "ZAPIER_IDENTITY_RESOLVER") {
-      throw new Error("INVALID_IDENTITY_PROCESSOR");
-    }
+    var normalized = birdieCommunityValidateIdentityWrite_(current, write);
 
-    var profiles = birdieCommunityActiveMatches_(
-      current.externalUserId
-    );
-
-    var expected;
-
-    if (profiles.length === 0) {
-      expected = {
-        resolutionStatus: "IDENTITY_PENDING",
-        matchedBirdieId: "",
-        decision: "NO_PROFILE_MATCH",
-        agentNotes: "Instagram identity not yet linked to a Birdie Profile."
+    if (birdieCommunitySameResolution_(current, normalized)) {
+      return {
+        success: true,
+        data: birdieCommunityResolutionView_(
+          workItemId,
+          found.row,
+          current,
+          expectedKey,
+          true
+        )
       };
-    } else if (profiles.length === 1) {
-      expected = {
-        resolutionStatus: "IDENTITY_RESOLVED",
-        matchedBirdieId: String(profiles[0].birdieId),
-        decision: "MATCHED_EXISTING_PROFILE",
-        agentNotes: "Instagram identity resolved automatically by exact handle match."
-      };
-    } else {
-      expected = {
-        resolutionStatus: "IDENTITY_CONFLICT",
-        matchedBirdieId: "",
-        decision: "MULTIPLE_PROFILE_MATCHES",
-        agentNotes: "Multiple Birdie Profiles match this Instagram handle. Manual resolution required."
-      };
-    }
-
-    if (
-      String(write.resolutionStatus) !== expected.resolutionStatus ||
-      String(write.matchedBirdieId || "") !== expected.matchedBirdieId ||
-      String(write.decision) !== expected.decision ||
-      String(write.agentNotes) !== expected.agentNotes
-    ) {
-      throw new Error("IDENTITY_RESOLUTION_MISMATCH");
     }
 
     var processedAt = new Date().toISOString();
 
-    // J:O ONLY — same row only.
+    // J:O only for existing resolver metadata.
     sheet.getRange(found.row, 10, 1, 6).setValues([[
-      expected.resolutionStatus,
-      expected.matchedBirdieId,
-      expected.decision,
-      expected.agentNotes,
-      "ZAPIER_IDENTITY_RESOLVER",
+      normalized.resolutionStatus,
+      normalized.matchedBirdieId,
+      normalized.decision,
+      normalized.agentNotes,
+      BIRDIE_IDENTITY_PROCESSOR_,
       processedAt
     ]]);
 
+    // Q:T only for Confidence Resolver V1 metadata. Column P remains untouched.
+    sheet.getRange(found.row, 17, 1, 4).setValues([[
+      normalized.identityConfidence,
+      normalized.identityReason,
+      normalized.identityConflict,
+      normalized.identityDecisionMode
+    ]]);
+
+    var updated = {};
+    BIRDIE_COMMUNITY_WORK_HEADERS_.forEach(function (header) {
+      updated[header] = current[header];
+    });
+    updated.resolutionStatus = normalized.resolutionStatus;
+    updated.matchedBirdieId = normalized.matchedBirdieId;
+    updated.decision = normalized.decision;
+    updated.agentNotes = normalized.agentNotes;
+    updated.processedBy = BIRDIE_IDENTITY_PROCESSOR_;
+    updated.processedAt = processedAt;
+    updated.identityConfidence = normalized.identityConfidence;
+    updated.identityReason = normalized.identityReason;
+    updated.identityConflict = normalized.identityConflict;
+    updated.identityDecisionMode = normalized.identityDecisionMode;
+
     return {
       success: true,
-      data: {
-        workItemId: workItemId,
-        rowNumber: found.row,
-        resolutionStatus: expected.resolutionStatus,
-        matchedBirdieId: expected.matchedBirdieId,
-        decision: expected.decision,
-        agentNotes: expected.agentNotes,
-        processedBy: "ZAPIER_IDENTITY_RESOLVER",
-        processedAt: processedAt
-      }
+      data: birdieCommunityResolutionView_(
+        workItemId,
+        found.row,
+        updated,
+        expectedKey,
+        false
+      )
     };
   } finally {
     lock.releaseLock();
   }
 }
 
-function birdieCommunityActiveMatches_(externalUserId) {
+function birdieCommunityValidateIdentityWrite_(current, write) {
+  if (String(write.processedBy) !== BIRDIE_IDENTITY_PROCESSOR_) {
+    throw new Error("INVALID_IDENTITY_PROCESSOR");
+  }
+
+  var confidence = Number(write.identityConfidence);
+  if (!isFinite(confidence) || confidence < 0 || confidence > 100) {
+    throw new Error("INVALID_IDENTITY_CONFIDENCE");
+  }
+  confidence = Math.round(confidence);
+
+  var reason = birdieCommunityRequired_(write.identityReason, "identityReason");
+  if (typeof write.identityConflict !== "boolean") {
+    throw new Error("INVALID_IDENTITY_CONFLICT");
+  }
+
+  var mode = birdieCommunityRequired_(write.identityDecisionMode, "identityDecisionMode");
+  var resolutionStatus = birdieCommunityRequired_(
+    write.resolutionStatus,
+    "resolutionStatus"
+  );
+  var decision = birdieCommunityRequired_(write.decision, "decision");
+  var agentNotes = birdieCommunityRequired_(write.agentNotes, "agentNotes");
+  var matchedBirdieId = String(write.matchedBirdieId || "").trim();
+
+  if (mode === "AUTO_EXACT_LINK") {
+    if (
+      resolutionStatus !== "IDENTITY_RESOLVED" ||
+      decision !== "EXACT_IDENTITY_LINK" ||
+      confidence !== 100 ||
+      write.identityConflict !== false ||
+      !matchedBirdieId
+    ) {
+      throw new Error("INVALID_AUTO_EXACT_IDENTITY_WRITE");
+    }
+
+    var exactMatches = birdieCommunityActiveExactMatches_(current.externalUserId);
+    if (
+      exactMatches.length !== 1 ||
+      String(exactMatches[0].birdieId) !== matchedBirdieId
+    ) {
+      throw new Error("EXACT_IDENTITY_LINK_NOT_VERIFIED");
+    }
+  } else if (mode === "AUTO_HIGH_CONFIDENCE") {
+    if (
+      resolutionStatus !== "IDENTITY_RESOLVED" ||
+      decision !== "HIGH_CONFIDENCE_MATCH" ||
+      confidence < 90 ||
+      write.identityConflict !== false ||
+      !matchedBirdieId
+    ) {
+      throw new Error("INVALID_HIGH_CONFIDENCE_IDENTITY_WRITE");
+    }
+
+    var profile = birdieCommunityFindActiveProfileByBirdieId_(matchedBirdieId);
+    if (!profile) {
+      throw new Error("HIGH_CONFIDENCE_PROFILE_NOT_ACTIVE");
+    }
+  } else if (mode === "FOUNDER_REVIEW_CONFLICT") {
+    if (
+      resolutionStatus !== "IDENTITY_PENDING" ||
+      decision !== "FOUNDER_REVIEW_REQUIRED" ||
+      write.identityConflict !== true ||
+      matchedBirdieId
+    ) {
+      throw new Error("INVALID_IDENTITY_CONFLICT_WRITE");
+    }
+  } else if (mode === "FOUNDER_REVIEW_LOW_CONFIDENCE") {
+    if (
+      resolutionStatus !== "IDENTITY_PENDING" ||
+      write.identityConflict !== false ||
+      matchedBirdieId ||
+      confidence >= 90 ||
+      ["FOUNDER_REVIEW_REQUIRED", "NO_PROFILE_MATCH"].indexOf(decision) === -1
+    ) {
+      throw new Error("INVALID_LOW_CONFIDENCE_IDENTITY_WRITE");
+    }
+    if (decision === "NO_PROFILE_MATCH" && confidence !== 0) {
+      throw new Error("NO_PROFILE_MATCH_CONFIDENCE_MUST_BE_ZERO");
+    }
+  } else {
+    throw new Error("UNKNOWN_IDENTITY_DECISION_MODE");
+  }
+
+  return {
+    resolutionStatus: resolutionStatus,
+    matchedBirdieId: matchedBirdieId,
+    decision: decision,
+    agentNotes: agentNotes,
+    identityConfidence: confidence,
+    identityReason: reason,
+    identityConflict: write.identityConflict,
+    identityDecisionMode: mode
+  };
+}
+
+function birdieCommunitySameResolution_(current, normalized) {
+  return (
+    String(current.resolutionStatus || "") === normalized.resolutionStatus &&
+    String(current.matchedBirdieId || "") === normalized.matchedBirdieId &&
+    String(current.decision || "") === normalized.decision &&
+    String(current.agentNotes || "") === normalized.agentNotes &&
+    String(current.processedBy || "") === BIRDIE_IDENTITY_PROCESSOR_ &&
+    Number(current.identityConfidence) === normalized.identityConfidence &&
+    String(current.identityReason || "") === normalized.identityReason &&
+    birdieCommunityBoolean_(current.identityConflict) === normalized.identityConflict &&
+    String(current.identityDecisionMode || "") === normalized.identityDecisionMode
+  );
+}
+
+function birdieCommunityResolutionView_(workItemId, rowNumber, row, idempotencyKey, idempotent) {
+  return {
+    workItemId: workItemId,
+    rowNumber: rowNumber,
+    resolutionStatus: row.resolutionStatus,
+    matchedBirdieId: row.matchedBirdieId,
+    decision: row.decision,
+    agentNotes: row.agentNotes,
+    processedBy: row.processedBy,
+    processedAt: row.processedAt,
+    identityConfidence: row.identityConfidence,
+    identityReason: row.identityReason,
+    identityConflict: birdieCommunityBoolean_(row.identityConflict),
+    identityDecisionMode: row.identityDecisionMode,
+    resolverVersion: BIRDIE_IDENTITY_RESOLVER_VERSION_,
+    idempotencyKey: idempotencyKey,
+    idempotent: idempotent === true
+  };
+}
+
+function birdieCommunityActiveExactMatches_(externalUserId) {
   var normalizedExternal = birdieCommunityNormalizeHandle_(externalUserId);
-
-  var profileData = birdieCommunityProfiles_().data.profiles;
-
-  return profileData.filter(function (profile) {
+  return birdieCommunityProfiles_().data.profiles.filter(function (profile) {
     return (
       String(profile.status) === "ACTIVE" &&
-      birdieCommunityNormalizeHandle_(profile.instagramHandle) === normalizedExternal
+      birdieCommunityNormalizeHandle_(profile.instagramHandle) === normalizedExternal &&
+      normalizedExternal !== ""
     );
   });
+}
+
+function birdieCommunityFindActiveProfileByBirdieId_(birdieId) {
+  var profiles = birdieCommunityProfiles_().data.profiles;
+  for (var index = 0; index < profiles.length; index += 1) {
+    if (
+      String(profiles[index].birdieId) === String(birdieId) &&
+      String(profiles[index].status) === "ACTIVE"
+    ) {
+      return profiles[index];
+    }
+  }
+  return null;
 }
 
 function birdieCommunityNormalizeHandle_(value) {
@@ -230,6 +389,11 @@ function birdieCommunityNormalizeHandle_(value) {
   }
 
   return normalized;
+}
+
+function birdieCommunityBoolean_(value) {
+  if (value === true || String(value).toUpperCase() === "TRUE") return true;
+  return false;
 }
 
 function birdieCommunitySheet_(name) {
