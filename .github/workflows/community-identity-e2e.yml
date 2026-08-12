@@ -32,7 +32,7 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run resolver unit tests
-        run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs
+        run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs test/community-write-gate.test.mjs
 
   live-e2e:
     if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E'
