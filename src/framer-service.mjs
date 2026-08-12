@@ -54,25 +54,70 @@ function collectionIdentity(collection) {
   };
 }
 
-function assertCollectionWritable(collection, env = process.env) {
-  if (!collection) throw cmsError("FRAMER_COLLECTION_NOT_FOUND", "Framer CMS collection not found", 404);
-  if (collection.readonly) throw cmsError("FRAMER_COLLECTION_READ_ONLY", "Framer CMS collection is read-only", 403);
+export function getFramerCollectionWriteEligibility(collection, env = process.env) {
+  if (!collection) {
+    return {
+      eligible: false,
+      code: "FRAMER_COLLECTION_NOT_FOUND",
+      status: 404,
+      reason: "Framer CMS collection not found"
+    };
+  }
+
+  // Framer now recommends managedBy + permission-aware checks instead of
+  // relying on the deprecated readonly property. Birdie intentionally edits
+  // only user-managed CMS collections and fails closed for every other owner.
+  if (collection.managedBy !== "user") {
+    return {
+      eligible: false,
+      code: "FRAMER_COLLECTION_NOT_USER_MANAGED",
+      status: 403,
+      reason: `Framer CMS collection is not user-managed: ${collection.managedBy || "unknown"}`
+    };
+  }
+
+  // Keep readonly as a secondary compatibility guard while Framer completes
+  // the transition to managedBy / granular permission checks.
+  if (collection.readonly === true) {
+    return {
+      eligible: false,
+      code: "FRAMER_COLLECTION_READ_ONLY",
+      status: 403,
+      reason: "Framer CMS collection is read-only"
+    };
+  }
 
   const allowlist = configuredCollectionAllowlist(env);
   if (!allowlist.length) {
-    throw cmsError(
-      "FRAMER_CMS_WRITE_ALLOWLIST_EMPTY",
-      "FRAMER_CMS_WRITE_ALLOWLIST must explicitly allow CMS collection IDs or names before writes are enabled",
-      403
-    );
+    return {
+      eligible: false,
+      code: "FRAMER_CMS_WRITE_ALLOWLIST_EMPTY",
+      status: 403,
+      reason: "FRAMER_CMS_WRITE_ALLOWLIST must explicitly allow CMS collection IDs or names before writes are enabled"
+    };
   }
 
   if (!allowlist.includes(collection.id) && !allowlist.includes(collection.name)) {
-    throw cmsError(
-      "FRAMER_COLLECTION_NOT_ALLOWED",
-      `Framer CMS collection is not write-allowlisted: ${collection.name || collection.id}`,
-      403
-    );
+    return {
+      eligible: false,
+      code: "FRAMER_COLLECTION_NOT_ALLOWED",
+      status: 403,
+      reason: `Framer CMS collection is not write-allowlisted: ${collection.name || collection.id}`
+    };
+  }
+
+  return {
+    eligible: true,
+    code: null,
+    status: 200,
+    reason: "USER_MANAGED_AND_ALLOWLISTED"
+  };
+}
+
+function assertCollectionWritable(collection, env = process.env) {
+  const eligibility = getFramerCollectionWriteEligibility(collection, env);
+  if (!eligibility.eligible) {
+    throw cmsError(eligibility.code, eligibility.reason, eligibility.status);
   }
 }
 
@@ -161,6 +206,8 @@ export function getFramerCmsWritePolicy(env = process.env) {
     mode: "ALLOWLIST_ONLY",
     writeEnabled: allowlist.length > 0,
     allowedCollections: allowlist,
+    collectionOwnership: "USER_MANAGED_ONLY",
+    permissionModel: "FRAMER_ENFORCED_FAIL_CLOSED",
     applyConfirmation: "APPLY_FRAMER_CMS_CHANGE",
     previewConfirmation: "PUBLISH_FRAMER_PREVIEW",
     productionConfirmation: "DEPLOY_FRAMER_PRODUCTION",
