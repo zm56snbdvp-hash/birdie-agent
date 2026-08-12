@@ -44,7 +44,7 @@ function waitForServer(child) {
   });
 }
 
-test("real HTTP server protects and advertises the Birdie Mail MCP tools", async (context) => {
+test("real HTTP server protects and advertises the BirdieOS MCP tools", async (context) => {
   const { publicKey, privateKey } = await generateKeyPair("RS256");
   const publicJwk = await exportJWK(publicKey);
   Object.assign(publicJwk, { kid: "birdie-test-key", alg: "RS256", use: "sig" });
@@ -89,6 +89,8 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
   assert.equal(metadata.resource, resource);
   assert.deepEqual(metadata.authorization_servers, [issuer]);
   assert.deepEqual(metadata.scopes_supported, [
+    "os.read",
+    "framer.read",
     "mail.read",
     "mail.write",
     "mail.send",
@@ -117,6 +119,8 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
     [
+      "birdie_framer_config",
+      "birdie_framer_status",
       "birdie_mail_delete",
       "birdie_mail_folders",
       "birdie_mail_get",
@@ -124,7 +128,11 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
       "birdie_mail_list",
       "birdie_mail_move",
       "birdie_mail_send",
-      "birdie_mail_update_flags"
+      "birdie_mail_update_flags",
+      "birdie_os_briefing",
+      "birdie_os_health",
+      "birdie_os_next_task",
+      "birdie_os_startup"
     ]
   );
 
@@ -148,7 +156,7 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
   await oauthClient.connect(oauthTransport);
 
   const oauthTools = await oauthClient.listTools();
-  assert.equal(oauthTools.tools.length, 8);
+  assert.equal(oauthTools.tools.length, 14);
 
   const deniedSend = await oauthClient.callTool({
     name: "birdie_mail_send",
@@ -163,6 +171,14 @@ test("real HTTP server protects and advertises the Birdie Mail MCP tools", async
   assert.equal(deniedSend.isError, true);
   assert.equal(deniedSend.content[0].text, "INSUFFICIENT_SCOPE");
   assert.match(deniedSend._meta["mcp/www_authenticate"][0], /mail\.send/);
+
+  const deniedStartup = await oauthClient.callTool({
+    name: "birdie_os_startup",
+    arguments: {}
+  });
+  assert.equal(deniedStartup.isError, true);
+  assert.equal(deniedStartup.content[0].text, "INSUFFICIENT_SCOPE");
+  assert.match(deniedStartup._meta["mcp/www_authenticate"][0], /os\.read/);
 
   const wrongAudienceToken = await new SignJWT({ scope: "mail.read" })
     .setProtectedHeader({ alg: "RS256", kid: "birdie-test-key" })

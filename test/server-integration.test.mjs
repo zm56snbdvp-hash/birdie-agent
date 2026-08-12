@@ -88,7 +88,7 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const baseUrl = `http://127.0.0.1:${agentPort}`;
   const rootResponse = await fetch(`${baseUrl}/`);
   const root = await rootResponse.json();
-  assert.equal(root.version, "2.6.2");
+  assert.equal(root.version, "2.7.0");
 
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);
