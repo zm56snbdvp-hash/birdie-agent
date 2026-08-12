@@ -6,6 +6,7 @@ import { routeMailRequest } from "./src/mail-router.mjs";
 import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
 import { routeFamilyMcpRequest } from "./src/family/family-mcp.mjs";
+import { routeFamilyApiRequest } from "./src/family/family-api.mjs";
 import {
   authenticateMcpRequest,
   createMcpAuthConfig,
@@ -301,6 +302,10 @@ const routes = [
   "POST /chat",
   "POST /mcp",
   "POST /family/mcp",
+  "GET /family/api/policy",
+  "GET /family/api/health",
+  "GET /family/api/briefing",
+  "GET /family/api/next-task",
   "GET /mail/health",
   "GET /mail/messages",
   "GET /mail/messages/{uid}",
@@ -341,6 +346,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (await routeFamilyApiRequest({
+      req,
+      res,
+      url,
+      birdieOSGet,
+      familyApiKey: BIRDIE_FAMILY_API_KEY
+    })) return;
 
     if (await routeFamilyMcpRequest({
       req,
