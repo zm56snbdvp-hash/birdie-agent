@@ -35,7 +35,7 @@ jobs:
         run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs
 
   live-e2e:
-    if: (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[RUN_IDENTITY_E2E_ONCE]'))
+    if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E'
     needs: unit
     runs-on: ubuntu-latest
     timeout-minutes: 10
