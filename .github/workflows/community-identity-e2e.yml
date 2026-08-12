@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      BIRDIE_OS_BASE: https://script.google.com/macros/s/AKfycbxw3TfFJzsdL-R44xnFqS-KtdhCZ_iFh9HCZEG7nngTteMab2EdRrB0mB3ia6ci_FbYYW/exec
+      BIRDIE_OS_BASE: https://script.google.com/macros/s/AKfycbxw3TfFJzsdL-R44xnFqS-KtdhCZ_iFh9HCZEG7nngTteMab2EdRrBOmB3ia6ci_FbYYw/exec
       BIRDIE_OS_API_KEY: ${{ secrets.BIRDIE_OS_API_KEY }}
       BIRDIE_AGENT_BASE: http://127.0.0.1:8080
       BIRDIE_AGENT_API_KEY: birdie-ci-e2e-local-only
