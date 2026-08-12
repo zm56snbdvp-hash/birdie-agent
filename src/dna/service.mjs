@@ -21,24 +21,6 @@ const VERIFICATION_MODES = ["OWNER_SUBMITTED", "SYSTEM_VERIFIED", "FOUNDER_VERIF
 const EVENT_DECISIONS = ["APPROVE", "REJECT"];
 const TRANSFER_MODES = ["DIRECT", "RELEASE_TO_FLOCK"];
 
-const EVOLUTION_TIERS = [
-  { code: "COMMON_RARE", threshold: 0 },
-  { code: "FLOCK_RARE", threshold: 30 },
-  { code: "NIGHT_OWL_RARE", threshold: 75 },
-  { code: "STAY_RARE", threshold: 150 },
-  { code: "LEGACY_RARE", threshold: 300 }
-];
-
-const EVENT_RULES = {
-  ACTIVATED: { points: 5, maxPerObject: 1 },
-  COURSE_VISIT: { points: 10, distinctBy: "courseName" },
-  FIRST_BIRDIE: { points: 20, maxPerObject: 1 },
-  INSTAGRAM_TAG_VERIFIED: { points: 10, distinctBy: "sourceReference" },
-  COMMUNITY_EVENT: { points: 25, distinctBy: "sourceReference" },
-  OWNERSHIP_TRANSFER: { points: 15, maxPerObject: 10, systemOnly: true },
-  RELEASED_TO_FLOCK: { points: 20, maxPerObject: 5, systemOnly: true }
-};
-
 function requireIdempotencyKey(body) {
   return requireString(body.idempotencyKey, "idempotencyKey", 180);
 }
@@ -66,20 +48,8 @@ export function createDnaService({ birdieOSPost }) {
   }
 
   return {
-    getConfig() {
-      return {
-        objectTypes: OBJECT_TYPES,
-        physicalIdentityTypes: PHYSICAL_IDENTITY_TYPES,
-        eventRules: EVENT_RULES,
-        evolutionTiers: EVOLUTION_TIERS,
-        transferModes: TRANSFER_MODES,
-        principles: {
-          eventLedgerAuthoritative: true,
-          clientControlledEvolution: false,
-          directCoinWrites: false,
-          productionObjectIssuanceRequiresFounderApproval: true
-        }
-      };
+    async getConfig() {
+      return post("dnaGetConfig", { source: "Birdie Agent" });
     },
 
     async createObject(input) {
@@ -109,7 +79,7 @@ export function createDnaService({ birdieOSPost }) {
           "physicalIdentityRef",
           300
         ),
-        publicPassport: body.publicPassport !== false,
+        publicPassport: body.publicPassport === true,
         founderApproved: true,
         idempotencyKey: requireIdempotencyKey(body),
         source: "Birdie Agent"
@@ -145,6 +115,13 @@ export function createDnaService({ birdieOSPost }) {
           403
         );
       }
+      if (verificationMode === "SYSTEM_VERIFIED" && body.systemVerified !== true) {
+        throw new DnaValidationError(
+          "SYSTEM_VERIFICATION_REQUIRED",
+          "System-verified Birdie DNA events require an explicit trusted-system assertion",
+          403
+        );
+      }
 
       return post("dnaCreateEvent", compact({
         objectId: requireString(objectId, "objectId", 100),
@@ -158,6 +135,7 @@ export function createDnaService({ birdieOSPost }) {
         evidenceUrl: optionalString(body.evidenceUrl, "evidenceUrl", 1000),
         metadata: optionalObject(body.metadata, "metadata"),
         verificationMode,
+        systemVerified: verificationMode === "SYSTEM_VERIFIED" ? true : undefined,
         founderApproved: verificationMode === "FOUNDER_VERIFIED" ? true : undefined,
         idempotencyKey: requireIdempotencyKey(body),
         source: "Birdie Agent"
