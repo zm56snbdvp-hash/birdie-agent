@@ -35,12 +35,14 @@ jobs:
         run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs
 
   live-e2e:
-    if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E'
+    if: >-
+      (github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E') ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[RUN_IDENTITY_E2E_ONCE]'))
     needs: unit
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      BIRDIE_OS_BASE: https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec
+      BIRDIE_OS_BASE: https://script.google.com/macros/s/AKfycbxw3TfFJzsdL-R44xnFqS-KtdhCZ_iFh9HCZEG7nngTteMab2EdRrB0mB3ia6ci_FbYYW/exec
       BIRDIE_OS_API_KEY: ${{ secrets.BIRDIE_OS_API_KEY }}
       BIRDIE_AGENT_BASE: http://127.0.0.1:8080
       BIRDIE_AGENT_API_KEY: birdie-ci-e2e-local-only
