@@ -39,12 +39,14 @@ async function connectedClient(context, service = mailService()) {
   return client;
 }
 
-test("MCP exposes governed read, write, send and delete mail tools", async (context) => {
+test("MCP exposes governed BirdieOS, Framer-read and mail tools", async (context) => {
   const client = await connectedClient(context);
   const { tools } = await client.listTools();
   assert.deepEqual(
     tools.map((tool) => tool.name).sort(),
     [
+      "birdie_framer_config",
+      "birdie_framer_status",
       "birdie_mail_delete",
       "birdie_mail_folders",
       "birdie_mail_get",
@@ -52,14 +54,22 @@ test("MCP exposes governed read, write, send and delete mail tools", async (cont
       "birdie_mail_list",
       "birdie_mail_move",
       "birdie_mail_send",
-      "birdie_mail_update_flags"
+      "birdie_mail_update_flags",
+      "birdie_os_briefing",
+      "birdie_os_health",
+      "birdie_os_next_task",
+      "birdie_os_startup"
     ]
   );
   const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+  assert.equal(byName.birdie_os_startup.annotations.readOnlyHint, true);
+  assert.equal(byName.birdie_framer_status.annotations.readOnlyHint, true);
   assert.equal(byName.birdie_mail_list.annotations.readOnlyHint, true);
   assert.equal(byName.birdie_mail_update_flags.annotations.readOnlyHint, false);
   assert.equal(byName.birdie_mail_send.annotations.openWorldHint, true);
   assert.equal(byName.birdie_mail_delete.annotations.destructiveHint, true);
+  assert.deepEqual(byName.birdie_os_startup._meta.securitySchemes[0].scopes, ["os.read"]);
+  assert.deepEqual(byName.birdie_framer_status._meta.securitySchemes[0].scopes, ["framer.read"]);
   assert.deepEqual(byName.birdie_mail_send._meta.securitySchemes[0].scopes, ["mail.send"]);
   assert.deepEqual(byName.birdie_mail_delete._meta.securitySchemes[0].scopes, ["mail.delete"]);
 });
