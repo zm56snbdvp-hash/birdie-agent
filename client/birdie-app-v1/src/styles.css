@@ -19,6 +19,8 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .world-meta { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 17px 20px; color: #f7f3eb; background: linear-gradient(100deg, #173226, #234734); border-bottom: 1px solid rgba(199,165,74,.28); }
 .world-meta p { margin: 0 0 3px; color: #dcc9a4; }
 .world-meta span { font-size: 12px; color: #dcc9a4; }
+.world-meta-status { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.world-meta .zone-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 5px 10px; border-radius: 999px; color: #f7f3eb; background: rgba(199,165,74,.18); border: 1px solid rgba(199,165,74,.52); box-shadow: inset 0 1px 0 rgba(255,255,255,.08); font-weight: 700; letter-spacing: .03em; }
 .three-mount { width: 100%; height: min(56vw, 560px); min-height: 340px; background: #f1c891; }
 .three-mount canvas { width: 100%; height: 100%; display: block; touch-action: none; }
 .webgl-fallback { min-height: 340px; display: grid; place-content: center; text-align: center; padding: 30px; background: linear-gradient(180deg, #dcc9a4, #f7f3eb); }
@@ -72,7 +74,8 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
   .hero { align-items: flex-start; }
   .avatar { width: 70px; height: 70px; font-size: 30px; }
   .world-stage { margin: 26px 0; border-radius: 24px; }
-  .world-meta { align-items: flex-start; flex-direction: column; gap: 6px; padding: 14px 16px; }
+  .world-meta { align-items: flex-start; flex-direction: column; gap: 8px; padding: 14px 16px; }
+  .world-meta-status { width: 100%; justify-content: space-between; }
   .three-mount { min-height: 340px; height: 78vw; max-height: 500px; }
   .touch-controls { right: 10px; bottom: 10px; width: 164px; padding: 10px; border-radius: 20px; }
   .touch-controls > button, .touch-controls div button { width: 46px; height: 46px; border-radius: 14px; }
