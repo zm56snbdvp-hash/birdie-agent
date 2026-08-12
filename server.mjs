@@ -5,6 +5,7 @@ import { routeCoinRequest } from "./src/coin/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
 import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
+import { routeFamilyMcpRequest } from "./src/family/family-mcp.mjs";
 import {
   authenticateMcpRequest,
   createMcpAuthConfig,
@@ -19,6 +20,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
 const BIRDIE_AGENT_API_KEY = process.env.BIRDIE_AGENT_API_KEY;
+const BIRDIE_FAMILY_API_KEY = process.env.BIRDIE_FAMILY_API_KEY;
 const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE || "https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec";
 const MCP_AUTH_CONFIG = createMcpAuthConfig();
 
@@ -338,6 +340,14 @@ const server = http.createServer(async (req, res) => {
     }
 
     const url = new URL(req.url, `http://${req.headers.host}`);
+
+    if (await routeFamilyMcpRequest({
+      req,
+      res,
+      url,
+      birdieOSGet,
+      familyApiKey: BIRDIE_FAMILY_API_KEY
+    })) return;
 
     if (req.method === "GET" && url.pathname === "/") {
       return json(res, 200, {
