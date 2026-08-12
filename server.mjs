@@ -2,6 +2,8 @@ import http from "node:http";
 import OpenAI from "openai";
 import { createCoinService } from "./src/coin/service.mjs";
 import { routeCoinRequest } from "./src/coin/router.mjs";
+import { createDnaService } from "./src/dna/service.mjs";
+import { routeDnaRequest } from "./src/dna/router.mjs";
 import { routeMailRequest } from "./src/mail-router.mjs";
 import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
@@ -13,7 +15,7 @@ import {
 } from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.7.0";
+const BIRDIE_AGENT_VERSION = "2.8.0-dna-v0";
 const ACTION_RESPONSE_MAX_CHARS = 60_000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
@@ -173,6 +175,7 @@ async function birdieOSPost(payload) {
 }
 
 const coinService = createCoinService({ birdieOSPost });
+const dnaService = createDnaService({ birdieOSPost });
 
 async function getLiveBriefing() {
   return (await birdieOSGet("briefing")).data;
@@ -190,7 +193,28 @@ async function phraseNextTask(task) {
   const response = await client.responses.create({
     model: OPENAI_MODEL,
     store: false,
-    instructions: `You are Birdie, the operating agent for Birdie & Breakfast.\nThe JSON input is an authoritative task record from Birdie OS.\nRules:\n- Never replace the task.\n- Never invent another task.\n- Never change taskId, task, priority, status or nextAction.\n- Never invent blockers, deadlines, suppliers, costs or company facts.\n- Respond in German.\n- Keep the answer concise and operational.\n\nFormat:\nNEXT TASK\n[TASK-ID — task]\n\nPRIORITY\n[priority] · [status]\n\nDO THIS NOW\n[nextAction]\n\nWHY THIS\n[one sentence based only on supplied data]`,
+    instructions: `You are Birdie, the operating agent for Birdie & Breakfast.
+The JSON input is an authoritative task record from Birdie OS.
+Rules:
+- Never replace the task.
+- Never invent another task.
+- Never change taskId, task, priority, status or nextAction.
+- Never invent blockers, deadlines, suppliers, costs or company facts.
+- Respond in German.
+- Keep the answer concise and operational.
+
+Format:
+NEXT TASK
+[TASK-ID — task]
+
+PRIORITY
+[priority] · [status]
+
+DO THIS NOW
+[nextAction]
+
+WHY THIS
+[one sentence based only on supplied data]`,
     input: JSON.stringify(task)
   });
 
@@ -201,7 +225,15 @@ async function generalResponse(message, briefing) {
   const response = await client.responses.create({
     model: OPENAI_MODEL,
     store: false,
-    instructions: `You are Birdie, the operating agent for Birdie & Breakfast.\nYou receive the user's request and the current authoritative LIVE BRIEFING from Birdie OS.\nRules:\n- Treat Birdie OS as the source of truth for current company facts.\n- Never invent live company data.\n- Never claim an action was completed unless it was actually executed.\n- External financial, legal, reputational or irreversible actions require explicit founder approval.\n- Respond in German unless asked otherwise.\n- Be concise and operational.`,
+    instructions: `You are Birdie, the operating agent for Birdie & Breakfast.
+You receive the user's request and the current authoritative LIVE BRIEFING from Birdie OS.
+Rules:
+- Treat Birdie OS as the source of truth for current company facts.
+- Never invent live company data.
+- Never claim an action was completed unless it was actually executed.
+- External financial, legal, reputational or irreversible actions require explicit founder approval.
+- Respond in German unless asked otherwise.
+- Be concise and operational.`,
     input: JSON.stringify({ message, liveBriefing: briefing })
   });
   return response.output_text;
@@ -320,6 +352,14 @@ const routes = [
   "POST /coin/redemptions",
   "POST /coin/redemptions/{redemptionId}/decision",
   "POST /coin/opening-balances",
+  "GET /dna/config",
+  "POST /dna/objects",
+  "GET /dna/objects/{objectId}",
+  "GET /dna/passports/{objectId}",
+  "POST /dna/objects/{objectId}/events",
+  "POST /dna/events/{eventId}/decision",
+  "POST /dna/objects/{objectId}/transfers",
+  "POST /dna/transfers/{ownershipId}/accept",
   "GET /framer/config",
   "GET /framer/status",
   "POST /framer/preview",
@@ -349,6 +389,7 @@ const server = http.createServer(async (req, res) => {
         writeAccess: "CONTROLLED",
         mail: "FULL_CONTROL_GOVERNED",
         framer: "GOVERNED_ADAPTER",
+        dna: "FEATURE_BRANCH_GOVERNED",
         mcp: "AUTH0_GOVERNED_FULL_MAIL_TOOLS"
       });
     }
@@ -390,6 +431,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
+    if (await routeDnaRequest({ req, res, url, json, readBody, service: dnaService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
     if (await routeFramerRequest({ req, res, url, json, readBody })) return;
 
