@@ -34,6 +34,23 @@ jobs:
       - name: Run resolver unit tests
         run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs
 
+  secret-probe:
+    if: github.event_name == 'push'
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      BIRDIE_OS_API_KEY: ${{ secrets.BIRDIE_OS_API_KEY }}
+    steps:
+      - name: Confirm Birdie OS secret is available without exposing it
+        shell: bash
+        run: |
+          if [ -z "$BIRDIE_OS_API_KEY" ]; then
+            echo "BIRDIE_OS_API_KEY is NOT available to this workflow."
+            exit 2
+          fi
+          echo "BIRDIE_OS_API_KEY is available to this workflow."
+
   live-e2e:
     if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E'
     needs: unit
