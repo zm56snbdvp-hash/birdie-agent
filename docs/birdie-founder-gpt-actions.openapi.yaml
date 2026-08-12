@@ -1,0 +1,116 @@
+openapi: 3.1.0
+info:
+  title: Birdie Founder API
+  version: 1.0.0
+  description: >-
+    Private founder-facing read API for BirdieOS and governed Framer status.
+    All operations in this schema are read-only. Authentication is handled by
+    the GPT Action as a Bearer API key and secrets must never be exposed in chat.
+servers:
+  - url: https://birdie-agent-893591677320.europe-west3.run.app
+security:
+  - bearerAuth: []
+paths:
+  /startup:
+    get:
+      operationId: birdieOsStartup
+      summary: Start BirdieOS
+      description: >-
+        Use this when Kevin says "Birdie, starte das OS" or equivalent startup wording.
+        Returns authoritative BirdieOS health and live briefing context. Read-only.
+      responses:
+        '200':
+          description: BirdieOS startup context
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Unauthorized
+  /health:
+    get:
+      operationId: birdieOsHealth
+      summary: Check BirdieOS health
+      description: Check Birdie Agent and BirdieOS health without changing state.
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Unauthorized
+  /briefing:
+    get:
+      operationId: birdieOsBriefing
+      summary: Read live BirdieOS briefing
+      description: Read the authoritative live company briefing from BirdieOS. Read-only.
+      responses:
+        '200':
+          description: Live briefing
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Unauthorized
+  /next-task:
+    get:
+      operationId: birdieOsNextTask
+      summary: Get authoritative next task
+      description: Return the authoritative next actionable task selected by BirdieOS. Read-only.
+      responses:
+        '200':
+          description: Next task
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Unauthorized
+  /framer/config:
+    get:
+      operationId: birdieFramerConfig
+      summary: Check Framer configuration
+      description: >-
+        Check whether the governed Framer Server API integration is configured.
+        Never returns the Framer secret. Read-only.
+      responses:
+        '200':
+          description: Framer configuration status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Unauthorized
+  /framer/status:
+    get:
+      operationId: birdieFramerStatus
+      summary: Read Framer project status
+      description: >-
+        Read project identity, publish information and changed paths from the
+        governed Framer Server API. Does not publish, deploy or mutate content.
+      responses:
+        '200':
+          description: Framer status
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          description: Unauthorized
+        '503':
+          description: Framer integration not configured
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
