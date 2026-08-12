@@ -1,3 +1,4 @@
+import { createHash, randomBytes } from "node:crypto";
 import {
   DnaValidationError,
   compact,
@@ -35,6 +36,25 @@ function rejectClientControlledEvolution(body) {
       );
     }
   }
+}
+
+function newClaimToken() {
+  return randomBytes(32).toString("base64url");
+}
+
+function hashClaimToken(token) {
+  return createHash("sha256").update(String(token), "utf8").digest("hex");
+}
+
+function redactClaimTokenHash(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const copy = { ...value };
+  delete copy.claimTokenHash;
+  if (copy.transfer && typeof copy.transfer === "object") {
+    copy.transfer = { ...copy.transfer };
+    delete copy.transfer.claimTokenHash;
+  }
+  return copy;
 }
 
 export function createDnaService({ birdieOSPost }) {
@@ -167,6 +187,8 @@ export function createDnaService({ birdieOSPost }) {
       const body = requireObject(input);
       const transferMode = requireEnum(body.transferMode, "transferMode", TRANSFER_MODES);
       const toBirdieId = optionalString(body.toBirdieId, "toBirdieId", 80);
+      const fromBirdieId = requireString(body.fromBirdieId, "fromBirdieId", 80);
+      const idempotencyKey = requireIdempotencyKey(body);
       if (transferMode === "DIRECT" && !toBirdieId) {
         throw new DnaValidationError(
           "RECIPIENT_REQUIRED",
@@ -180,28 +202,81 @@ export function createDnaService({ birdieOSPost }) {
         );
       }
 
-      return post("dnaInitiateTransfer", compact({
+      if (transferMode === "DIRECT") {
+        return redactClaimTokenHash(await post("dnaInitiateTransfer", compact({
+          objectId: requireString(objectId, "objectId", 100),
+          fromBirdieId,
+          toBirdieId,
+          transferMode,
+          sourceReference: optionalString(body.sourceReference, "sourceReference", 500),
+          actor: optionalString(body.actor, "actor", 100) || fromBirdieId,
+          idempotencyKey,
+          source: "Birdie Agent"
+        })));
+      }
+
+      const claimToken = newClaimToken();
+      const claimTokenHash = hashClaimToken(claimToken);
+      let result = await post("dnaInitiateTransfer", compact({
         objectId: requireString(objectId, "objectId", 100),
-        fromBirdieId: requireString(body.fromBirdieId, "fromBirdieId", 80),
-        toBirdieId,
+        fromBirdieId,
         transferMode,
         sourceReference: optionalString(body.sourceReference, "sourceReference", 500),
+        actor: optionalString(body.actor, "actor", 100) || fromBirdieId,
+        claimTokenHash,
+        idempotencyKey,
+        source: "Birdie Agent"
+      }));
+
+      if (result.claimTokenHash && result.claimTokenHash !== claimTokenHash) {
+        result = await post("dnaRotateReleaseClaimToken", {
+          ownershipId: requireString(result.ownershipId, "ownershipId", 100),
+          fromBirdieId,
+          claimTokenHash,
+          actor: optionalString(body.actor, "actor", 100) || fromBirdieId,
+          idempotencyKey: `${idempotencyKey}:claim-token:${claimTokenHash.slice(0, 16)}`,
+          source: "Birdie Agent"
+        });
+      }
+
+      return {
+        ...redactClaimTokenHash(result),
+        claimToken,
+        claimTokenOneTime: true
+      };
+    },
+
+    async rotateReleaseClaimToken(ownershipId, input) {
+      const body = requireObject(input);
+      const claimToken = newClaimToken();
+      const claimTokenHash = hashClaimToken(claimToken);
+      const result = await post("dnaRotateReleaseClaimToken", {
+        ownershipId: requireString(ownershipId, "ownershipId", 100),
+        fromBirdieId: requireString(body.fromBirdieId, "fromBirdieId", 80),
+        claimTokenHash,
         actor: optionalString(body.actor, "actor", 100) || body.fromBirdieId,
         idempotencyKey: requireIdempotencyKey(body),
         source: "Birdie Agent"
-      }));
+      });
+      return {
+        ...redactClaimTokenHash(result),
+        claimToken,
+        claimTokenOneTime: true
+      };
     },
 
     async acceptTransfer(ownershipId, input) {
       const body = requireObject(input);
-      return post("dnaAcceptTransfer", compact({
+      const claimToken = optionalString(body.claimToken, "claimToken", 200);
+      return redactClaimTokenHash(await post("dnaAcceptTransfer", compact({
         ownershipId: requireString(ownershipId, "ownershipId", 100),
         toBirdieId: requireString(body.toBirdieId, "toBirdieId", 80),
+        claimTokenHash: claimToken ? hashClaimToken(claimToken) : undefined,
         actor: optionalString(body.actor, "actor", 100) || body.toBirdieId,
         sourceReference: optionalString(body.sourceReference, "sourceReference", 500),
         idempotencyKey: requireIdempotencyKey(body),
         source: "Birdie Agent"
-      }));
+      })));
     }
   };
 }
