@@ -43,7 +43,8 @@ BIRDIE_DNA_HEADERS_[BIRDIE_DNA_SHEETS_.EVENTS] = [
 BIRDIE_DNA_HEADERS_[BIRDIE_DNA_SHEETS_.OWNERSHIP] = [
   "ownershipId", "objectId", "fromBirdieId", "toBirdieId", "transferMode",
   "status", "initiatedAt", "acceptedAt", "initiatedBy", "acceptedBy",
-  "releaseState", "sourceReference", "updatedAt", "idempotencyKey"
+  "releaseState", "sourceReference", "updatedAt", "idempotencyKey",
+  "claimTokenHash", "claimTokenIssuedAt", "claimTokenUsedAt"
 ];
 BIRDIE_DNA_HEADERS_[BIRDIE_DNA_SHEETS_.EVOLUTION] = [
   "ruleId", "ruleType", "eventType", "points", "maxPerObject", "tierCode",
@@ -69,6 +70,7 @@ function handleBirdieDnaAction_(request) {
     case "dnaCreateEvent": return birdieDnaCreateEvent_(request);
     case "dnaDecideEvent": return birdieDnaDecideEvent_(request);
     case "dnaInitiateTransfer": return birdieDnaInitiateTransfer_(request);
+    case "dnaRotateReleaseClaimToken": return birdieDnaRotateReleaseClaimToken_(request);
     case "dnaAcceptTransfer": return birdieDnaAcceptTransfer_(request);
     default: throw new Error("UNKNOWN_BIRDIE_DNA_ACTION");
   }
@@ -113,6 +115,8 @@ function birdieDnaGetConfig_() {
       directCoinWrites: false,
       publicPassportDefault: false,
       preparedRulesDoNotScore: true,
+      releaseClaimStoresHashOnly: true,
+      releaseClaimOneTime: true,
       productionObjectIssuanceRequiresFounderApproval: true
     }
   });
@@ -363,12 +367,14 @@ function birdieDnaInitiateTransfer_(request) {
     var transferMode = birdieCoinRequired_(request.transferMode, "transferMode").toUpperCase();
     if (BIRDIE_DNA_TRANSFER_MODES_.indexOf(transferMode) === -1) throw new Error("INVALID_DNA_TRANSFER_MODE");
     var toBirdieId = String(request.toBirdieId || "").trim();
+    var claimTokenHash = "";
     if (transferMode === "DIRECT") {
       if (!toBirdieId) throw new Error("DNA_TRANSFER_RECIPIENT_REQUIRED");
       if (toBirdieId === fromBirdieId) throw new Error("DNA_TRANSFER_SAME_OWNER");
       birdieCoinRequireProfile_(toBirdieId);
-    } else if (toBirdieId) {
-      throw new Error("DNA_RELEASE_RECIPIENT_NOT_ALLOWED");
+    } else {
+      if (toBirdieId) throw new Error("DNA_RELEASE_RECIPIENT_NOT_ALLOWED");
+      claimTokenHash = birdieDnaRequireClaimTokenHash_(request.claimTokenHash);
     }
 
     var now = birdieCoinNow_();
@@ -386,13 +392,59 @@ function birdieDnaInitiateTransfer_(request) {
       releaseState: transferMode === "RELEASE_TO_FLOCK" ? "OPEN" : "NONE",
       sourceReference: String(request.sourceReference || ""),
       updatedAt: now,
-      idempotencyKey: key
+      idempotencyKey: key,
+      claimTokenHash: claimTokenHash,
+      claimTokenIssuedAt: transferMode === "RELEASE_TO_FLOCK" ? now : "",
+      claimTokenUsedAt: ""
     };
     birdieCoinAppendObject_(sheet, ownership);
     if (transferMode === "RELEASE_TO_FLOCK") {
       birdieDnaAppendSystemEvent_(object.objectId, "RELEASED_TO_FLOCK", fromBirdieId, ownership.ownershipId);
     }
-    birdieCoinAudit_("DNA_TRANSFER_INITIATED", "OBJECT_OWNERSHIP", ownership.ownershipId, ownership.initiatedBy, ownership, key);
+    birdieCoinAudit_("DNA_TRANSFER_INITIATED", "OBJECT_OWNERSHIP", ownership.ownershipId, ownership.initiatedBy, {
+      ownershipId: ownership.ownershipId,
+      objectId: ownership.objectId,
+      fromBirdieId: ownership.fromBirdieId,
+      toBirdieId: ownership.toBirdieId,
+      transferMode: ownership.transferMode,
+      status: ownership.status,
+      releaseState: ownership.releaseState,
+      claimTokenIssued: Boolean(ownership.claimTokenHash)
+    }, key);
+    return birdieDnaSuccess_(ownership);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function birdieDnaRotateReleaseClaimToken_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var sheet = birdieDnaSheet_(BIRDIE_DNA_SHEETS_.OWNERSHIP);
+    var found = birdieCoinFind_(sheet, "ownershipId", birdieCoinRequired_(request.ownershipId, "ownershipId"));
+    if (!found) throw new Error("DNA_TRANSFER_NOT_FOUND");
+    var ownership = found.object;
+    if (String(ownership.transferMode) !== "RELEASE_TO_FLOCK") throw new Error("DNA_CLAIM_TOKEN_NOT_APPLICABLE");
+    if (String(ownership.status) !== "PENDING") throw new Error("DNA_TRANSFER_NOT_PENDING");
+
+    var fromBirdieId = birdieCoinRequired_(request.fromBirdieId, "fromBirdieId");
+    if (String(ownership.fromBirdieId) !== fromBirdieId) throw new Error("DNA_TRANSFER_OWNER_MISMATCH");
+    var objectFound = birdieDnaRequireObjectFound_(ownership.objectId);
+    if (String(objectFound.object.currentOwnerBirdieId || "") !== fromBirdieId) throw new Error("DNA_TRANSFER_STALE_OWNER");
+
+    var now = birdieCoinNow_();
+    ownership.claimTokenHash = birdieDnaRequireClaimTokenHash_(request.claimTokenHash);
+    ownership.claimTokenIssuedAt = now;
+    ownership.claimTokenUsedAt = "";
+    ownership.updatedAt = now;
+    birdieCoinWriteObject_(sheet, found.row, ownership);
+    birdieCoinAudit_("DNA_RELEASE_CLAIM_TOKEN_ROTATED", "OBJECT_OWNERSHIP", ownership.ownershipId, request.actor, {
+      ownershipId: ownership.ownershipId,
+      objectId: ownership.objectId,
+      fromBirdieId: ownership.fromBirdieId,
+      claimTokenRotated: true
+    }, request.idempotencyKey);
     return birdieDnaSuccess_(ownership);
   } finally {
     lock.releaseLock();
@@ -427,6 +479,13 @@ function birdieDnaAcceptTransfer_(request) {
     }
     if (String(ownership.fromBirdieId) === toBirdieId) throw new Error("DNA_TRANSFER_SAME_OWNER");
 
+    if (String(ownership.transferMode) === "RELEASE_TO_FLOCK") {
+      if (!String(ownership.claimTokenHash || "")) throw new Error("DNA_RELEASE_CLAIM_TOKEN_MISSING");
+      if (String(ownership.claimTokenUsedAt || "")) throw new Error("DNA_RELEASE_CLAIM_TOKEN_ALREADY_USED");
+      var presentedHash = birdieDnaRequireClaimTokenHash_(request.claimTokenHash);
+      if (presentedHash !== String(ownership.claimTokenHash)) throw new Error("DNA_RELEASE_CLAIM_TOKEN_INVALID");
+    }
+
     var objectFound = birdieDnaRequireObjectFound_(ownership.objectId);
     var object = objectFound.object;
     if (String(object.currentOwnerBirdieId || "") !== String(ownership.fromBirdieId)) throw new Error("DNA_TRANSFER_STALE_OWNER");
@@ -437,6 +496,7 @@ function birdieDnaAcceptTransfer_(request) {
     ownership.acceptedAt = now;
     ownership.acceptedBy = String(request.actor || toBirdieId);
     ownership.releaseState = String(ownership.transferMode) === "RELEASE_TO_FLOCK" ? "CLAIMED" : "NONE";
+    if (String(ownership.transferMode) === "RELEASE_TO_FLOCK") ownership.claimTokenUsedAt = now;
     ownership.sourceReference = String(request.sourceReference || ownership.sourceReference || "");
     ownership.updatedAt = now;
     birdieCoinWriteObject_(sheet, found.row, ownership);
@@ -446,7 +506,8 @@ function birdieDnaAcceptTransfer_(request) {
       objectId: ownership.objectId,
       fromBirdieId: ownership.fromBirdieId,
       toBirdieId: ownership.toBirdieId,
-      transferMode: ownership.transferMode
+      transferMode: ownership.transferMode,
+      claimTokenConsumed: String(ownership.transferMode) === "RELEASE_TO_FLOCK"
     }, request.idempotencyKey);
     return birdieDnaSuccess_({
       transfer: ownership,
@@ -655,6 +716,12 @@ function birdieDnaPublicDate_(value) {
   if (!text) return "";
   var match = text.match(/^\d{4}-\d{2}-\d{2}/);
   return match ? match[0] : text.slice(0, 10);
+}
+
+function birdieDnaRequireClaimTokenHash_(value) {
+  var hash = String(value || "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error("INVALID_DNA_CLAIM_TOKEN_HASH");
+  return hash;
 }
 
 function birdieDnaObjectInternalView_(object) {
