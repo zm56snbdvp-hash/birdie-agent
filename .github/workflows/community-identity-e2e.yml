@@ -29,6 +29,12 @@ jobs:
           node-version: '22'
           cache: npm
 
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run resolver unit tests first
+        run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs
+
       - name: Require existing Birdie OS CI secret
         shell: bash
         run: |
@@ -36,12 +42,6 @@ jobs:
             echo "BIRDIE_OS_API_KEY is not available to this workflow; refusing live E2E execution."
             exit 2
           fi
-
-      - name: Install dependencies
-        run: npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Run resolver unit tests first
-        run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs
 
       - name: Start feature-branch Birdie Agent locally
         shell: bash
