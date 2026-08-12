@@ -19,6 +19,15 @@ var BIRDIE_DNA_SHEETS_ = {
   EVOLUTION: "OBJECT EVOLUTION RULES"
 };
 
+var BIRDIE_DNA_OBJECT_TYPES_ = ["BALL", "COIN", "MARKER", "CARD", "OTHER"];
+var BIRDIE_DNA_PHYSICAL_IDENTITY_TYPES_ = ["QR", "NFC", "QR_NFC", "NONE"];
+var BIRDIE_DNA_EVENT_TYPES_ = [
+  "ACTIVATED", "COURSE_VISIT", "FIRST_BIRDIE", "INSTAGRAM_TAG_VERIFIED",
+  "COMMUNITY_EVENT", "OWNERSHIP_TRANSFER", "RELEASED_TO_FLOCK"
+];
+var BIRDIE_DNA_TRANSFER_MODES_ = ["DIRECT", "RELEASE_TO_FLOCK"];
+var BIRDIE_DNA_VERIFICATION_MODES_ = ["OWNER_SUBMITTED", "SYSTEM_VERIFIED", "FOUNDER_VERIFIED"];
+
 var BIRDIE_DNA_HEADERS_ = {};
 BIRDIE_DNA_HEADERS_[BIRDIE_DNA_SHEETS_.OBJECTS] = [
   "objectId", "objectType", "editionCode", "serialNumber", "displayName",
@@ -53,6 +62,7 @@ function handleBirdieDnaAction_(request) {
   request = request || {};
   setupBirdieDnaSystem_();
   switch (String(request.action || "")) {
+    case "dnaGetConfig": return birdieDnaGetConfig_(request);
     case "dnaCreateObject": return birdieDnaCreateObject_(request);
     case "dnaGetObject": return birdieDnaGetObject_(request);
     case "dnaGetPassport": return birdieDnaGetPassport_(request);
@@ -64,6 +74,50 @@ function handleBirdieDnaAction_(request) {
   }
 }
 
+function birdieDnaGetConfig_() {
+  var allRules = birdieCoinObjects_(birdieDnaSheet_(BIRDIE_DNA_SHEETS_.EVOLUTION));
+  var activeRules = allRules.filter(function (row) {
+    return String(row.status || "").toUpperCase() === "ACTIVE";
+  });
+  var activeEventRules = activeRules.filter(function (row) {
+    return String(row.ruleType) === "EVENT_POINTS";
+  });
+  var activeTierRules = activeRules.filter(function (row) {
+    return String(row.ruleType) === "TIER_THRESHOLD";
+  });
+  return birdieDnaSuccess_({
+    objectTypes: BIRDIE_DNA_OBJECT_TYPES_,
+    physicalIdentityTypes: BIRDIE_DNA_PHYSICAL_IDENTITY_TYPES_,
+    eventTypes: BIRDIE_DNA_EVENT_TYPES_,
+    transferModes: BIRDIE_DNA_TRANSFER_MODES_,
+    verificationModes: BIRDIE_DNA_VERIFICATION_MODES_,
+    evolutionRules: allRules.map(function (row) {
+      return {
+        ruleId: row.ruleId,
+        ruleType: row.ruleType,
+        eventType: row.eventType || "",
+        points: row.points === "" ? null : Number(row.points),
+        maxPerObject: row.maxPerObject || "",
+        tierCode: row.tierCode || "",
+        threshold: row.threshold === "" ? null : Number(row.threshold),
+        status: row.status || ""
+      };
+    }),
+    activeEventRuleCount: activeEventRules.length,
+    activeTierRuleCount: activeTierRules.length,
+    eventScoringEnabled: activeEventRules.length > 0 && activeTierRules.length > 0,
+    principles: {
+      birdieOsAuthoritative: true,
+      eventLedgerAuthoritative: true,
+      clientControlledEvolution: false,
+      directCoinWrites: false,
+      publicPassportDefault: false,
+      preparedRulesDoNotScore: true,
+      productionObjectIssuanceRequiresFounderApproval: true
+    }
+  });
+}
+
 function birdieDnaCreateObject_(request) {
   if (request.founderApproved !== true) throw new Error("FOUNDER_APPROVAL_REQUIRED");
   var lock = LockService.getScriptLock();
@@ -73,6 +127,13 @@ function birdieDnaCreateObject_(request) {
     var key = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
     var duplicate = birdieCoinFind_(sheet, "idempotencyKey", key);
     if (duplicate) return birdieDnaSuccess_(birdieDnaObjectInternalView_(duplicate.object));
+
+    var objectType = birdieCoinRequired_(request.objectType, "objectType").toUpperCase();
+    if (BIRDIE_DNA_OBJECT_TYPES_.indexOf(objectType) === -1) throw new Error("INVALID_DNA_OBJECT_TYPE");
+    var physicalIdentityType = String(request.physicalIdentityType || "NONE").toUpperCase();
+    if (BIRDIE_DNA_PHYSICAL_IDENTITY_TYPES_.indexOf(physicalIdentityType) === -1) {
+      throw new Error("INVALID_DNA_PHYSICAL_IDENTITY_TYPE");
+    }
 
     var serialNumber = birdieCoinRequired_(request.serialNumber, "serialNumber");
     if (birdieCoinFind_(sheet, "serialNumber", serialNumber)) throw new Error("DNA_SERIAL_ALREADY_EXISTS");
@@ -88,7 +149,7 @@ function birdieDnaCreateObject_(request) {
     var now = birdieCoinNow_();
     var object = {
       objectId: birdieCoinId_("DNA"),
-      objectType: birdieCoinRequired_(request.objectType, "objectType").toUpperCase(),
+      objectType: objectType,
       editionCode: String(request.editionCode || ""),
       serialNumber: serialNumber,
       displayName: birdieCoinRequired_(request.displayName, "displayName"),
@@ -96,11 +157,11 @@ function birdieDnaCreateObject_(request) {
       lifecycleStatus: "ISSUED",
       evolutionTier: initialTier,
       evolutionScore: 0,
-      physicalIdentityType: String(request.physicalIdentityType || "NONE").toUpperCase(),
+      physicalIdentityType: physicalIdentityType,
       physicalIdentityRef: physicalRef,
       bornAt: now,
       activatedAt: "",
-      publicPassport: request.publicPassport !== false,
+      publicPassport: request.publicPassport === true,
       updatedAt: now,
       idempotencyKey: key
     };
@@ -110,7 +171,8 @@ function birdieDnaCreateObject_(request) {
       objectType: object.objectType,
       editionCode: object.editionCode,
       serialNumber: object.serialNumber,
-      ownerBirdieId: object.currentOwnerBirdieId
+      ownerBirdieId: object.currentOwnerBirdieId,
+      publicPassport: object.publicPassport
     }, key);
     return birdieDnaSuccess_(birdieDnaObjectInternalView_(object));
   } finally {
@@ -152,8 +214,8 @@ function birdieDnaGetPassport_(request) {
     serialNumber: object.serialNumber,
     displayName: object.displayName,
     lifecycleStatus: object.lifecycleStatus,
-    bornAt: object.bornAt,
-    activatedAt: object.activatedAt,
+    bornAt: birdieDnaPublicDate_(object.bornAt),
+    activatedAt: birdieDnaPublicDate_(object.activatedAt),
     owner: birdieDnaPublicOwner_(object.currentOwnerBirdieId),
     evolution: birdieDnaEvolutionView_(object.evolutionScore, object.evolutionTier),
     journey: {
@@ -169,8 +231,8 @@ function birdieDnaGetPassport_(request) {
         eventType: event.eventType,
         courseName: event.courseName || "",
         locationLabel: event.locationLabel || "",
-        eventAt: event.eventAt,
-        evidenceUrl: event.evidenceUrl || ""
+        eventAt: birdieDnaPublicDate_(event.eventAt),
+        hasEvidence: Boolean(String(event.evidenceUrl || "").trim())
       };
     })
   });
@@ -187,19 +249,23 @@ function birdieDnaCreateEvent_(request) {
     if (String(object.currentOwnerBirdieId || "") !== birdieId) throw new Error("DNA_OBJECT_OWNER_MISMATCH");
 
     var eventType = birdieCoinRequired_(request.eventType, "eventType").toUpperCase();
-    var rule = birdieDnaRuleForEvent_(eventType);
-    if (!rule) throw new Error("UNKNOWN_DNA_EVENT_TYPE");
+    if (BIRDIE_DNA_EVENT_TYPES_.indexOf(eventType) === -1) throw new Error("UNKNOWN_DNA_EVENT_TYPE");
     if (["OWNERSHIP_TRANSFER", "RELEASED_TO_FLOCK"].indexOf(eventType) !== -1) throw new Error("DNA_SYSTEM_EVENT_ONLY");
+    var rule = birdieDnaRuleForEvent_(eventType);
+    if (!rule) throw new Error("DNA_EVOLUTION_RULE_NOT_ACTIVE");
 
     var verificationMode = String(request.verificationMode || "OWNER_SUBMITTED").toUpperCase();
+    if (BIRDIE_DNA_VERIFICATION_MODES_.indexOf(verificationMode) === -1) {
+      throw new Error("INVALID_DNA_VERIFICATION_MODE");
+    }
     var status = "PENDING";
-    if (verificationMode === "SYSTEM_VERIFIED") status = "VERIFIED";
+    if (verificationMode === "SYSTEM_VERIFIED") {
+      if (request.systemVerified !== true) throw new Error("SYSTEM_VERIFICATION_REQUIRED");
+      status = "VERIFIED";
+    }
     if (verificationMode === "FOUNDER_VERIFIED") {
       if (request.founderApproved !== true) throw new Error("FOUNDER_APPROVAL_REQUIRED");
       status = "VERIFIED";
-    }
-    if (["OWNER_SUBMITTED", "SYSTEM_VERIFIED", "FOUNDER_VERIFIED"].indexOf(verificationMode) === -1) {
-      throw new Error("INVALID_DNA_VERIFICATION_MODE");
     }
 
     var event = birdieDnaAppendEvent_({
@@ -245,6 +311,7 @@ function birdieDnaDecideEvent_(request) {
     if (["VERIFIED", "REJECTED"].indexOf(String(event.status)) !== -1) throw new Error("DNA_EVENT_ALREADY_DECIDED");
 
     var rule = birdieDnaRuleForEvent_(String(event.eventType));
+    if (decision === "APPROVE" && !rule) throw new Error("DNA_EVOLUTION_RULE_NOT_ACTIVE");
     if (decision === "APPROVE") {
       birdieDnaValidateEventUniqueness_(event.objectId, event.eventType, event.courseName, event.sourceReference, event.eventId);
     }
@@ -284,7 +351,7 @@ function birdieDnaInitiateTransfer_(request) {
     if (openTransfer) throw new Error("DNA_TRANSFER_ALREADY_PENDING");
 
     var transferMode = birdieCoinRequired_(request.transferMode, "transferMode").toUpperCase();
-    if (["DIRECT", "RELEASE_TO_FLOCK"].indexOf(transferMode) === -1) throw new Error("INVALID_DNA_TRANSFER_MODE");
+    if (BIRDIE_DNA_TRANSFER_MODES_.indexOf(transferMode) === -1) throw new Error("INVALID_DNA_TRANSFER_MODE");
     var toBirdieId = String(request.toBirdieId || "").trim();
     if (transferMode === "DIRECT") {
       if (!toBirdieId) throw new Error("DNA_TRANSFER_RECIPIENT_REQUIRED");
@@ -371,7 +438,9 @@ function birdieDnaAcceptTransfer_(request) {
     return birdieDnaSuccess_({
       transfer: ownership,
       object: birdieDnaObjectInternalView_(refreshed.object),
-      passport: birdieDnaGetPassport_({ objectId: object.objectId }).data
+      passport: birdieDnaBoolean_(refreshed.object.publicPassport)
+        ? birdieDnaGetPassport_({ objectId: object.objectId }).data
+        : null
     });
   } finally {
     lock.releaseLock();
@@ -379,8 +448,8 @@ function birdieDnaAcceptTransfer_(request) {
 }
 
 function birdieDnaAppendSystemEvent_(objectId, eventType, birdieId, sourceReference) {
+  if (BIRDIE_DNA_EVENT_TYPES_.indexOf(eventType) === -1) throw new Error("UNKNOWN_DNA_SYSTEM_EVENT_TYPE");
   var rule = birdieDnaRuleForEvent_(eventType);
-  if (!rule) throw new Error("UNKNOWN_DNA_SYSTEM_EVENT_TYPE");
   var key = "DNA|" + objectId + "|" + eventType + "|" + sourceReference;
   return birdieDnaAppendEvent_({
     objectId: objectId,
@@ -393,7 +462,7 @@ function birdieDnaAppendSystemEvent_(objectId, eventType, birdieId, sourceRefere
     eventAt: birdieCoinNow_(),
     evidenceUrl: "",
     status: "VERIFIED",
-    evolutionPoints: Number(rule.points || 0),
+    evolutionPoints: rule ? Number(rule.points || 0) : 0,
     metadataJson: "{}",
     idempotencyKey: key,
     actor: "Birdie DNA"
@@ -444,13 +513,13 @@ function birdieDnaAppendEvent_(input) {
 
 function birdieDnaValidateEventUniqueness_(objectId, eventType, courseName, sourceReference, excludeEventId) {
   var rule = birdieDnaRuleForEvent_(eventType);
-  if (!rule) throw new Error("UNKNOWN_DNA_EVENT_TYPE");
   var events = birdieCoinObjects_(birdieDnaSheet_(BIRDIE_DNA_SHEETS_.EVENTS)).filter(function (row) {
     return String(row.objectId) === String(objectId) &&
       String(row.eventType) === String(eventType) &&
       String(row.status) !== "REJECTED" &&
       String(row.eventId) !== String(excludeEventId || "");
   });
+  if (!rule) return;
   var limit = String(rule.maxPerObject || "").trim();
   if (/^\d+$/.test(limit) && Number(limit) > 0 && events.length >= Number(limit)) throw new Error("DNA_EVENT_LIMIT_REACHED");
   if (limit === "DISTINCT_COURSE") {
@@ -495,7 +564,7 @@ function birdieDnaVerifiedEvents_(objectId) {
 
 function birdieDnaEvolutionConfig_() {
   var rows = birdieCoinObjects_(birdieDnaSheet_(BIRDIE_DNA_SHEETS_.EVOLUTION)).filter(function (row) {
-    return String(row.status || "").toUpperCase() !== "DISABLED";
+    return String(row.status || "").toUpperCase() === "ACTIVE";
   });
   var rules = {};
   var tiers = [];
@@ -551,6 +620,13 @@ function birdieDnaPublicOwner_(birdieId) {
   return {
     displayName: birdieDnaBoolean_(profile.publicWall) ? String(profile.displayName) : "Private Flock Member"
   };
+}
+
+function birdieDnaPublicDate_(value) {
+  var text = String(value || "").trim();
+  if (!text) return "";
+  var match = text.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : text.slice(0, 10);
 }
 
 function birdieDnaObjectInternalView_(object) {
