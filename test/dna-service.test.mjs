@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { createDnaService } from "../src/dna/service.mjs";
 
 function harness() {
@@ -24,6 +25,12 @@ function harness() {
             }
           }
         };
+      }
+      if (payload.action === "dnaInitiateTransfer") {
+        return { data: { ...payload, ownershipId: "OWN-001" } };
+      }
+      if (payload.action === "dnaRotateReleaseClaimToken") {
+        return { data: { ...payload, transferMode: "RELEASE_TO_FLOCK" } };
       }
       return { data: { ok: true, payload } };
     }
@@ -153,6 +160,58 @@ test("release into flock cannot preselect a recipient", async () => {
   );
 });
 
+test("release into flock returns raw token once but sends only its SHA-256 hash to BirdieOS", async () => {
+  const { service, calls } = harness();
+  const result = await service.initiateTransfer("DNA-001", {
+    fromBirdieId: "BIRDIE-0001",
+    transferMode: "RELEASE_TO_FLOCK",
+    idempotencyKey: "dna:release:001"
+  });
+
+  assert.equal(calls[0].action, "dnaInitiateTransfer");
+  assert.match(calls[0].claimTokenHash, /^[a-f0-9]{64}$/);
+  assert.equal(calls[0].claimToken, undefined);
+  assert.equal(result.claimTokenOneTime, true);
+  assert.ok(result.claimToken.length >= 40);
+  assert.equal(result.claimTokenHash, undefined);
+  assert.equal(
+    createHash("sha256").update(result.claimToken, "utf8").digest("hex"),
+    calls[0].claimTokenHash
+  );
+});
+
+test("release claim-token rotation sends only a fresh hash and returns raw token once", async () => {
+  const { service, calls } = harness();
+  const result = await service.rotateReleaseClaimToken("OWN-001", {
+    fromBirdieId: "BIRDIE-0001",
+    idempotencyKey: "dna:release:rotate:001"
+  });
+
+  assert.equal(calls[0].action, "dnaRotateReleaseClaimToken");
+  assert.match(calls[0].claimTokenHash, /^[a-f0-9]{64}$/);
+  assert.equal(calls[0].claimToken, undefined);
+  assert.equal(result.claimTokenOneTime, true);
+  assert.ok(result.claimToken.length >= 40);
+  assert.equal(result.claimTokenHash, undefined);
+});
+
+test("release acceptance hashes the raw claim token before BirdieOS", async () => {
+  const { service, calls } = harness();
+  const rawToken = "claim-token-only-the-client-sees";
+  await service.acceptTransfer("OWN-001", {
+    toBirdieId: "BIRDIE-0002",
+    claimToken: rawToken,
+    idempotencyKey: "dna:release:accept:001"
+  });
+
+  assert.equal(calls[0].action, "dnaAcceptTransfer");
+  assert.equal(calls[0].claimToken, undefined);
+  assert.equal(
+    calls[0].claimTokenHash,
+    createHash("sha256").update(rawToken, "utf8").digest("hex")
+  );
+});
+
 test("direct transfer requires recipient and acceptance is a separate action", async () => {
   const { service, calls } = harness();
   await service.initiateTransfer("DNA-001", {
@@ -168,6 +227,8 @@ test("direct transfer requires recipient and acceptance is a separate action", a
 
   assert.equal(calls[0].action, "dnaInitiateTransfer");
   assert.equal(calls[1].action, "dnaAcceptTransfer");
+  assert.equal(calls[0].claimTokenHash, undefined);
+  assert.equal(calls[1].claimTokenHash, undefined);
 });
 
 test("config is read from BirdieOS and prepared rules do not imply active scoring", async () => {
