@@ -300,6 +300,7 @@ const routes = [
   "POST /tasks/{taskId}",
   "POST /chat",
   "POST /mcp",
+  "POST /family/mcp",
   "GET /mail/health",
   "GET /mail/messages",
   "GET /mail/messages/{uid}",
