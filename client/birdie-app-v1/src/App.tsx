@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { sandboxAdapter, type RoundDetailDto, type RoundSummaryDto } from "./appAdapter";
+import {
+  sandboxAdapter,
+  type BallPassportDto,
+  type RoundDetailDto,
+  type RoundSummaryDto
+} from "./appAdapter";
 import { formatRoundDetail } from "./roundDetail";
 
 const birdieId = "BIRDIE-SANDBOX-001";
@@ -8,9 +13,12 @@ export default function App() {
   const [rounds, setRounds] = useState<RoundSummaryDto[]>([]);
   const [selectedRound, setSelectedRound] = useState<RoundDetailDto | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [passports, setPassports] = useState<BallPassportDto[]>([]);
+  const [selectedPassport, setSelectedPassport] = useState<BallPassportDto | null>(null);
 
   useEffect(() => {
     sandboxAdapter.getGolfHistory(birdieId).then(setRounds);
+    sandboxAdapter.getOwnedBallPassports(birdieId).then(setPassports);
   }, []);
 
   const detail = useMemo(
@@ -25,6 +33,10 @@ export default function App() {
     } finally {
       setDetailLoading(false);
     }
+  }
+
+  async function openPassport(objectId: string) {
+    setSelectedPassport(await sandboxAdapter.getBallPassport(objectId, birdieId));
   }
 
   return (
@@ -84,10 +96,47 @@ export default function App() {
           )}
         </article>
 
-        <article className="panel muted">
+        <article className="panel ball-vault">
           <p className="eyebrow">Hotspot 02</p>
           <h2>Ball Vault</h2>
-          <p>Ball Passport adapter comes next.</p>
+          {passports.length === 0 ? <p>No owned sandbox balls yet.</p> : passports.map((passport) => (
+            <button className="passport-card" key={passport.objectId} onClick={() => openPassport(passport.objectId)}>
+              <div className="ball-orb" aria-hidden="true">B</div>
+              <div>
+                <strong>{passport.displayName}</strong>
+                <span>{passport.editionId ?? "Edition not provided"} · {passport.rarity ?? "Rarity not provided"}</span>
+                <small>{passport.state} · {passport.privacySafeStats.holesSurvived} holes survived</small>
+              </div>
+            </button>
+          ))}
+
+          {selectedPassport && (
+            <section className="passport-detail" aria-label="Ball Passport detail">
+              <div className="detail-heading">
+                <div>
+                  <p className="eyebrow">Living Ball Passport</p>
+                  <h3>{selectedPassport.displayName}</h3>
+                  <p>{selectedPassport.objectId}</p>
+                </div>
+                <button className="close-detail" onClick={() => setSelectedPassport(null)}>Close</button>
+              </div>
+              <div className="passport-stats">
+                <span>{selectedPassport.privacySafeStats.rounds} rounds</span>
+                <span>{selectedPassport.privacySafeStats.courses} courses</span>
+                <span>{selectedPassport.privacySafeStats.birdiesWitnessed} birdies</span>
+                <span>{selectedPassport.privacySafeStats.holesSurvived} holes</span>
+              </div>
+              <div className="journey">
+                {selectedPassport.journey.map((event) => (
+                  <div className="journey-event" key={event.eventId}>
+                    <strong>{event.eventType.replaceAll("_", " ")}</strong>
+                    <span>{event.courseName ?? "Private journey event"}</span>
+                    <small>{event.locationLabel ?? event.privacyClass} · {event.occurredAt.slice(0, 10)}</small>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </article>
 
         <article className="panel muted">
