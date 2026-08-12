@@ -7,6 +7,20 @@ export const MAIL_SCOPES = Object.freeze([
   "mail.delete"
 ]);
 
+export const OS_SCOPES = Object.freeze([
+  "os.read"
+]);
+
+export const FRAMER_SCOPES = Object.freeze([
+  "framer.read"
+]);
+
+export const MCP_SCOPES = Object.freeze([
+  ...OS_SCOPES,
+  ...FRAMER_SCOPES,
+  ...MAIL_SCOPES
+]);
+
 const DEFAULT_ISSUER = "https://dev-dfveukr86fg3e8fr.eu.auth0.com/";
 const DEFAULT_RESOURCE = "https://birdie-agent-893591677320.europe-west3.run.app";
 
@@ -31,7 +45,7 @@ export function createMcpAuthConfig(env = process.env) {
     resource,
     jwksUrl,
     metadataUrl: `${resource}/.well-known/oauth-protected-resource`,
-    scopes: MAIL_SCOPES,
+    scopes: MCP_SCOPES,
     jwks: createRemoteJWKSet(new URL(jwksUrl))
   };
 }
@@ -43,14 +57,14 @@ export function protectedResourceMetadata(config) {
     scopes_supported: [...config.scopes],
     bearer_methods_supported: ["header"],
     resource_documentation:
-      "https://github.com/zm56snbdvp-hash/birdie-agent#chatty-mcp-mail-bridge"
+      "https://github.com/zm56snbdvp-hash/birdie-agent#birdie-os-mcp"
   };
 }
 
 export function oauthChallenge(config, {
-  scope = "mail.read",
+  scope = "os.read",
   error = "invalid_token",
-  description = "A valid Birdie Mail access token is required"
+  description = "A valid BirdieOS access token is required"
 } = {}) {
   const safeDescription = String(description).replace(/["\r\n]/g, " ");
   return `Bearer resource_metadata="${config.metadataUrl}", scope="${scope}", error="${error}", error_description="${safeDescription}"`;
@@ -70,7 +84,7 @@ export async function authenticateMcpRequest(req, { apiKey, config }) {
   const customHeader = String(req.headers["x-birdie-agent-key"] || "");
 
   if (customHeader === apiKey || bearer === `Bearer ${apiKey}`) {
-    return { type: "api-key", subject: "birdie-agent", scopes: new Set(MAIL_SCOPES) };
+    return { type: "api-key", subject: "birdie-agent", scopes: new Set(MCP_SCOPES) };
   }
 
   if (!bearer.startsWith("Bearer ")) return null;
@@ -92,4 +106,8 @@ export async function authenticateMcpRequest(req, { apiKey, config }) {
 
 export function fullMailAuthContext() {
   return { type: "internal", subject: "birdie-mail-test", scopes: new Set(MAIL_SCOPES) };
+}
+
+export function fullMcpAuthContext() {
+  return { type: "internal", subject: "birdie-os-test", scopes: new Set(MCP_SCOPES) };
 }
