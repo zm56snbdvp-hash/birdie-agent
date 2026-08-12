@@ -87,7 +87,8 @@ test("static prototype is mobile viewport based and contains all main journey la
   const html = await readFile(new URL("../prototype/round-mode/index.html", import.meta.url), "utf8");
   const app = await readFile(new URL("../prototype/round-mode/app.mjs", import.meta.url), "utf8");
   const css = await readFile(new URL("../prototype/round-mode/styles.css", import.meta.url), "utf8");
-  const combined = `${html}\n${app}\n${css}`;
+  const viewModel = await readFile(new URL("../src/round-mode/ux-prototype.mjs", import.meta.url), "utf8");
+  const combined = `${html}\n${app}\n${css}\n${viewModel}`;
 
   assert.match(html, /width=device-width/);
   assert.match(combined, /My Golf/);
