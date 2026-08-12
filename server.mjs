@@ -180,7 +180,11 @@ async function birdieOSPost(payload) {
 }
 
 const coinService = createCoinService({ birdieOSPost });
-const communityIdentityService = createCommunityIdentityService({ birdieOSGet, birdieOSPost });
+const communityIdentityService = createCommunityIdentityService({
+  birdieOSGet,
+  birdieOSPost,
+  evidenceSigningKey: BIRDIE_AGENT_API_KEY
+});
 
 async function getLiveBriefing() {
   return (await birdieOSGet("briefing")).data;
@@ -305,6 +309,7 @@ const routes = [
   "POST /ideas",
   "POST /tasks/{taskId}",
   "POST /chat",
+  "POST /community/identity/evidence",
   "POST /community/identity/resolve",
   "POST /mcp",
   "GET /mail/health",

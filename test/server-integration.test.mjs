@@ -47,12 +47,14 @@ function waitForServer(child) {
 }
 
 test("Birdie Coin HTTP contract runs through the real server", async (context) => {
+  let upstreamPosts = 0;
   const upstream = http.createServer(async (req, res) => {
     let raw = "";
     for await (const chunk of req) raw += chunk;
     const payload = raw ? JSON.parse(raw) : {};
     const url = new URL(req.url, "http://127.0.0.1");
     const action = url.searchParams.get("action");
+    if (req.method === "POST") upstreamPosts += 1;
     let data = payload;
     if (action === "health") data = { status: "ONLINE", version: "test" };
     if (action === "briefing") {
@@ -61,6 +63,29 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
           id: index + 1,
           content: "x".repeat(1000)
         }))
+      };
+    }
+    if (action === "communityWorkItem") {
+      data = {
+        workItem: {
+          workItemId: url.searchParams.get("workItemId"),
+          sourceType: "INSTAGRAM",
+          externalUserId: "provider.test",
+          resolutionStatus: "IDENTITY_PENDING",
+          matchedBirdieId: ""
+        }
+      };
+    }
+    if (action === "birdieProfiles") {
+      data = {
+        profiles: [
+          {
+            birdieId: "BIRDIE-HTTP-90",
+            status: "ACTIVE",
+            email: "provider@example.com",
+            instagramHandle: "provider.test"
+          }
+        ]
       };
     }
     res.writeHead(200, { "Content-Type": "application/json" });
@@ -88,10 +113,65 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const baseUrl = `http://127.0.0.1:${agentPort}`;
   const rootResponse = await fetch(`${baseUrl}/`);
   const root = await rootResponse.json();
-  assert.equal(root.version, "2.6.2");
+  assert.equal(root.version, "2.7.0");
 
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);
+
+  const unauthorizedEvidence = await fetch(`${baseUrl}/community/identity/evidence`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      workItemId: "WORK-HTTP-90",
+      providerIdentity: { provider: "INSTAGRAM" }
+    })
+  });
+  assert.equal(unauthorizedEvidence.status, 401);
+
+  const writesBeforeEvidence = upstreamPosts;
+  const evidenceResponse = await fetch(`${baseUrl}/community/identity/evidence`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer test-agent-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      workItemId: "WORK-HTTP-90",
+      providerIdentity: {
+        provider: "INSTAGRAM",
+        verifiedEmail: "provider@example.com",
+        emailVerified: true,
+        sourceEventId: "IG-HTTP-90",
+        observedAt: "2026-08-12T14:00:00Z"
+      }
+    })
+  });
+  const evidence = await evidenceResponse.json();
+  assert.equal(evidenceResponse.status, 200);
+  assert.equal(evidence.source, "PROVIDER_EVIDENCE_V1");
+  assert.equal(evidence.data.confidence, 90);
+  assert.equal(evidence.data.candidateCount, 1);
+  assert.ok(evidence.data.integrityToken);
+  assert.equal(upstreamPosts, writesBeforeEvidence);
+
+  const invalidEvidenceResponse = await fetch(`${baseUrl}/community/identity/evidence`, {
+    method: "POST",
+    headers: {
+      "X-Birdie-Agent-Key": "test-agent-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      workItemId: "WORK-HTTP-90",
+      providerIdentity: {
+        provider: "INSTAGRAM",
+        confidence: 100
+      }
+    })
+  });
+  const invalidEvidence = await invalidEvidenceResponse.json();
+  assert.equal(invalidEvidenceResponse.status, 400);
+  assert.equal(invalidEvidence.error, "DERIVED_PROVIDER_EVIDENCE_NOT_ALLOWED:confidence");
+  assert.equal(upstreamPosts, writesBeforeEvidence);
 
   const startupResponse = await fetch(`${baseUrl}/startup`, {
     headers: { Authorization: "Bearer test-agent-key" }

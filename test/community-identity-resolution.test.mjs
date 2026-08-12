@@ -114,14 +114,15 @@ test("IDRES-005 no match stays pending", () => {
   assert.equal(result.write.identityConflict, false);
 });
 
-test("BIRDIE_PROFILES exact handle is treated as an explicit identity link", () => {
+test("BIRDIE_PROFILES exact handle alone remains low-confidence review", () => {
   const result = resolveInstagramIdentity(workItem("@Kevin.Test"), [
     { birdieId: "BIRDIE-001", instagramHandle: " kevin.test ", status: "ACTIVE" }
   ], NOW);
 
-  assert.equal(result.write.identityConfidence, 100);
-  assert.equal(result.write.identityDecisionMode, "AUTO_EXACT_LINK");
-  assert.equal(result.write.matchedBirdieId, "BIRDIE-001");
+  assert.equal(result.write.identityConfidence, 60);
+  assert.equal(result.write.identityDecisionMode, "FOUNDER_REVIEW_LOW_CONFIDENCE");
+  assert.equal(result.write.resolutionStatus, "IDENTITY_PENDING");
+  assert.equal(result.write.matchedBirdieId, "");
 });
 
 test("processing guard blocks resolved work items", () => {
