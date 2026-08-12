@@ -8,7 +8,7 @@ export async function routeCommunityIdentityRequest({
 }) {
   if (req.method === "POST" && url.pathname === "/community/identity/resolve") {
     const body = await readBody(req);
-    const result = await service.resolveByWorkItemId(body.workItemId);
+    const result = await service.resolveByWorkItemId(body.workItemId, body.evidence ?? null);
 
     return json(res, 200, {
       success: true,
