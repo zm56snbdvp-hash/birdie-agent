@@ -6,6 +6,8 @@ Status: **IN PROGRESS — sandbox only**
 
 Birdie App V1 is a responsive web-first client. The implementation uses React, TypeScript and Three.js for the compact comic 3D hotel hub. The client remains Capacitor-ready, while all backend contracts stay engine-neutral so a later native Unity client can reuse them.
 
+The engine-neutral contract boundary is locked in `docs/BIRDIE_APP_ENGINE_NEUTRAL_CONTRACTS_V1.md`. Multiplayer is a confirmed later roadmap capability but remains excluded from V1 runtime scope.
+
 Client work is isolated from Birdie Agent production code. This branch starts from the verified Round Mode baseline `52de11105956b3f075976fd6ab635484129ea51a` and must not be mixed into Birdie DNA PR #16.
 
 ## First vertical slice
@@ -57,8 +59,9 @@ PASS when:
 - Rendered HTML test: PASS
 - Sites artifact validation: PASS
 - Visual compatibility view: PASS
+- Engine-neutral contract lock: PASS — TASK-066 architecture baseline
 - Cloud-browser WebGL interaction: not available in the isolated QA browser; the app falls back cleanly instead of crashing
 
 ## Non-goals
 
-No full Sims-style slider editor, hotel interior, multiplayer, voice, live GPS/course integration, QR/NFC choice, real wallet balance, production authentication, production API write or public release is part of this slice.
+No full Sims-style slider editor, hotel interior, multiplayer runtime, voice, live GPS/course integration, QR/NFC choice, real wallet balance, production authentication, production API write or public release is part of this slice.
