@@ -338,7 +338,17 @@ function birdieDnaInitiateTransfer_(request) {
     var sheet = birdieDnaSheet_(BIRDIE_DNA_SHEETS_.OWNERSHIP);
     var key = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
     var duplicate = birdieCoinFind_(sheet, "idempotencyKey", key);
-    if (duplicate) return birdieDnaSuccess_(duplicate.object);
+    if (duplicate) {
+      if (String(duplicate.object.transferMode) === "RELEASE_TO_FLOCK") {
+        birdieDnaAppendSystemEvent_(
+          duplicate.object.objectId,
+          "RELEASED_TO_FLOCK",
+          duplicate.object.fromBirdieId,
+          duplicate.object.ownershipId
+        );
+      }
+      return birdieDnaSuccess_(duplicate.object);
+    }
 
     var objectFound = birdieDnaRequireObjectFound_(request.objectId);
     var object = objectFound.object;
@@ -399,9 +409,17 @@ function birdieDnaAcceptTransfer_(request) {
     var ownership = found.object;
     var toBirdieId = birdieCoinRequired_(request.toBirdieId, "toBirdieId");
     birdieCoinRequireProfile_(toBirdieId);
+
     if (String(ownership.status) === "ACCEPTED") {
       if (String(ownership.toBirdieId) !== toBirdieId) throw new Error("DNA_TRANSFER_ALREADY_ACCEPTED_BY_OTHER_PROFILE");
-      return birdieDnaSuccess_({ transfer: ownership, passport: birdieDnaGetPassport_({ objectId: ownership.objectId }).data });
+      var repaired = birdieDnaReconcileAcceptedTransfer_(ownership, toBirdieId);
+      return birdieDnaSuccess_({
+        transfer: ownership,
+        object: birdieDnaObjectInternalView_(repaired.object),
+        passport: birdieDnaBoolean_(repaired.object.publicPassport)
+          ? birdieDnaGetPassport_({ objectId: ownership.objectId }).data
+          : null
+      });
     }
     if (String(ownership.status) !== "PENDING") throw new Error("DNA_TRANSFER_NOT_PENDING");
     if (String(ownership.transferMode) === "DIRECT" && String(ownership.toBirdieId) !== toBirdieId) {
@@ -423,28 +441,38 @@ function birdieDnaAcceptTransfer_(request) {
     ownership.updatedAt = now;
     birdieCoinWriteObject_(sheet, found.row, ownership);
 
-    object.currentOwnerBirdieId = toBirdieId;
-    object.lifecycleStatus = "ACTIVE";
-    object.updatedAt = now;
-    birdieCoinWriteObject_(birdieDnaSheet_(BIRDIE_DNA_SHEETS_.OBJECTS), objectFound.row, object);
-    birdieDnaAppendSystemEvent_(object.objectId, "OWNERSHIP_TRANSFER", toBirdieId, ownership.ownershipId);
-    var refreshed = birdieDnaRefreshObjectEvolution_(birdieDnaRequireObjectFound_(object.objectId));
+    var reconciled = birdieDnaReconcileAcceptedTransfer_(ownership, toBirdieId);
     birdieCoinAudit_("DNA_TRANSFER_ACCEPTED", "OBJECT_OWNERSHIP", ownership.ownershipId, ownership.acceptedBy, {
-      objectId: object.objectId,
+      objectId: ownership.objectId,
       fromBirdieId: ownership.fromBirdieId,
       toBirdieId: ownership.toBirdieId,
       transferMode: ownership.transferMode
     }, request.idempotencyKey);
     return birdieDnaSuccess_({
       transfer: ownership,
-      object: birdieDnaObjectInternalView_(refreshed.object),
-      passport: birdieDnaBoolean_(refreshed.object.publicPassport)
-        ? birdieDnaGetPassport_({ objectId: object.objectId }).data
+      object: birdieDnaObjectInternalView_(reconciled.object),
+      passport: birdieDnaBoolean_(reconciled.object.publicPassport)
+        ? birdieDnaGetPassport_({ objectId: ownership.objectId }).data
         : null
     });
   } finally {
     lock.releaseLock();
   }
+}
+
+function birdieDnaReconcileAcceptedTransfer_(ownership, toBirdieId) {
+  var objectFound = birdieDnaRequireObjectFound_(ownership.objectId);
+  var object = objectFound.object;
+  var currentOwner = String(object.currentOwnerBirdieId || "");
+  if (currentOwner !== String(toBirdieId)) {
+    if (currentOwner !== String(ownership.fromBirdieId)) throw new Error("DNA_TRANSFER_STALE_OWNER");
+    object.currentOwnerBirdieId = toBirdieId;
+    object.lifecycleStatus = "ACTIVE";
+    object.updatedAt = birdieCoinNow_();
+    birdieCoinWriteObject_(birdieDnaSheet_(BIRDIE_DNA_SHEETS_.OBJECTS), objectFound.row, object);
+  }
+  birdieDnaAppendSystemEvent_(object.objectId, "OWNERSHIP_TRANSFER", toBirdieId, ownership.ownershipId);
+  return birdieDnaRefreshObjectEvolution_(birdieDnaRequireObjectFound_(object.objectId));
 }
 
 function birdieDnaAppendSystemEvent_(objectId, eventType, birdieId, sourceReference) {
