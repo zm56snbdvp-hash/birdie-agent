@@ -2,12 +2,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import * as defaultMailService from "./mail-service.mjs";
+import { getFramerStatus, isFramerConfigured } from "./framer-service.mjs";
 import { fullMailAuthContext, oauthChallenge } from "./mcp-auth.mjs";
 
-const READ_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.read"] }] };
-const WRITE_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.write"] }] };
-const SEND_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.send"] }] };
-const DELETE_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.delete"] }] };
+const MAIL_READ_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.read"] }] };
+const MAIL_WRITE_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.write"] }] };
+const MAIL_SEND_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.send"] }] };
+const MAIL_DELETE_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mail.delete"] }] };
+const OS_READ_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["os.read"] }] };
+const FRAMER_READ_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["framer.read"] }] };
+
+const DEFAULT_BIRDIE_OS_BASE = "https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec";
 
 function toolResult(data, summary) {
   return {
@@ -22,12 +27,12 @@ function toolError(error, meta) {
     ...(meta ? { _meta: meta } : {}),
     content: [{
       type: "text",
-      text: error?.code || error?.message || "Birdie Mail request failed"
+      text: error?.code || error?.message || "BirdieOS request failed"
     }]
   };
 }
 
-function guarded(handler, { authContext, authConfig, requiredScope }) {
+function guarded(handler, { authContext, authConfig, requiredScope, label = "BirdieOS" }) {
   return async (input) => {
     if (!authContext.scopes.has(requiredScope)) {
       return toolError(
@@ -36,7 +41,7 @@ function guarded(handler, { authContext, authConfig, requiredScope }) {
           "mcp/www_authenticate": [oauthChallenge(authConfig, {
             scope: requiredScope,
             error: "insufficient_scope",
-            description: `Birdie Mail requires the ${requiredScope} permission`
+            description: `${label} requires the ${requiredScope} permission`
           })]
         }
       );
@@ -49,167 +54,283 @@ function guarded(handler, { authContext, authConfig, requiredScope }) {
   };
 }
 
+function createBirdieOsReader(env = process.env) {
+  const apiKey = env.BIRDIE_OS_API_KEY;
+  const baseUrl = env.BIRDIE_OS_BASE || DEFAULT_BIRDIE_OS_BASE;
+
+  async function get(action) {
+    if (!apiKey) {
+      const error = new Error("BIRDIE_OS_API_KEY is not configured");
+      error.code = "BIRDIE_OS_NOT_CONFIGURED";
+      throw error;
+    }
+    const url = new URL(baseUrl);
+    url.searchParams.set("action", action);
+    url.searchParams.set("api_key", apiKey);
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      redirect: "follow",
+      headers: { Accept: "application/json" }
+    });
+    if (!response.ok) {
+      const error = new Error(`Birdie OS HTTP ${response.status}`);
+      error.code = "BIRDIE_OS_HTTP_ERROR";
+      throw error;
+    }
+    const data = await response.json();
+    if (!data?.success) {
+      const error = new Error(data?.error || data?.message || "Birdie OS returned an error");
+      error.code = "BIRDIE_OS_ERROR";
+      throw error;
+    }
+    return data;
+  }
+
+  return { get };
+}
+
 export function createBirdieMailMcpServer({
   service = defaultMailService,
   authContext = fullMailAuthContext(),
   authConfig = {
     metadataUrl: "https://birdie-agent-893591677320.europe-west3.run.app/.well-known/oauth-protected-resource"
-  }
+  },
+  birdieOsReader = createBirdieOsReader(),
+  framer = { isConfigured: isFramerConfigured, getStatus: getFramerStatus }
 } = {}) {
   const server = new McpServer(
-    { name: "birdie-mail", version: "1.1.0" },
+    { name: "birdie-os", version: "1.0.0" },
     {
       instructions:
-        "Use these governed IONOS tools for the Birdie & Breakfast mailbox. " +
-        "Use birdie_mail_list before birdie_mail_get unless the user supplied a UID. " +
-        "Never invent messages, suppliers, prices, recipients or attachment contents. " +
-        "Never send or delete without the user's explicit approval of that exact action. " +
-        "Prefer moving to trash over permanent deletion. Permanent deletion is allowed only when the user explicitly asks for irreversible deletion."
+        "This is the governed BirdieOS control surface for Birdie & Breakfast. " +
+        "On explicit BirdieOS startup requests, use birdie_os_startup first. " +
+        "Treat BirdieOS as authoritative for current company facts. " +
+        "Framer tools exposed in this version are read-only. " +
+        "Mail writes, sends and deletes retain their exact approval requirements. " +
+        "Never expose secrets, tokens, API keys or runtime credentials."
     }
+  );
+
+  server.registerTool(
+    "birdie_os_startup",
+    {
+      title: "Start BirdieOS",
+      description:
+        "Load the canonical BirdieOS health state and live briefing for a new Birdie session. This is read-only and should be the first tool used after 'Birdie, starte das OS'.",
+      inputSchema: {},
+      _meta: OS_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
+    },
+    guarded(async () => {
+      const [health, briefing] = await Promise.all([
+        birdieOsReader.get("health"),
+        birdieOsReader.get("briefing")
+      ]);
+      return toolResult({
+        authoritative: true,
+        source: "BIRDIE_OS",
+        health: health.data ?? health,
+        liveBriefing: briefing.data ?? briefing
+      }, "BirdieOS started from the canonical live source.");
+    }, { authContext, authConfig, requiredScope: "os.read", label: "BirdieOS" })
+  );
+
+  server.registerTool(
+    "birdie_os_health",
+    {
+      title: "Check BirdieOS health",
+      description: "Read the canonical BirdieOS health response without changing any state.",
+      inputSchema: {},
+      _meta: OS_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
+    },
+    guarded(async () => {
+      const result = await birdieOsReader.get("health");
+      return toolResult(result.data ?? result, "BirdieOS health checked.");
+    }, { authContext, authConfig, requiredScope: "os.read", label: "BirdieOS" })
+  );
+
+  server.registerTool(
+    "birdie_os_briefing",
+    {
+      title: "Read BirdieOS briefing",
+      description: "Read the canonical live Birdie & Breakfast briefing from BirdieOS.",
+      inputSchema: {},
+      _meta: OS_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
+    },
+    guarded(async () => {
+      const result = await birdieOsReader.get("briefing");
+      return toolResult(result.data ?? result, "BirdieOS live briefing loaded.");
+    }, { authContext, authConfig, requiredScope: "os.read", label: "BirdieOS" })
+  );
+
+  server.registerTool(
+    "birdie_os_next_task",
+    {
+      title: "Get BirdieOS next task",
+      description: "Read the authoritative next actionable task selected by BirdieOS.",
+      inputSchema: {},
+      _meta: OS_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
+    },
+    guarded(async () => {
+      const result = await birdieOsReader.get("nextTask");
+      return toolResult(result.data ?? result, "BirdieOS next task loaded.");
+    }, { authContext, authConfig, requiredScope: "os.read", label: "BirdieOS" })
+  );
+
+  server.registerTool(
+    "birdie_framer_config",
+    {
+      title: "Check Framer connection",
+      description: "Check whether the governed Framer Server API adapter is configured. Does not expose credentials.",
+      inputSchema: {},
+      _meta: FRAMER_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: true, destructiveHint: false }
+    },
+    guarded(async () => toolResult({
+      configured: Boolean(framer.isConfigured()),
+      secretExposed: false
+    }, "Framer configuration checked without exposing secrets."), {
+      authContext,
+      authConfig,
+      requiredScope: "framer.read",
+      label: "Birdie Framer"
+    })
+  );
+
+  server.registerTool(
+    "birdie_framer_status",
+    {
+      title: "Read Framer status",
+      description: "Read Framer project info, publish info and changed paths through the governed Server API adapter. No publish or deploy occurs.",
+      inputSchema: {},
+      _meta: FRAMER_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: true, destructiveHint: false }
+    },
+    guarded(async () => {
+      const result = await framer.getStatus();
+      return toolResult(result, "Framer project and publish status loaded read-only.");
+    }, {
+      authContext,
+      authConfig,
+      requiredScope: "framer.read",
+      label: "Birdie Framer"
+    })
   );
 
   server.registerTool(
     "birdie_mail_health",
     {
       title: "Check Birdie mailbox",
-      description:
-        "Check whether the governed kevin@birdiebites.de IONOS mailbox is configured and authenticated.",
+      description: "Check whether the governed kevin@birdiebites.de IONOS mailbox is configured and authenticated.",
       inputSchema: {},
-      _meta: READ_SECURITY,
-      annotations: {
-        readOnlyHint: true,
-        openWorldHint: false,
-        destructiveHint: false
-      }
+      _meta: MAIL_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
     },
     guarded(async () => {
       const health = await service.getMailHealth();
       return toolResult(health, "Birdie mailbox health checked.");
-    }, { authContext, authConfig, requiredScope: "mail.read" })
+    }, { authContext, authConfig, requiredScope: "mail.read", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_list",
     {
       title: "List Birdie emails",
-      description:
-        "List recent Birdie & Breakfast emails with stable IMAP UIDs. Use this to find supplier messages before reading a full message.",
+      description: "List recent Birdie & Breakfast emails with stable IMAP UIDs. Use this to find supplier messages before reading a full message.",
       inputSchema: {
         limit: z.number().int().min(1).max(50).default(20),
         unreadOnly: z.boolean().default(false),
         mailbox: z.string().min(1).max(255).default("INBOX")
       },
-      _meta: READ_SECURITY,
-      annotations: {
-        readOnlyHint: true,
-        openWorldHint: false,
-        destructiveHint: false
-      }
+      _meta: MAIL_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
     },
     guarded(async ({ limit, unreadOnly, mailbox }) => {
       const messages = await service.listRecentMail({ limit, unreadOnly, mailbox });
       return toolResult(messages, `Found ${messages.length} Birdie email(s).`);
-    }, { authContext, authConfig, requiredScope: "mail.read" })
+    }, { authContext, authConfig, requiredScope: "mail.read", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_get",
     {
       title: "Read Birdie email",
-      description:
-        "Read one Birdie & Breakfast email by the exact IMAP UID returned by birdie_mail_list, including plain-text body and attachment metadata.",
+      description: "Read one Birdie & Breakfast email by the exact IMAP UID returned by birdie_mail_list, including plain-text body and attachment metadata.",
       inputSchema: {
         uid: z.union([z.string().min(1).max(32), z.number().int().positive()]),
         mailbox: z.string().min(1).max(255).default("INBOX")
       },
-      _meta: READ_SECURITY,
-      annotations: {
-        readOnlyHint: true,
-        openWorldHint: false,
-        destructiveHint: false
-      }
+      _meta: MAIL_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
     },
     guarded(async ({ uid, mailbox }) => {
       const message = await service.getMessage({ uid, mailbox });
       return toolResult(message, `Read Birdie email UID ${message.uid}.`);
-    }, { authContext, authConfig, requiredScope: "mail.read" })
+    }, { authContext, authConfig, requiredScope: "mail.read", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_folders",
     {
       title: "List Birdie mail folders",
-      description:
-        "List the available IONOS mailbox folders without changing mailbox state.",
+      description: "List the available IONOS mailbox folders without changing mailbox state.",
       inputSchema: {},
-      _meta: READ_SECURITY,
-      annotations: {
-        readOnlyHint: true,
-        openWorldHint: false,
-        destructiveHint: false
-      }
+      _meta: MAIL_READ_SECURITY,
+      annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false }
     },
     guarded(async () => {
       const folders = await service.listMailFolders();
       return toolResult(folders, `Found ${folders.length} Birdie mail folder(s).`);
-    }, { authContext, authConfig, requiredScope: "mail.read" })
+    }, { authContext, authConfig, requiredScope: "mail.read", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_update_flags",
     {
       title: "Update Birdie email status",
-      description:
-        "Mark one Birdie email as read or unread and/or flagged or unflagged. This changes mailbox state but does not send or delete mail.",
+      description: "Mark one Birdie email as read or unread and/or flagged or unflagged. This changes mailbox state but does not send or delete mail.",
       inputSchema: {
         uid: z.union([z.string().min(1).max(32), z.number().int().positive()]),
         mailbox: z.string().min(1).max(255).default("INBOX"),
         read: z.boolean().optional(),
         flagged: z.boolean().optional()
       },
-      _meta: WRITE_SECURITY,
-      annotations: {
-        readOnlyHint: false,
-        openWorldHint: false,
-        destructiveHint: false
-      }
+      _meta: MAIL_WRITE_SECURITY,
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
     guarded(async ({ uid, mailbox, read, flagged }) => {
       const result = await service.updateMessageFlags({ uid, mailbox, read, flagged });
       return toolResult(result, `Updated Birdie email UID ${result.uid}.`);
-    }, { authContext, authConfig, requiredScope: "mail.write" })
+    }, { authContext, authConfig, requiredScope: "mail.write", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_move",
     {
       title: "Move Birdie email",
-      description:
-        "Move one Birdie email to an existing mailbox folder. Use birdie_mail_folders first when the exact destination path is unknown.",
+      description: "Move one Birdie email to an existing mailbox folder. Use birdie_mail_folders first when the exact destination path is unknown.",
       inputSchema: {
         uid: z.union([z.string().min(1).max(32), z.number().int().positive()]),
         mailbox: z.string().min(1).max(255).default("INBOX"),
         destination: z.string().min(1).max(255)
       },
-      _meta: WRITE_SECURITY,
-      annotations: {
-        readOnlyHint: false,
-        openWorldHint: false,
-        destructiveHint: false
-      }
+      _meta: MAIL_WRITE_SECURITY,
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false }
     },
     guarded(async ({ uid, mailbox, destination }) => {
       const result = await service.moveMessage({ uid, mailbox, destination });
       return toolResult(result, `Moved Birdie email UID ${result.uid} to ${result.destination}.`);
-    }, { authContext, authConfig, requiredScope: "mail.write" })
+    }, { authContext, authConfig, requiredScope: "mail.write", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_send",
     {
       title: "Send Birdie email",
-      description:
-        "Send an email as kevin@birdiebites.de only after the user explicitly approves the exact recipients, subject and content. Set founderApproved=true and confirmation=SEND_EMAIL only after that approval.",
+      description: "Send an email as kevin@birdiebites.de only after the user explicitly approves the exact recipients, subject and content. Set founderApproved=true and confirmation=SEND_EMAIL only after that approval.",
       inputSchema: {
         to: z.array(z.string().email().max(320)).min(1).max(20),
         cc: z.array(z.string().email().max(320)).max(20).default([]),
@@ -220,25 +341,20 @@ export function createBirdieMailMcpServer({
         founderApproved: z.literal(true),
         confirmation: z.literal("SEND_EMAIL")
       },
-      _meta: SEND_SECURITY,
-      annotations: {
-        readOnlyHint: false,
-        openWorldHint: true,
-        destructiveHint: false
-      }
+      _meta: MAIL_SEND_SECURITY,
+      annotations: { readOnlyHint: false, openWorldHint: true, destructiveHint: false }
     },
     guarded(async (input) => {
       const result = await service.sendMail(input);
       return toolResult(result, `Sent Birdie email ${result.messageId}.`);
-    }, { authContext, authConfig, requiredScope: "mail.send" })
+    }, { authContext, authConfig, requiredScope: "mail.send", label: "Birdie Mail" })
   );
 
   server.registerTool(
     "birdie_mail_delete",
     {
       title: "Delete Birdie email",
-      description:
-        "Delete one Birdie email only after explicit user approval. Prefer mode=trash with confirmation=MOVE_TO_TRASH. Use mode=permanent with confirmation=DELETE_PERMANENTLY only when the user explicitly requests irreversible deletion.",
+      description: "Delete one Birdie email only after explicit user approval. Prefer mode=trash with confirmation=MOVE_TO_TRASH. Use mode=permanent with confirmation=DELETE_PERMANENTLY only when the user explicitly requests irreversible deletion.",
       inputSchema: {
         uid: z.union([z.string().min(1).max(32), z.number().int().positive()]),
         mailbox: z.string().min(1).max(255).default("INBOX"),
@@ -246,12 +362,8 @@ export function createBirdieMailMcpServer({
         founderApproved: z.literal(true),
         confirmation: z.enum(["MOVE_TO_TRASH", "DELETE_PERMANENTLY"])
       },
-      _meta: DELETE_SECURITY,
-      annotations: {
-        readOnlyHint: false,
-        openWorldHint: false,
-        destructiveHint: true
-      }
+      _meta: MAIL_DELETE_SECURITY,
+      annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: true }
     },
     guarded(async (input) => {
       const result = await service.deleteMessage(input);
@@ -259,11 +371,13 @@ export function createBirdieMailMcpServer({
         ? `Permanently deleted Birdie email UID ${result.uid}.`
         : `Moved Birdie email UID ${result.uid} to trash.`;
       return toolResult(result, summary);
-    }, { authContext, authConfig, requiredScope: "mail.delete" })
+    }, { authContext, authConfig, requiredScope: "mail.delete", label: "Birdie Mail" })
   );
 
   return server;
 }
+
+export const createBirdieOsMcpServer = createBirdieMailMcpServer;
 
 export async function routeMcpRequest({
   req,
