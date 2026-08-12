@@ -34,41 +34,6 @@ jobs:
       - name: Run resolver unit tests
         run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs test/community-write-gate.test.mjs
 
-  verify-read-only-health:
-    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[VERIFY_BIRDIE_OS_HEALTH_ONCE]')
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    env:
-      BIRDIE_OS_BASE: https://script.google.com/macros/s/AKfycbxw3TfFJzsdL-R44xnFqS-KtdhCZ_iFh9HCZEG7nngTteMab2EdRrBOmB3ia6ci_FbYYw/exec
-      BIRDIE_OS_API_KEY: ${{ secrets.BIRDIE_OS_API_KEY }}
-    steps:
-      - name: Verify Birdie OS v3.3.1 is read-only
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          const base = process.env.BIRDIE_OS_BASE;
-          const key = process.env.BIRDIE_OS_API_KEY;
-          if (!key) throw new Error('Birdie OS CI secret missing');
-          const url = new URL(base);
-          url.searchParams.set('action', 'health');
-          url.searchParams.set('api_key', key);
-          const response = await fetch(url, { redirect: 'follow' });
-          const text = await response.text();
-          let body;
-          try { body = JSON.parse(text); }
-          catch { throw new Error('Birdie OS health returned non-JSON'); }
-          if (!response.ok || body.success !== true) {
-            throw new Error(`Birdie OS health failed: ${body?.error || response.status}`);
-          }
-          console.log(`Birdie OS health verified: version=${body.version} mode=${body.mode}`);
-          if (body.version !== '3.3.1') {
-            throw new Error(`Unexpected Birdie OS version: ${body.version}`);
-          }
-          if (body.mode !== 'READ_ONLY') {
-            throw new Error(`Global controlled-write gate is not closed: mode=${body.mode}`);
-          }
-          NODE
-
   live-e2e:
     if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E'
     needs: unit
