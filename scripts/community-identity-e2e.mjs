@@ -39,6 +39,10 @@ async function parseJson(response, label) {
   if (!response.ok) {
     throw new Error(`${label} HTTP ${response.status}: ${JSON.stringify(body).slice(0, 500)}`);
   }
+  if (body?.success === false) {
+    const safeError = String(body.error || body.message || "unknown error").slice(0, 300);
+    throw new Error(`${label} error: ${safeError}`);
+  }
   return body;
 }
 
