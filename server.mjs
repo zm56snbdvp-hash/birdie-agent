@@ -7,6 +7,8 @@ import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
 import { createCommunityIdentityService } from "./src/community/identity-service.mjs";
 import { routeCommunityIdentityRequest } from "./src/community/identity-router.mjs";
+import { createMetaCommunityService } from "./src/meta/service.mjs";
+import { routeMetaPublicRequest, routeMetaGovernedRequest } from "./src/meta/router.mjs";
 import {
   authenticateMcpRequest,
   createMcpAuthConfig,
@@ -117,9 +119,14 @@ function boundActionData(value, maxChars = ACTION_RESPONSE_MAX_CHARS) {
   };
 }
 
-async function readBody(req) {
+async function readRawBody(req) {
   let body = "";
   for await (const chunk of req) body += chunk;
+  return body;
+}
+
+async function readBody(req) {
+  const body = await readRawBody(req);
   if (!body) return {};
   try {
     return JSON.parse(body);
@@ -181,6 +188,7 @@ async function birdieOSPost(payload) {
 
 const coinService = createCoinService({ birdieOSPost });
 const communityIdentityService = createCommunityIdentityService({ birdieOSGet, birdieOSPost });
+const metaCommunityService = createMetaCommunityService({ birdieOSPost });
 
 async function getLiveBriefing() {
   return (await birdieOSGet("briefing")).data;
@@ -332,7 +340,11 @@ const routes = [
   "GET /framer/config",
   "GET /framer/status",
   "POST /framer/preview",
-  "POST /framer/deploy"
+  "POST /framer/deploy",
+  "GET /meta/webhook",
+  "POST /meta/webhook",
+  "POST /meta/messages/private-reply",
+  "POST /meta/messages/send"
 ];
 
 const server = http.createServer(async (req, res) => {
@@ -394,6 +406,14 @@ const server = http.createServer(async (req, res) => {
       })) return;
     }
 
+    if (await routeMetaPublicRequest({
+      req,
+      res,
+      url,
+      service: metaCommunityService,
+      readRawBody
+    })) return;
+
     if (!isAgentAuthorized(req)) {
       return json(res, 401, { success: false, error: "UNAUTHORIZED" });
     }
@@ -401,6 +421,14 @@ const server = http.createServer(async (req, res) => {
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
     if (await routeFramerRequest({ req, res, url, json, readBody })) return;
+    if (await routeMetaGovernedRequest({
+      req,
+      res,
+      url,
+      json,
+      readBody,
+      service: metaCommunityService
+    })) return;
     if (await routeCommunityIdentityRequest({
       req,
       res,
