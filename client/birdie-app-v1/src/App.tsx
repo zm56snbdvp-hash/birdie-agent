@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { sandboxAdapter, type BallPassportDto, type PersonalBirdieReplyDto, type RoundDetailDto, type RoundSummaryDto } from "./appAdapter";
 import { formatRoundDetail } from "./roundDetail";
+import { ThreeHotelScene } from "./ThreeHotelScene";
 
 const birdieId = "BIRDIE-SANDBOX-001";
 
@@ -41,7 +42,7 @@ export default function App() {
   return (
     <main className="app-shell">
       <section className="hero"><div><p className="eyebrow">Birdie App V1 · Sandbox</p><h1>Welcome home, golfer.</h1><p className="lede">The hotel hub runs on an engine-neutral Birdie core.</p></div><div className="avatar" aria-label="Avatar preset">B</div></section>
-      <section className="hotel" aria-label="Birdie and Breakfast hotel exterior"><div className="hotel-sign">Birdie &amp; Breakfast</div><div className="doors">Hotel Hub</div></section>
+      <ThreeHotelScene />
 
       <section className="hotspots">
         <article className="panel golf-history">
