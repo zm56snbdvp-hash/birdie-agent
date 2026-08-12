@@ -37,3 +37,11 @@ jobs:
       - name: Build Birdie App client
         working-directory: client/birdie-app-v1
         run: npm run build
+
+      - name: Upload owner-review build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: birdie-app-v1-owner-review-${{ github.sha }}
+          path: client/birdie-app-v1/dist
+          if-no-files-found: error
+          retention-days: 7
