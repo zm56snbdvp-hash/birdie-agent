@@ -16,7 +16,7 @@ export async function routeDnaRequest({ req, res, url, json, readBody, service }
   if (!url.pathname.startsWith("/dna")) return false;
 
   if (req.method === "GET" && url.pathname === "/dna/config") {
-    json(res, 200, resultBody(service.getConfig(), "BIRDIE_DNA_CONFIG"));
+    json(res, 200, resultBody(await service.getConfig(), "BIRDIE_DNA_CONFIG"));
     return true;
   }
 
