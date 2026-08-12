@@ -34,6 +34,7 @@ export function simulateCompleteRoundModeJourney() {
     locationLabel: "Sandbox Hole 1 tee",
     visibility: "PRIVATE"
   });
+  sandbox.recordHoleScore(round.roundId, 1, { strokes: 4, putts: 2, penalties: 0 });
   sandbox.completeHole(round.roundId, 1);
 
   sandbox.activateHole(round.roundId, 2);
@@ -71,6 +72,7 @@ export function simulateCompleteRoundModeJourney() {
     holeNumber: 2
   });
   timeline.push(["BALL_B_RESUMED", resumedSession.playSessionId]);
+  sandbox.recordHoleScore(round.roundId, 2, { strokes: 6, putts: 2, penalties: 1 });
   sandbox.completeHole(round.roundId, 2);
 
   sandbox.activateHole(round.roundId, 3);
@@ -81,21 +83,35 @@ export function simulateCompleteRoundModeJourney() {
     locationLabel: "Sandbox Hole 3 green",
     visibility: "APPROXIMATE"
   });
+  sandbox.recordHoleScore(round.roundId, 3, { strokes: 3, putts: 1, penalties: 0 });
   sandbox.completeHole(round.roundId, 3);
+
+  const scorecardBeforeEnd = sandbox.getScorecard(round.roundId);
+  const privacySafeLastSeen = sandbox.getPrivacySafeLastSeen("BALL-SANDBOX-B");
+  timeline.push(["SCORECARD_READY", scorecardBeforeEnd.totals.strokes]);
+  timeline.push(["LAST_SEEN_SAFE", privacySafeLastSeen.locationLabel]);
+
   const completedRound = sandbox.endRound(round.roundId);
   timeline.push(["ROUND_COMPLETED", completedRound.roundId]);
 
   const state = sandbox.snapshot();
+  const scorecard = sandbox.getScorecard(round.roundId);
   return {
     timeline,
     state,
+    scorecard,
+    privacySafeLastSeen,
     invariants: {
       roundCompleted: completedRound.status === "COMPLETED",
+      scorecardComplete: scorecard.scoreComplete === true,
       noCoinSideEffects: !Object.keys(state).some((key) => key.toUpperCase().includes("COIN")),
       hardwareNeutral: !JSON.stringify(state).match(/\b(QR|NFC)\b/i),
       exactLocationAbsentByDefault: state.OBJECT_LOCATION_EVENTS.every(
         (event) => event.latitude === null && event.longitude === null
-      )
+      ),
+      privacySafeLastSeenHasNoCoordinates:
+        privacySafeLastSeen.latitude === null && privacySafeLastSeen.longitude === null,
+      noGpsCourseFacts: scorecard.gpsDataUsed === false
     }
   };
 }

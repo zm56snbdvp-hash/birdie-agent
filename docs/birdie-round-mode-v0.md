@@ -1,83 +1,91 @@
 # Birdie App Round Mode V0 — Digital Sandbox
 
-Status: **sandbox only**  
+Status: **TASK-050 sandbox implementation**  
 Branch: `feature/birdie-round-mode-v0`  
 Source baseline: `feature/birdie-dna-v0`
 
 ## Purpose
 
-Provide a hardware-neutral, production-isolated domain sandbox for Birdie App Round Mode before any scorecard UI, QR/NFC decision, physical-object pilot, deployment or Birdie Coin integration.
+Provide a hardware-neutral, production-isolated Birdie App Round Mode domain with a scorecard, Ball in Play/Lost Birdie lifecycle and privacy-safe last-seen projection before any app deployment, QR/NFC choice, physical-object pilot or Birdie Coin integration.
 
 ## Domain records
 
-The sandbox models four requested record sets:
+The sandbox keeps the four original record sets:
 
 - `ROUNDS` — one digital round owned by one Birdie profile.
-- `ROUND_HOLES` — ordered hole lifecycle records (`PENDING → ACTIVE → COMPLETED`).
-- `OBJECT_PLAY_SESSIONS` — which Birdie object is in play during a round, including switches, loss and round end.
+- `ROUND_HOLES` — ordered hole lifecycle and user-entered score records.
+- `OBJECT_PLAY_SESSIONS` — which Birdie object is in play, including switches, loss and round end.
 - `OBJECT_LOCATION_EVENTS` — privacy-governed last-seen/lost/found/note events.
 
-`OBJECT_STATES` is an in-memory derived state projection used to test the object state machine. It is not a new production table or Source of Truth.
+`OBJECT_STATES` remains an in-memory derived projection for state-machine tests, not a production Source of Truth.
 
-## State machine
+## Scorecard contract
 
-Object state transitions are intentionally small:
+Rule version: `round-mode-v0.2.0`.
+
+Each hole may store:
+
+- `strokes` — required when a score is entered;
+- `putts` — optional, never inferred;
+- `penalties` — optional, never inferred;
+- `scoreRevision` — increments on a correction while the round remains active;
+- `scoreSource = USER_ENTERED_SANDBOX`.
+
+`getScorecard(roundId)` returns hole rows, scored/unscored counts and totals. It does not invent par, course metadata or GPS data. A `courseRef` is treated as a reference only and `gpsDataUsed` remains false.
+
+## Ball in Play / Lost Birdie
+
+The state machine remains explicit:
 
 - `RESTING → IN_PLAY` when selected for play.
 - `IN_PLAY → RESTING` when switched out or the round ends.
 - `IN_PLAY → LOST` when the active object is marked lost.
 - `LOST → FOUND` when a lost object is found.
 - `FOUND → IN_PLAY` when resumed.
-- `FOUND → RESTING` is supported by the model for a future explicit rest action.
 
-Invalid transitions fail closed.
+A round can have only one active object play session at a time. Mid-round switches close the previous session before selecting the next object.
 
-## Rule versioning
+## Privacy-safe Last Seen
 
-Every persisted sandbox record carries `ruleVersion = round-mode-v0.1.0`.
+Location remains private by default.
 
-The V0 service rejects unsupported rule versions rather than silently changing behavior. Future rules must be introduced as a new explicit version.
-
-## Privacy contract
-
-Location is private by default.
-
-- A human-readable `locationLabel` may be stored without coordinates.
 - Exact latitude/longitude require `exactLocationOptIn=true`.
-- Exact coordinates are only accepted with `visibility=PRIVATE`.
-- The complete journey simulator uses no exact coordinates.
+- Exact coordinates are accepted only with `visibility=PRIVATE`.
+- `getPrivacySafeLastSeen(objectId)` never returns coordinates.
+- Private location labels are redacted from the privacy-safe projection.
+- Approximate/public labels may be returned without coordinates.
 
-This is a domain privacy invariant, not merely a UI preference.
+This is enforced in the domain layer rather than left to UI behavior.
 
-## Explicit non-goals / safety boundaries
+## Complete sandbox journey
 
-V0 does **not**:
+`simulateCompleteRoundModeJourney()` exercises a deterministic three-hole journey:
+
+1. Start round.
+2. Put Ball A in play on hole 1 and enter a score.
+3. Switch to Ball B on hole 2.
+4. Mark Ball B lost, found and resumed.
+5. Enter hole 2 score including a penalty.
+6. Record an approximate last-seen label on hole 3.
+7. Enter hole 3 score.
+8. Build a complete scorecard.
+9. Read privacy-safe Last Seen.
+10. End the round and return the active object to `RESTING`.
+
+Acceptance verifies score totals, revision behavior, optional putts/penalties, lost/found lifecycle, no Coin effects, hardware neutrality and no GPS/course-fact fabrication.
+
+## Explicit safety boundaries
+
+TASK-050 does **not**:
 
 - choose QR, NFC or any physical identity mechanism;
 - create or modify a real Birdie DNA object;
-- call BirdieOS production write APIs;
-- write `COIN_TRANSACTIONS`, claims, rewards, badges or balances;
+- call BirdieOS production write APIs from the sandbox code;
+- write Birdie Coins, claims, rewards, badges or balances;
+- fabricate real course, par or GPS data;
+- decide PWA vs native app;
 - merge to `main`;
-- deploy a service;
-- publish an app;
-- claim real course/GPS data;
-- implement the final scorecard UX (reserved for later tasks).
-
-## Complete journey simulator
-
-`simulateCompleteRoundModeJourney()` exercises a deterministic 3-hole sandbox journey:
-
-1. Start round.
-2. Activate hole 1 and put Ball A in play.
-3. Store a private label-only last-seen event.
-4. Switch to Ball B on hole 2.
-5. Mark Ball B lost.
-6. Mark Ball B found.
-7. Resume Ball B.
-8. Finish holes 2 and 3.
-9. End round and verify the active object returns to `RESTING`.
-
-The simulator reports invariants for round completion, no Coin side effects, hardware neutrality and absence of exact location by default.
+- deploy a service or publish an app.
 
 ## Acceptance
 
@@ -87,4 +95,4 @@ Run:
 npm test
 ```
 
-V0 acceptance requires all repository tests plus Round Mode tests to pass. The branch-specific GitHub Actions workflow must remain isolated from production deployment.
+Acceptance requires the full repository suite plus all Round Mode tests to pass on the branch-specific GitHub Actions workflow. Production merge/deploy remains a separate governed decision.

@@ -10,6 +10,7 @@ import {
   nextObjectState,
   normalizeLocationInput,
   requireEnum,
+  requireNonNegativeInteger,
   requirePositiveInteger,
   requireString
 } from "./model.mjs";
@@ -134,6 +135,13 @@ export function createRoundModeSandbox({
     return clone(record);
   }
 
+  function latestLocationEventForObject(objectId) {
+    for (let index = objectLocationEvents.length - 1; index >= 0; index -= 1) {
+      if (objectLocationEvents[index].objectId === objectId) return objectLocationEvents[index];
+    }
+    return null;
+  }
+
   return {
     getRuleVersion() {
       return ROUND_MODE_RULE_VERSION;
@@ -163,6 +171,12 @@ export function createRoundModeSandbox({
           status: "PENDING",
           startedAt: null,
           completedAt: null,
+          strokes: null,
+          putts: null,
+          penalties: null,
+          scoreEnteredAt: null,
+          scoreRevision: 0,
+          scoreSource: null,
           ruleVersion,
           sandbox: true
         });
@@ -192,6 +206,31 @@ export function createRoundModeSandbox({
       return clone(hole);
     },
 
+    recordHoleScore(roundId, holeNumber, input = {}) {
+      const round = findRound(requireString(roundId, "roundId", 100));
+      if (round.status !== "ACTIVE") {
+        throw new RoundModeValidationError("ROUND_NOT_ACTIVE", `Round ${roundId} is not active`);
+      }
+      const hole = findHole(roundId, requirePositiveInteger(holeNumber, "holeNumber", round.holeCount));
+      if (hole.status === "PENDING") {
+        throw new RoundModeValidationError(
+          "HOLE_NOT_STARTED",
+          `Hole ${holeNumber} must be activated before score entry`
+        );
+      }
+      hole.strokes = requirePositiveInteger(input.strokes, "strokes", 30);
+      hole.putts = input.putts === undefined || input.putts === null
+        ? null
+        : requireNonNegativeInteger(input.putts, "putts", 20);
+      hole.penalties = input.penalties === undefined || input.penalties === null
+        ? null
+        : requireNonNegativeInteger(input.penalties, "penalties", 20);
+      hole.scoreEnteredAt = now();
+      hole.scoreRevision += 1;
+      hole.scoreSource = "USER_ENTERED_SANDBOX";
+      return clone(hole);
+    },
+
     completeHole(roundId, holeNumber) {
       const round = findRound(requireString(roundId, "roundId", 100));
       const hole = findHole(roundId, requirePositiveInteger(holeNumber, "holeNumber", round.holeCount));
@@ -201,6 +240,44 @@ export function createRoundModeSandbox({
       hole.status = "COMPLETED";
       hole.completedAt = now();
       return clone(hole);
+    },
+
+    getScorecard(roundId) {
+      const round = findRound(requireString(roundId, "roundId", 100));
+      const holes = roundHoles
+        .filter((hole) => hole.roundId === round.roundId)
+        .sort((a, b) => a.holeNumber - b.holeNumber);
+      const scored = holes.filter((hole) => hole.strokes !== null);
+      const puttValues = scored.filter((hole) => hole.putts !== null);
+      const penaltyValues = scored.filter((hole) => hole.penalties !== null);
+      return clone({
+        roundId: round.roundId,
+        birdieId: round.birdieId,
+        courseRef: round.courseRef,
+        status: round.status,
+        ruleVersion: round.ruleVersion,
+        holeCount: round.holeCount,
+        scoredHoles: scored.length,
+        unscoredHoles: holes.length - scored.length,
+        scoreComplete: scored.length === holes.length,
+        totals: {
+          strokes: scored.reduce((sum, hole) => sum + hole.strokes, 0),
+          putts: puttValues.reduce((sum, hole) => sum + hole.putts, 0),
+          penalties: penaltyValues.reduce((sum, hole) => sum + hole.penalties, 0)
+        },
+        holes: holes.map((hole) => ({
+          holeNumber: hole.holeNumber,
+          status: hole.status,
+          strokes: hole.strokes,
+          putts: hole.putts,
+          penalties: hole.penalties,
+          scoreRevision: hole.scoreRevision,
+          scoreSource: hole.scoreSource
+        })),
+        courseDataMode: round.courseRef ? "REFERENCE_ONLY" : "UNSPECIFIED",
+        gpsDataUsed: false,
+        sandbox: true
+      });
     },
 
     selectObject(input = {}) {
@@ -280,6 +357,26 @@ export function createRoundModeSandbox({
 
     recordLocation(input = {}) {
       return createLocationEvent({ ...input, eventType: input.eventType || "LAST_SEEN" });
+    },
+
+    getPrivacySafeLastSeen(objectId) {
+      const normalizedObjectId = requireString(objectId, "objectId", 100);
+      const event = latestLocationEventForObject(normalizedObjectId);
+      if (!event) return null;
+      return clone({
+        objectId: event.objectId,
+        roundId: event.roundId,
+        eventType: event.eventType,
+        recordedAt: event.recordedAt,
+        visibility: event.visibility,
+        locationLabel: event.visibility === "PRIVATE" ? null : event.locationLabel,
+        privateLocationRecorded: event.visibility === "PRIVATE",
+        exactCoordinatesStoredPrivately: event.latitude !== null && event.longitude !== null,
+        latitude: null,
+        longitude: null,
+        ruleVersion: event.ruleVersion,
+        sandbox: true
+      });
     },
 
     markLost(input = {}) {

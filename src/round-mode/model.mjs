@@ -1,4 +1,4 @@
-export const ROUND_MODE_RULE_VERSION = "round-mode-v0.1.0";
+export const ROUND_MODE_RULE_VERSION = "round-mode-v0.2.0";
 
 export const ROUND_STATUSES = Object.freeze(["ACTIVE", "COMPLETED", "CANCELLED"]);
 export const HOLE_STATUSES = Object.freeze(["PENDING", "ACTIVE", "COMPLETED"]);
@@ -29,6 +29,13 @@ export function requireString(value, field, maxLength = 180) {
 export function requirePositiveInteger(value, field, max = 36) {
   if (!Number.isInteger(value) || value < 1 || value > max) {
     throw new RoundModeValidationError("INVALID_INPUT", `${field} must be an integer from 1 to ${max}`);
+  }
+  return value;
+}
+
+export function requireNonNegativeInteger(value, field, max = 50) {
+  if (!Number.isInteger(value) || value < 0 || value > max) {
+    throw new RoundModeValidationError("INVALID_INPUT", `${field} must be an integer from 0 to ${max}`);
   }
   return value;
 }

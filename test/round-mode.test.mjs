@@ -229,3 +229,131 @@ test("sandbox state is hardware-neutral and contains no QR/NFC choice", () => {
   assert.equal(/\bNFC\b/i.test(serialized), false);
   assert.equal(serialized.includes("physicalIdentityType"), false);
 });
+
+test("scorecard records strokes with optional putts and penalties", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  engine.activateHole(round.roundId, 1);
+  const score = engine.recordHoleScore(round.roundId, 1, {
+    strokes: 5,
+    putts: 2,
+    penalties: 1
+  });
+  const card = engine.getScorecard(round.roundId);
+
+  assert.equal(score.strokes, 5);
+  assert.equal(score.putts, 2);
+  assert.equal(score.penalties, 1);
+  assert.equal(score.scoreRevision, 1);
+  assert.equal(score.scoreSource, "USER_ENTERED_SANDBOX");
+  assert.deepEqual(card.totals, { strokes: 5, putts: 2, penalties: 1 });
+  assert.equal(card.scoredHoles, 1);
+  assert.equal(card.unscoredHoles, 2);
+});
+
+test("putts and penalties remain optional rather than invented", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  engine.activateHole(round.roundId, 1);
+  const score = engine.recordHoleScore(round.roundId, 1, { strokes: 4 });
+  const card = engine.getScorecard(round.roundId);
+
+  assert.equal(score.putts, null);
+  assert.equal(score.penalties, null);
+  assert.deepEqual(card.totals, { strokes: 4, putts: 0, penalties: 0 });
+});
+
+test("score entry validates strokes, putts and penalties", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  engine.activateHole(round.roundId, 1);
+
+  assert.throws(
+    () => engine.recordHoleScore(round.roundId, 1, { strokes: 0 }),
+    (error) => error instanceof RoundModeValidationError && error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => engine.recordHoleScore(round.roundId, 1, { strokes: 4, putts: -1 }),
+    (error) => error instanceof RoundModeValidationError && error.code === "INVALID_INPUT"
+  );
+  assert.throws(
+    () => engine.recordHoleScore(round.roundId, 1, { strokes: 4, penalties: -1 }),
+    (error) => error instanceof RoundModeValidationError && error.code === "INVALID_INPUT"
+  );
+});
+
+test("score corrections are versioned while the round remains active", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  engine.activateHole(round.roundId, 1);
+  engine.recordHoleScore(round.roundId, 1, { strokes: 5, putts: 2 });
+  const corrected = engine.recordHoleScore(round.roundId, 1, { strokes: 4, putts: 2 });
+
+  assert.equal(corrected.strokes, 4);
+  assert.equal(corrected.scoreRevision, 2);
+  assert.equal(engine.getScorecard(round.roundId).totals.strokes, 4);
+});
+
+test("privacy-safe last seen redacts private labels and exact coordinates", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  engine.recordLocation({
+    roundId: round.roundId,
+    birdieId: round.birdieId,
+    objectId: "BALL-PRIVATE",
+    locationLabel: "Exact private bunker position",
+    latitude: 51.191,
+    longitude: 9.483,
+    exactLocationOptIn: true,
+    visibility: "PRIVATE"
+  });
+  const safe = engine.getPrivacySafeLastSeen("BALL-PRIVATE");
+
+  assert.equal(safe.locationLabel, null);
+  assert.equal(safe.latitude, null);
+  assert.equal(safe.longitude, null);
+  assert.equal(safe.privateLocationRecorded, true);
+  assert.equal(safe.exactCoordinatesStoredPrivately, true);
+});
+
+test("privacy-safe last seen may expose an approximate label but never coordinates", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  engine.recordLocation({
+    roundId: round.roundId,
+    birdieId: round.birdieId,
+    objectId: "BALL-APPROX",
+    locationLabel: "Hole 7 rough",
+    visibility: "APPROXIMATE"
+  });
+  const safe = engine.getPrivacySafeLastSeen("BALL-APPROX");
+
+  assert.equal(safe.locationLabel, "Hole 7 rough");
+  assert.equal(safe.latitude, null);
+  assert.equal(safe.longitude, null);
+  assert.equal(safe.privateLocationRecorded, false);
+});
+
+test("scorecard treats course reference as a reference and never invents GPS/par facts", () => {
+  const engine = sandbox();
+  const round = activeRound(engine);
+  const card = engine.getScorecard(round.roundId);
+
+  assert.equal(card.courseRef, "SANDBOX-COURSE");
+  assert.equal(card.courseDataMode, "REFERENCE_ONLY");
+  assert.equal(card.gpsDataUsed, false);
+  assert.equal(Object.hasOwn(card.holes[0], "par"), false);
+});
+
+test("complete journey produces a complete scorecard and privacy-safe last seen output", () => {
+  const result = simulateCompleteRoundModeJourney();
+
+  assert.deepEqual(result.scorecard.totals, { strokes: 13, putts: 5, penalties: 1 });
+  assert.equal(result.scorecard.scoreComplete, true);
+  assert.equal(result.invariants.scorecardComplete, true);
+  assert.equal(result.invariants.privacySafeLastSeenHasNoCoordinates, true);
+  assert.equal(result.invariants.noGpsCourseFacts, true);
+  assert.equal(result.privacySafeLastSeen.locationLabel, "Sandbox Hole 3 green");
+  assert.equal(result.privacySafeLastSeen.latitude, null);
+  assert.equal(result.privacySafeLastSeen.longitude, null);
+});
