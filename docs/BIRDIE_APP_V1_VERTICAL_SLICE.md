@@ -24,6 +24,12 @@ The first slice contains:
 - a non-WebGL compatibility view
 - explicit sandbox labels and no production records
 
+## Unity and multiplayer compatibility
+
+V1 does not implement multiplayer. However, stable Birdie IDs, avatar preset IDs, round IDs, object IDs, event IDs and versioned JSON DTOs are canonical and renderer-neutral. React/Three.js scene instances are never canonical identifiers. A future Unity/C# client may map these stable IDs to local prefabs/GameObjects while consuming the same governed app APIs and durable domain events.
+
+Future multiplayer transport may use HTTP, WebSocket or a Unity networking layer, but authoritative durable Birdie state remains server-governed. Ephemeral movement/animation synchronization must remain separate from durable records such as round completion, ownership transfer and Ball journey history.
+
 ## Personal Birdie boundary
 
 The app never calls internal BirdieOS routes directly. A later user-facing gateway may expose only allowlisted, per-user capabilities:
