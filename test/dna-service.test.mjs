@@ -7,6 +7,24 @@ function harness() {
   const service = createDnaService({
     async birdieOSPost(payload) {
       calls.push(payload);
+      if (payload.action === "dnaGetConfig") {
+        return {
+          data: {
+            evolutionRules: [
+              { ruleId: "DNA-TIER-COMMON", tierCode: "COMMON_RARE", threshold: 0, status: "PREPARED" }
+            ],
+            eventScoringEnabled: false,
+            principles: {
+              birdieOsAuthoritative: true,
+              eventLedgerAuthoritative: true,
+              clientControlledEvolution: false,
+              directCoinWrites: false,
+              publicPassportDefault: false,
+              preparedRulesDoNotScore: true
+            }
+          }
+        };
+      }
       return { data: { ok: true, payload } };
     }
   });
@@ -59,6 +77,20 @@ test("valid object issuance maps to authoritative dnaCreateObject action", async
   assert.equal(calls[0].action, "dnaCreateObject");
   assert.equal(calls[0].founderApproved, true);
   assert.equal(calls[0].objectType, "COIN");
+  assert.equal(calls[0].publicPassport, true);
+});
+
+test("public passport is privacy-off by default at object issuance", async () => {
+  const { service, calls } = harness();
+  await service.createObject({
+    objectType: "BALL",
+    serialNumber: "0002",
+    displayName: "Ball #0002",
+    physicalIdentityType: "QR",
+    founderApproved: true,
+    idempotencyKey: "dna:ball:0002"
+  });
+  assert.equal(calls[0].publicPassport, false);
 });
 
 test("owner-submitted event never controls points and maps as pending-capable event", async () => {
@@ -93,6 +125,21 @@ test("founder-verified event requires founder approval", async () => {
   );
 });
 
+test("system-verified event requires an explicit trusted-system assertion", async () => {
+  const { service } = harness();
+  await assert.rejects(
+    () => service.createEvent("DNA-001", {
+      eventType: "INSTAGRAM_TAG_VERIFIED",
+      birdieId: "BIRDIE-0001",
+      sourceType: "INSTAGRAM",
+      sourceReference: "ig:media:001",
+      verificationMode: "SYSTEM_VERIFIED",
+      idempotencyKey: "dna:event:ig:001"
+    }),
+    (error) => error.code === "SYSTEM_VERIFICATION_REQUIRED"
+  );
+});
+
 test("release into flock cannot preselect a recipient", async () => {
   const { service } = harness();
   await assert.rejects(
@@ -123,14 +170,15 @@ test("direct transfer requires recipient and acceptance is a separate action", a
   assert.equal(calls[1].action, "dnaAcceptTransfer");
 });
 
-test("config declares append-only evolution principles and no direct coin writes", () => {
-  const { service } = harness();
-  const config = service.getConfig();
+test("config is read from BirdieOS and prepared rules do not imply active scoring", async () => {
+  const { service, calls } = harness();
+  const config = await service.getConfig();
+  assert.equal(calls[0].action, "dnaGetConfig");
+  assert.equal(config.principles.birdieOsAuthoritative, true);
   assert.equal(config.principles.eventLedgerAuthoritative, true);
   assert.equal(config.principles.clientControlledEvolution, false);
   assert.equal(config.principles.directCoinWrites, false);
-  assert.deepEqual(
-    config.evolutionTiers.map((tier) => tier.code),
-    ["COMMON_RARE", "FLOCK_RARE", "NIGHT_OWL_RARE", "STAY_RARE", "LEGACY_RARE"]
-  );
+  assert.equal(config.principles.publicPassportDefault, false);
+  assert.equal(config.principles.preparedRulesDoNotScore, true);
+  assert.equal(config.eventScoringEnabled, false);
 });
