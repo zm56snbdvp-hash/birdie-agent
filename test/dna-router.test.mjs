@@ -65,3 +65,27 @@ test("DNA event route forwards object id and body", async () => {
   assert.equal(calls[0].status, 201);
   assert.equal(calls[0].body.data.eventId, "EVT-1");
 });
+
+test("DNA claim-token rotation route forwards ownership id and body", async () => {
+  const { json, calls } = responseHarness();
+  const serviceCalls = [];
+  await routeDnaRequest({
+    req: { method: "POST" },
+    res: {},
+    url: new URL("http://birdie.local/dna/transfers/OWN-123/claim-token"),
+    json,
+    readBody: async () => ({ fromBirdieId: "BIRDIE-0001" }),
+    service: {
+      async rotateReleaseClaimToken(ownershipId, body) {
+        serviceCalls.push({ ownershipId, body });
+        return { ownershipId, claimToken: "one-time" };
+      }
+    }
+  });
+  assert.deepEqual(serviceCalls[0], {
+    ownershipId: "OWN-123",
+    body: { fromBirdieId: "BIRDIE-0001" }
+  });
+  assert.equal(calls[0].status, 200);
+  assert.equal(calls[0].body.data.claimToken, "one-time");
+});
