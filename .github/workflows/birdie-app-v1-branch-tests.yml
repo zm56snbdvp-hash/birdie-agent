@@ -8,18 +8,32 @@ on:
     branches:
       - feature/birdie-round-mode-v0
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: 22
-      - run: npm ci
-      - run: npm test
-      - name: Build reconstructed Birdie App client
+          node-version: '22'
+
+      - name: Install root dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Install Birdie App client dependencies
         working-directory: client/birdie-app-v1
-        run: |
-          npm install
-          npm run build
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Build Birdie App client
+        working-directory: client/birdie-app-v1
+        run: npm run build
