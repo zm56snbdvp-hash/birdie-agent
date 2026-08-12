@@ -14,9 +14,17 @@ button, textarea { font: inherit; }
 h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .lede { max-width: 620px; font-size: 18px; }
 .avatar { width: 96px; height: 96px; border-radius: 50%; background: #234734; color: #f7f3eb; display: grid; place-items: center; font-size: 42px; font-weight: 700; flex: 0 0 auto; }
-.hotel { margin: 36px 0; min-height: 300px; border-radius: 28px; background: linear-gradient(180deg, #dcc9a4 0 62%, #234734 62%); display: grid; place-items: center; position: relative; overflow: hidden; }
-.hotel-sign { position: absolute; top: 58px; background: #234734; color: #f7f3eb; padding: 14px 22px; border-radius: 999px; font-family: Georgia, serif; font-size: 24px; }
-.doors { margin-top: 96px; width: 180px; height: 140px; background: #2f2f2f; color: white; display: grid; place-items: center; border-radius: 14px 14px 0 0; }
+.world-stage { margin: 36px 0; border-radius: 28px; overflow: hidden; background: #fff; box-shadow: 0 12px 38px rgba(0,0,0,.08); }
+.world-meta { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 16px 18px; background: #fff; border-bottom: 1px solid #eadfca; }
+.world-meta p { margin: 0 0 3px; }
+.world-meta span { font-size: 12px; color: #2f2f2f; }
+.three-mount { width: 100%; height: min(54vw, 520px); min-height: 320px; background: #f7f3eb; }
+.three-mount canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.webgl-fallback { min-height: 320px; display: grid; place-content: center; text-align: center; padding: 30px; background: linear-gradient(180deg, #dcc9a4, #f7f3eb); }
+.webgl-fallback p { max-width: 520px; color: #2f2f2f; }
+.touch-controls { display: none; padding: 12px; background: #f7f3eb; border-top: 1px solid #eadfca; text-align: center; user-select: none; }
+.touch-controls > button, .touch-controls div button { width: 54px; height: 46px; border: 1px solid #c7a54a; border-radius: 12px; background: #234734; color: #fff; font-size: 22px; touch-action: none; }
+.touch-controls div { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
 .hotspots { display: grid; grid-template-columns: 1.5fr 1.25fr 1fr; gap: 16px; align-items: start; }
 .panel { background: white; border-radius: 20px; padding: 20px; min-height: 220px; box-shadow: 0 8px 30px rgba(0,0,0,.06); }
 .round, .passport-card { width: 100%; display: grid; gap: 5px; padding: 14px; background: #f7f3eb; border: 1px solid transparent; border-radius: 14px; color: #234734; text-align: left; cursor: pointer; }
@@ -51,10 +59,16 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .birdie-scope { margin-top: 12px; font-size: 12px; color: #2f2f2f; }
 .birdie-scope summary { cursor: pointer; color: #234734; font-weight: 700; }
 
+@media (pointer: coarse) {
+  .touch-controls { display: block; }
+}
+
 @media (max-width: 760px) {
+  .app-shell { padding: 16px; }
   .hero { align-items: flex-start; }
   .avatar { width: 70px; height: 70px; font-size: 30px; }
+  .world-meta { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .three-mount { min-height: 300px; height: 62vw; max-height: 430px; }
   .hotspots { grid-template-columns: 1fr; }
-  .hotel { min-height: 240px; }
   .holes { grid-template-columns: 1fr; }
 }
