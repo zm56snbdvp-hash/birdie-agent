@@ -67,6 +67,16 @@ export async function routeDnaRequest({ req, res, url, json, readBody, service }
     return true;
   }
 
+  const claimTokenMatch = match(url.pathname, /^\/dna\/transfers\/([^/]+)\/claim-token$/);
+  if (req.method === "POST" && claimTokenMatch) {
+    json(
+      res,
+      200,
+      resultBody(await service.rotateReleaseClaimToken(claimTokenMatch[0], await readBody(req)))
+    );
+    return true;
+  }
+
   const transferAcceptMatch = match(url.pathname, /^\/dna\/transfers\/([^/]+)\/accept$/);
   if (req.method === "POST" && transferAcceptMatch) {
     json(
