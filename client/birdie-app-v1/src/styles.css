@@ -6,7 +6,7 @@
 
 * { box-sizing: border-box; }
 body { margin: 0; min-width: 320px; }
-button { font: inherit; }
+button, textarea { font: inherit; }
 
 .app-shell { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .hero { display: flex; justify-content: space-between; gap: 24px; align-items: center; }
@@ -19,7 +19,6 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .doors { margin-top: 96px; width: 180px; height: 140px; background: #2f2f2f; color: white; display: grid; place-items: center; border-radius: 14px 14px 0 0; }
 .hotspots { display: grid; grid-template-columns: 1.5fr 1.25fr 1fr; gap: 16px; align-items: start; }
 .panel { background: white; border-radius: 20px; padding: 20px; min-height: 220px; box-shadow: 0 8px 30px rgba(0,0,0,.06); }
-.panel.muted { opacity: .75; }
 .round, .passport-card { width: 100%; display: grid; gap: 5px; padding: 14px; background: #f7f3eb; border: 1px solid transparent; border-radius: 14px; color: #234734; text-align: left; cursor: pointer; }
 .round:hover, .round:focus-visible, .passport-card:hover, .passport-card:focus-visible { border-color: #c7a54a; outline: none; }
 .round span, .round small, .passport-card span, .passport-card small { color: #2f2f2f; }
@@ -38,6 +37,19 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .passport-card > div:last-child { display: grid; gap: 4px; }
 .ball-orb { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #fff 0 18%, #dcc9a4 19% 48%, #234734 49% 100%); color: #fff; font-weight: 800; border: 2px solid #c7a54a; box-shadow: inset -7px -8px 14px rgba(0,0,0,.15); }
 .journey { display: grid; gap: 8px; }
+.personal-birdie { border: 1px solid #dcc9a4; }
+.birdie-boundary { font-size: 13px; color: #2f2f2f; background: #f7f3eb; padding: 8px 10px; border-radius: 10px; }
+.birdie-input { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
+.birdie-input textarea { width: 100%; resize: vertical; border: 1px solid #dcc9a4; border-radius: 12px; padding: 10px; background: #fffdf8; color: #2f2f2f; }
+.birdie-input textarea:focus { outline: 2px solid #c7a54a; border-color: transparent; }
+.ask-birdie { width: 100%; margin-top: 10px; border: 0; border-radius: 999px; padding: 10px 14px; background: #234734; color: #f7f3eb; cursor: pointer; }
+.ask-birdie:disabled { opacity: .55; cursor: default; }
+.birdie-reply { margin-top: 12px; padding: 12px; border-radius: 14px; background: #edf3ee; color: #234734; }
+.birdie-reply.refused { background: #f7eee8; color: #6d3f2a; }
+.birdie-reply p { margin: 6px 0; color: inherit; }
+.birdie-reply small { opacity: .72; }
+.birdie-scope { margin-top: 12px; font-size: 12px; color: #2f2f2f; }
+.birdie-scope summary { cursor: pointer; color: #234734; font-weight: 700; }
 
 @media (max-width: 760px) {
   .hero { align-items: flex-start; }
