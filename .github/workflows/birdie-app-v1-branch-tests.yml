@@ -1,0 +1,25 @@
+name: Birdie App V1 branch tests
+
+on:
+  push:
+    branches:
+      - feature/birdie-app-v1-vertical-slice
+  pull_request:
+    branches:
+      - feature/birdie-round-mode-v0
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - name: Build reconstructed Birdie App client
+        working-directory: client/birdie-app-v1
+        run: |
+          npm install
+          npm run build
