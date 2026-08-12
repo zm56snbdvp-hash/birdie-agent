@@ -1,0 +1,148 @@
+openapi: 3.1.0
+info:
+  title: Birdie Framer Agent V2
+  version: 2.0.0
+  description: Private read and plan-only API for BirdieOS and Framer website reconciliation.
+servers:
+  - url: https://birdie-agent-893591677320.europe-west3.run.app
+security:
+  - bearerAuth: []
+paths:
+  /startup:
+    get:
+      operationId: birdieOsStartup
+      summary: Start BirdieOS
+      responses:
+        '200':
+          description: Startup context
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /briefing:
+    get:
+      operationId: birdieOsBriefing
+      summary: Read authoritative BirdieOS briefing
+      responses:
+        '200':
+          description: Live briefing
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/status:
+    get:
+      operationId: birdieFramerStatus
+      summary: Read Framer publish and project status
+      responses:
+        '200':
+          description: Framer status
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/site/pages:
+    get:
+      operationId: framerSitePages
+      summary: List Framer web pages
+      description: Read page IDs, paths, draft state and text-node counts. No write.
+      responses:
+        '200':
+          description: Page inventory
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/site/page:
+    get:
+      operationId: framerSitePageContent
+      summary: Read one Framer page and its text nodes
+      parameters:
+        - in: query
+          name: ref
+          required: true
+          schema: { type: string }
+          description: Framer page ID or exact path such as / or /ueber-uns.
+      responses:
+        '200':
+          description: Page and text-node inventory
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/site/text-plan:
+    post:
+      operationId: framerPlanTextChange
+      summary: Plan a Framer text change without writing
+      description: Returns before/after diff and state hash. Never changes Framer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pageRef: { type: string }
+                nodeId: { type: string }
+                text: { type: string, maxLength: 20000 }
+              required: [pageRef, nodeId, text]
+      responses:
+        '200':
+          description: Plan-only text diff
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/cms/collections:
+    get:
+      operationId: framerCmsCollections
+      summary: List Framer CMS collections
+      description: Read collection identities, field definitions and item counts. No write.
+      responses:
+        '200':
+          description: CMS inventory
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/cms/collection:
+    get:
+      operationId: framerCmsCollection
+      summary: Read one Framer CMS collection
+      parameters:
+        - in: query
+          name: ref
+          required: true
+          schema: { type: string }
+          description: Collection ID or exact collection name.
+      responses:
+        '200':
+          description: Collection fields and items
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+  /framer/cms/plan:
+    post:
+      operationId: framerPlanCmsChange
+      summary: Plan a Framer CMS change without writing
+      description: Returns field-level before/after diff and state hash. Never changes Framer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                collectionId: { type: string }
+                itemId: { type: string }
+                fieldData:
+                  type: object
+                  properties: {}
+                  additionalProperties: true
+                slug: { type: string, maxLength: 200 }
+              required: [collectionId, itemId, fieldData]
+      responses:
+        '200':
+          description: Plan-only CMS diff
+          content:
+            application/json:
+              schema: { type: object, properties: {}, additionalProperties: true }
+components:
+  schemas: {}
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
