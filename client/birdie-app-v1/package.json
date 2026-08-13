@@ -6,6 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "typecheck:e2e": "tsc --noEmit --strict --moduleResolution bundler --module esnext --target es2022 --lib ES2022,DOM --allowSyntheticDefaultImports --esModuleInterop --skipLibCheck e2e/*.ts playwright.config.ts",
     "typecheck": "tsc --noEmit --strict --jsx react-jsx --moduleResolution bundler --module esnext --target es2022 --lib ES2022,DOM --allowSyntheticDefaultImports --esModuleInterop --skipLibCheck src/*.tsx src/*.ts"
   },
   "dependencies": {
@@ -17,6 +20,7 @@
     "three": "^0.179.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
     "@types/three": "^0.179.0"
