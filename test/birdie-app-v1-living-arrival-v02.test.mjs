@@ -140,6 +140,8 @@ test("destination and return navigation restore an accessible focus story", () =
   assert.match(app, /prefersReducedMotion\(\) \? "auto" : "smooth"/);
   assert.equal((app.match(/renderArrivalGuide\("/g) ?? []).length, 3);
   assert.match(guide, /Zurück zu Birdie/);
+  assert.match(companion, /const active = activeDestination === destination\.id/);
+  assert.doesNotMatch(companion, /const active = lastDestination === destination\.id/);
 });
 
 test("basic mobile accessibility remains visible and touch-sized", () => {

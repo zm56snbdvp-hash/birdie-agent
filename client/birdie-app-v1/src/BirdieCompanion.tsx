@@ -293,7 +293,7 @@ export function BirdieCompanion({
 
               <div className="birdie-companion__destinations">
                 {BIRDIE_V1_DESTINATIONS.map((destination, index) => {
-                  const active = lastDestination === destination.id;
+                  const active = activeDestination === destination.id;
                   const recommended =
                     !active && recommendedDestination === destination.id;
                   return (
