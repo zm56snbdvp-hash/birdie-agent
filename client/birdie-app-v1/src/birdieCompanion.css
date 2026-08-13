@@ -591,7 +591,7 @@
 
 @media (max-width: 430px) {
   .birdie-companion__dialog {
-    padding-left: 18px;
+    padding: 14px 14px 10px;
   }
 
   .birdie-companion__bird {
@@ -599,7 +599,54 @@
   }
 
   .birdie-companion__content h2 {
-    font-size: 28px;
+    margin: 4px 30px 6px 0;
+    font-size: 24px;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) > p:not(.birdie-companion__eyebrow) {
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__world-cue {
+    gap: 3px;
+    margin-top: 9px;
+    padding: 8px 10px;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__world-cue strong {
+    font-size: 15px;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__world-cue span {
+    font-size: 9px;
+    line-height: 1.35;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__primary {
+    min-height: 38px;
+    padding: 8px 10px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__secondary {
+    padding: 7px 4px;
+    font-size: 10.5px;
+    white-space: nowrap;
+  }
+
+  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__boundary {
+    margin-top: 7px;
+    font-size: 7.5px;
+    line-height: 1.25;
   }
 
   .birdie-companion__launcher {

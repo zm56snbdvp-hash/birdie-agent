@@ -15,6 +15,7 @@ const companion = await read("BirdieCompanion.tsx");
 const bridge = await read("useBirdieWorldBridge.ts");
 const scene = await read("ThreeHotelScene.tsx");
 const app = await read("App.tsx");
+const companionStyles = await read("birdieCompanion.css");
 
 const destinationIds = ["golf-history", "ball-vault", "personal-birdie"];
 const zoneIds = [
@@ -96,4 +97,19 @@ test("there is one companion and the existing Pass-04 hotspots remain", () => {
   assert.match(app, /<WorldAtmosphere onOpenHotspot=\{openWorldHotspot\}/);
   assert.match(app, /onChoose=\{openWorldHotspot\}/);
   assert.doesNotMatch(combinedSource, /visitedZones|placesVisited|progressCount/);
+});
+
+test("mobile intro keeps both companion actions in one compact first view", () => {
+  assert.match(
+    companionStyles,
+    /@media \(max-width: 430px\)[\s\S]*?grid-template-columns: minmax\(0, 1fr\) auto/
+  );
+  assert.match(
+    companionStyles,
+    /\.birdie-companion__content:not\(\.birdie-companion__content--guide\) \.birdie-companion__primary[\s\S]*?white-space: nowrap/
+  );
+  assert.match(
+    companionStyles,
+    /\.birdie-companion__content:not\(\.birdie-companion__content--guide\) \.birdie-companion__secondary[\s\S]*?white-space: nowrap/
+  );
 });
