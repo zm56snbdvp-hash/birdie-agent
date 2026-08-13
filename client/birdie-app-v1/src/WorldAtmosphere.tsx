@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
+import type { BirdieWorldDestination } from "./birdieDestinations";
 
-export type WorldHotspotId = "golf-history" | "ball-vault" | "personal-birdie";
+export type WorldHotspotId = BirdieWorldDestination;
 
 type WorldAtmosphereProps = {
   onOpenHotspot: (hotspot: WorldHotspotId) => void;
@@ -57,7 +58,7 @@ function markerStyle(active: boolean, position: CSSProperties): CSSProperties {
 
 export function WorldAtmosphere({ onOpenHotspot, activeHotspot }: WorldAtmosphereProps) {
   return (
-    <div className="world-atmosphere" aria-label="Birdie World V1 hotspot links">
+    <div className="world-atmosphere" aria-label="Drei erreichbare Orte in der BirdieWorld">
       <div aria-hidden="true">
         <div className="ambient-cloud cloud-a"><i /><i /><i /></div>
         <div className="ambient-cloud cloud-b"><i /><i /><i /></div>
@@ -115,32 +116,35 @@ export function WorldAtmosphere({ onOpenHotspot, activeHotspot }: WorldAtmospher
 
       <button
         type="button"
+        className="world-hotspot world-hotspot--golf-history"
         style={markerStyle(activeHotspot === "golf-history", { left: "3.5%", bottom: "31%" })}
         onClick={() => onOpenHotspot("golf-history")}
-        aria-label="Open Golf History hotspot"
+        aria-label="Golf History am Putting Green öffnen"
       >
         <span style={markerIcon}>01</span>
-        <span><strong style={{ display: "block", fontSize: 12 }}>Golf History</strong><small style={{ color: "#dcc9a4", fontSize: 10 }}>Putting side</small></span>
+        <span><strong style={{ display: "block", fontSize: 12 }}>Golf History</strong><small style={{ color: "#dcc9a4", fontSize: 10 }}>Am Putting Green</small></span>
       </button>
 
       <button
         type="button"
+        className="world-hotspot world-hotspot--ball-vault"
         style={markerStyle(activeHotspot === "ball-vault", { left: "43%", top: "25%" })}
         onClick={() => onOpenHotspot("ball-vault")}
-        aria-label="Open Ball Vault hotspot"
+        aria-label="Ball Vault im Hotel öffnen"
       >
         <span style={markerIcon}>02</span>
-        <span><strong style={{ display: "block", fontSize: 12 }}>Ball Vault</strong><small style={{ color: "#dcc9a4", fontSize: 10 }}>Hotel collection</small></span>
+        <span><strong style={{ display: "block", fontSize: 12 }}>Ball Vault</strong><small style={{ color: "#dcc9a4", fontSize: 10 }}>Im Hotel</small></span>
       </button>
 
       <button
         type="button"
+        className="world-hotspot world-hotspot--personal-birdie"
         style={markerStyle(activeHotspot === "personal-birdie", { right: "3.5%", bottom: "29%" })}
         onClick={() => onOpenHotspot("personal-birdie")}
-        aria-label="Open Personal Birdie hotspot"
+        aria-label="Personal Birdie auf der Terrasse öffnen"
       >
         <span style={markerIcon}>03</span>
-        <span><strong style={{ display: "block", fontSize: 12 }}>Personal Birdie</strong><small style={{ color: "#dcc9a4", fontSize: 10 }}>Terrace / Nest</small></span>
+        <span><strong style={{ display: "block", fontSize: 12 }}>Personal Birdie</strong><small style={{ color: "#dcc9a4", fontSize: 10 }}>Auf der Terrasse</small></span>
       </button>
     </div>
   );

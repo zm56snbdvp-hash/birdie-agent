@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { WebglFallbackWorld } from "./WebglFallbackWorld";
 
 type Direction = "forward" | "back" | "left" | "right";
 export type WorldZone = "Arrival Path" | "Hotel Entrance" | "Putting Green" | "Terrace" | "Hotel Grounds";
@@ -22,6 +23,29 @@ const COLORS = {
   wood: 0x75513b,
   warmLight: 0xffc86b
 } as const;
+
+const WORLD_ZONE_LABELS: Record<WorldZone, string> = {
+  "Arrival Path": "Ankunftsweg",
+  "Hotel Entrance": "Hoteleingang",
+  "Putting Green": "Putting Green",
+  Terrace: "Terrasse",
+  "Hotel Grounds": "Hotelgelände"
+};
+
+function createWebGLRenderTarget() {
+  const canvas = document.createElement("canvas");
+  try {
+    const context = canvas.getContext("webgl2", {
+      alpha: false,
+      antialias: true,
+      depth: true,
+      powerPreference: "high-performance"
+    });
+    return context ? { canvas, context } : null;
+  } catch {
+    return null;
+  }
+}
 
 function disposeMaterial(material: THREE.Material | THREE.Material[]) {
   if (Array.isArray(material)) material.forEach((item) => item.dispose());
@@ -215,10 +239,23 @@ export function ThreeHotelScene({ onZoneChange }: ThreeHotelSceneProps) {
     if (!mount) return;
     onZoneChangeRef.current?.(zoneRef.current);
 
+    const renderTarget = createWebGLRenderTarget();
+    if (!renderTarget) {
+      setWebglAvailable(false);
+      return;
+    }
+
     let renderer: THREE.WebGLRenderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+      renderer = new THREE.WebGLRenderer({
+        canvas: renderTarget.canvas,
+        context: renderTarget.context,
+        antialias: true,
+        alpha: false,
+        powerPreference: "high-performance"
+      });
     } catch {
+      renderTarget.context.getExtension("WEBGL_lose_context")?.loseContext();
       setWebglAvailable(false);
       return;
     }
@@ -545,8 +582,9 @@ export function ThreeHotelScene({ onZoneChange }: ThreeHotelSceneProps) {
       if (direction) heldRef.current.delete(direction);
     };
     const clearHeld = () => heldRef.current.clear();
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
+    mount.addEventListener("keydown", onKeyDown);
+    mount.addEventListener("keyup", onKeyUp);
+    mount.addEventListener("blur", clearHeld);
     window.addEventListener("blur", clearHeld);
     window.addEventListener("pointerup", clearHeld);
 
@@ -690,8 +728,9 @@ export function ThreeHotelScene({ onZoneChange }: ThreeHotelSceneProps) {
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
+      mount.removeEventListener("keydown", onKeyDown);
+      mount.removeEventListener("keyup", onKeyUp);
+      mount.removeEventListener("blur", clearHeld);
       window.removeEventListener("blur", clearHeld);
       window.removeEventListener("pointerup", clearHeld);
       renderer.dispose();
@@ -713,33 +752,42 @@ export function ThreeHotelScene({ onZoneChange }: ThreeHotelSceneProps) {
   const release = (direction: Direction) => heldRef.current.delete(direction);
 
   return (
-    <section className="world-stage" aria-label="Interactive Birdie and Breakfast hotel exterior">
+    <section
+      className="world-stage"
+      aria-label="Interaktive Außenwelt von Birdie & Breakfast"
+      aria-describedby="world-control-help"
+    >
       <div className="world-meta">
         <div>
-          <p className="eyebrow">Hotel Hub · Golden Hour Sandbox</p>
-          <strong>Welcome home. Walk the path, explore the grounds.</strong>
+          <p className="eyebrow">Birdie &amp; Breakfast · Goldene Stunde</p>
+          <strong>Das Hotel vor dir. Das Putting Green links. Die Terrasse rechts.</strong>
         </div>
         <div className="world-meta-status">
-          <span className="zone-chip">{worldZone}</span>
-          <span>WASD / arrows · touch controls</span>
+          <span className="zone-chip">{WORLD_ZONE_LABELS[worldZone]}</span>
+          <span id="world-control-help">Welt fokussieren · WASD / Pfeile oder Touch</span>
         </div>
       </div>
       {webglAvailable ? (
-        <div className="three-mount" ref={mountRef} />
+        <div
+          className="three-mount"
+          ref={mountRef}
+          tabIndex={0}
+          aria-label="Begehbare 3D-Welt. Mit WASD oder Pfeiltasten bewegen."
+          onPointerDown={() => mountRef.current?.focus()}
+        />
       ) : (
-        <div className="webgl-fallback">
-          <strong>Compatibility view</strong>
-          <p>WebGL is unavailable on this browser. Golf History, Ball Vault and Personal Birdie remain usable below.</p>
+        <WebglFallbackWorld />
+      )}
+      {webglAvailable && (
+        <div className="touch-controls" aria-label="Touch-Steuerung für den Avatar">
+          <button type="button" aria-label="Vorwärts gehen" onPointerDown={() => press("forward")} onPointerUp={() => release("forward")} onPointerCancel={() => release("forward")} onPointerLeave={() => release("forward")}>↑</button>
+          <div>
+            <button type="button" aria-label="Nach links gehen" onPointerDown={() => press("left")} onPointerUp={() => release("left")} onPointerCancel={() => release("left")} onPointerLeave={() => release("left")}>←</button>
+            <button type="button" aria-label="Rückwärts gehen" onPointerDown={() => press("back")} onPointerUp={() => release("back")} onPointerCancel={() => release("back")} onPointerLeave={() => release("back")}>↓</button>
+            <button type="button" aria-label="Nach rechts gehen" onPointerDown={() => press("right")} onPointerUp={() => release("right")} onPointerCancel={() => release("right")} onPointerLeave={() => release("right")}>→</button>
+          </div>
         </div>
       )}
-      <div className="touch-controls" aria-label="Avatar touch controls">
-        <button onPointerDown={() => press("forward")} onPointerUp={() => release("forward")} onPointerCancel={() => release("forward")} onPointerLeave={() => release("forward")}>↑</button>
-        <div>
-          <button onPointerDown={() => press("left")} onPointerUp={() => release("left")} onPointerCancel={() => release("left")} onPointerLeave={() => release("left")}>←</button>
-          <button onPointerDown={() => press("back")} onPointerUp={() => release("back")} onPointerCancel={() => release("back")} onPointerLeave={() => release("back")}>↓</button>
-          <button onPointerDown={() => press("right")} onPointerUp={() => release("right")} onPointerCancel={() => release("right")} onPointerLeave={() => release("right")}>→</button>
-        </div>
-      </div>
     </section>
   );
 }

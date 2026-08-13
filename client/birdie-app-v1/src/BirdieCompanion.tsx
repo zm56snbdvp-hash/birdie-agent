@@ -7,6 +7,10 @@ import {
 } from "./birdieDestinations";
 import { getBirdieWorldCue } from "./birdieWorldCue";
 import type { BirdieWorldContextProjection } from "./worldContext";
+import {
+  BIRDIE_HOST_JOURNEY_VERSION,
+  type BirdieHostJourneyStage
+} from "./hostJourney";
 import "./birdieCompanion.css";
 
 export type BirdieCompanionDestination = BirdieWorldDestination;
@@ -27,6 +31,8 @@ export interface BirdieCompanionProps {
   initiallyOpen?: boolean;
   /** In-memory request from the arrival guide to reopen the existing guide phase. */
   guideRequestId?: number;
+  /** Reports only visible V0.2 welcome/orientation transitions to the session shell. */
+  onHostStageChange?: (stage: Extract<BirdieHostJourneyStage, "welcomed" | "oriented">) => void;
 }
 
 function prefersReducedMotion() {
@@ -56,16 +62,27 @@ export function BirdieCompanion({
   onChoose,
   targetIds,
   initiallyOpen = true,
-  guideRequestId = 0
+  guideRequestId = 0,
+  onHostStageChange
 }: BirdieCompanionProps) {
   const [open, setOpen] = useState(initiallyOpen);
   const [introduced, setIntroduced] = useState(false);
   const [phase, setPhase] = useState<"hello" | "guide">("hello");
+  const [returnedToBirdie, setReturnedToBirdie] = useState(false);
   const [lastDestination, setLastDestination] =
     useState<BirdieCompanionDestination | null>(activeDestination ?? null);
   const firstActionRef = useRef<HTMLButtonElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
   const handledGuideRequestRef = useRef(guideRequestId);
+  const onHostStageChangeRef = useRef(onHostStageChange);
+
+  useEffect(() => {
+    onHostStageChangeRef.current = onHostStageChange;
+  }, [onHostStageChange]);
+
+  useEffect(() => {
+    if (initiallyOpen) onHostStageChangeRef.current?.("welcomed");
+  }, [initiallyOpen]);
 
   const worldCue = useMemo(
     () => getBirdieWorldCue(worldContext),
@@ -85,6 +102,7 @@ export function BirdieCompanion({
     handledGuideRequestRef.current = guideRequestId;
     setIntroduced(true);
     setPhase("guide");
+    setReturnedToBirdie(true);
     setOpen(true);
   }, [guideRequestId]);
 
@@ -117,7 +135,11 @@ export function BirdieCompanion({
   };
 
   const reopen = () => {
-    setPhase(introduced ? "guide" : "hello");
+    const nextPhase = introduced ? "guide" : "hello";
+    setPhase(nextPhase);
+    if (!returnedToBirdie) {
+      onHostStageChangeRef.current?.(nextPhase === "guide" ? "oriented" : "welcomed");
+    }
     setOpen(true);
   };
 
@@ -125,6 +147,7 @@ export function BirdieCompanion({
     const targetId =
       targetIds?.[destination] ?? BIRDIE_V1_TARGET_IDS[destination];
     setIntroduced(true);
+    setReturnedToBirdie(false);
     setLastDestination(destination);
     setOpen(false);
     if (onChoose) onChoose(destination);
@@ -132,22 +155,24 @@ export function BirdieCompanion({
   };
 
   const greeting = profileName?.trim()
-    ? `Hey ${profileName.trim()}, ich sehe, wo du gerade bist.`
-    : "Hey, ich sehe, wo du gerade bist.";
+    ? `Schön, dass du da bist, ${profileName.trim()}.`
+    : "Schön, dass du da bist.";
 
-  const guideTitle =
-    destinationContext?.activeTitle ??
-    worldCue?.title ??
-    "Wohin darf ich dich führen?";
-  const guideCopy =
-    destinationContext?.activeCopy ??
-    worldCue?.copy ??
-    "Diese drei Orte bleiben der vollständige, gebundene V1-Rahmen.";
+  const guideTitle = returnedToBirdie
+    ? "Da bist du wieder."
+    : destinationContext?.activeTitle ??
+      worldCue?.title ??
+      "Was passt heute zu dir?";
+  const guideCopy = returnedToBirdie
+    ? "Von hier finden wir gemeinsam weiter. Du kannst noch einmal losziehen oder einfach bei mir bleiben."
+    : destinationContext?.activeCopy ??
+      worldCue?.copy ??
+      "Ich zeige dir drei vertraute Orte. Du entscheidest, wohin wir gehen.";
   const launcherEyebrow = worldCue?.eyebrow ?? "Birdie ist da";
   const launcherCopy =
     destinationContext?.dock ??
     worldCue?.launcher ??
-    "Dein Begleiter in der Birdie World";
+    "Dein Begleiter in der BirdieWorld";
 
   return (
     <div className="birdie-companion">
@@ -184,6 +209,8 @@ export function BirdieCompanion({
           aria-modal="false"
           aria-labelledby="birdie-companion-title"
           aria-describedby="birdie-companion-copy"
+          data-birdie-host={BIRDIE_HOST_JOURNEY_VERSION}
+          data-host-stage={returnedToBirdie ? "return-to-birdie" : phase === "hello" ? "welcomed" : "oriented"}
         >
           <div className="birdie-companion__aura" aria-hidden="true" />
           <div className="birdie-companion__bird" aria-hidden="true">
@@ -208,13 +235,12 @@ export function BirdieCompanion({
           {phase === "hello" ? (
             <div className="birdie-companion__content">
               <p className="birdie-companion__eyebrow">
-                <span aria-hidden="true" /> Birdie liest die Welt
+                <span aria-hidden="true" /> Birdie hat dich bemerkt
               </p>
               <h2 id="birdie-companion-title">{greeting}</h2>
               <p id="birdie-companion-copy">
-                Ich bekomme nur eine grobe, flüchtige Weltzone aus der aktuellen
-                Szene. Exakte Koordinaten, Bewegungsverlauf und Entscheidungen bleiben
-                außerhalb dieses Begleiters.
+                Ich bin Birdie. Komm erst einmal an – ich bleibe hier, orientiere
+                dich und zeige dir nur, was gerade zu diesem Ort passt.
               </p>
 
               {worldCue && (
@@ -232,24 +258,26 @@ export function BirdieCompanion({
                   type="button"
                   onClick={() => {
                     setIntroduced(true);
+                    setReturnedToBirdie(false);
                     setPhase("guide");
+                    onHostStageChangeRef.current?.("oriented");
                   }}
                 >
-                  Zeig mir, was hier passt
+                  Zeig mir die Welt
                 </button>
                 <button
                   className="birdie-companion__secondary"
                   type="button"
                   onClick={close}
                 >
-                  Bleib einfach bei mir
+                  Ich schaue mich erst um
                 </button>
               </div>
             </div>
           ) : (
             <div className="birdie-companion__content birdie-companion__content--guide">
               <p className="birdie-companion__eyebrow">
-                <span aria-hidden="true" /> Dein kontextueller Weltbegleiter
+                <span aria-hidden="true" /> Birdie orientiert dich
               </p>
               <h2 id="birdie-companion-title">{guideTitle}</h2>
               <p id="birdie-companion-copy">{guideCopy}</p>
@@ -257,7 +285,7 @@ export function BirdieCompanion({
               {worldCue && (
                 <div className="birdie-companion__world-cue birdie-companion__world-cue--compact">
                   <small>
-                    {worldContext?.zoneLabel} · {worldContext?.contractVersion}
+                    {worldCue.eyebrow} · nur diese Sitzung
                   </small>
                   <span>{worldCue.recommendationReason}</span>
                 </div>
@@ -275,6 +303,7 @@ export function BirdieCompanion({
                       className={`birdie-companion__destination${active ? " is-active" : ""}${recommended ? " is-recommended" : ""}`}
                       type="button"
                       data-birdie-destination={destination.id}
+                      data-host-stage="invited"
                       aria-current={active ? "location" : undefined}
                       aria-describedby={
                         recommended
@@ -300,7 +329,11 @@ export function BirdieCompanion({
               <button
                 className="birdie-companion__back"
                 type="button"
-                onClick={() => setPhase("hello")}
+                onClick={() => {
+                  setPhase("hello");
+                  setReturnedToBirdie(false);
+                  onHostStageChangeRef.current?.("welcomed");
+                }}
               >
                 ← Begrüßung noch einmal
               </button>
@@ -308,8 +341,8 @@ export function BirdieCompanion({
           )}
 
           <p className="birdie-companion__boundary">
-            {worldContext?.precision ?? "coarse-zone"} · keine Koordinaten · kein
-            Storage · kein Modellaufruf · keine neue Autorität
+            Nur eine grobe Weltzone · flüchtig · keine Koordinaten · nichts wird
+            gespeichert
           </p>
         </aside>
       )}

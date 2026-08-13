@@ -18,8 +18,8 @@
   position: absolute;
   left: clamp(12px, 3vw, 34px);
   bottom: clamp(14px, 3vw, 30px);
-  width: min(570px, calc(100% - 28px));
-  padding: 24px 24px 18px 112px;
+  width: min(520px, calc(100% - 28px));
+  padding: 20px 20px 16px 98px;
   overflow: hidden;
   color: #f7f3eb;
   background:
@@ -47,8 +47,8 @@
 
 .birdie-companion__bird {
   position: absolute;
-  left: 26px;
-  top: 43px;
+  left: 20px;
+  top: 36px;
   width: 69px;
   height: 72px;
   filter: drop-shadow(0 10px 16px rgba(0, 0, 0, .24));
@@ -125,8 +125,8 @@
   position: absolute;
   right: 14px;
   top: 12px;
-  width: 35px;
-  height: 35px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
   color: #f7f3eb;
@@ -144,18 +144,18 @@
 }
 
 .birdie-companion__content h2 {
-  max-width: 420px;
+  max-width: 385px;
   margin: 6px 34px 9px 0;
   color: #f7f3eb;
   font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(27px, 4.2vw, 40px);
+  font-size: clamp(26px, 3.6vw, 35px);
   font-weight: 500;
   line-height: 1.03;
   letter-spacing: -.025em;
 }
 
 .birdie-companion__content > p:not(.birdie-companion__eyebrow) {
-  max-width: 420px;
+  max-width: 385px;
   margin: 0;
   color: rgba(247, 243, 235, .82);
   font-size: 14px;
@@ -186,7 +186,7 @@
 .birdie-companion__world-cue {
   display: grid;
   gap: 5px;
-  max-width: 420px;
+  max-width: 385px;
   margin-top: 15px;
   padding: 12px 14px;
   border: 1px solid rgba(199, 165, 74, .42);
@@ -246,7 +246,7 @@
 }
 
 .birdie-companion__primary {
-  min-height: 42px;
+  min-height: 44px;
   padding: 10px 17px;
   border: 1px solid #d7b960;
   color: #173226;
@@ -385,9 +385,10 @@
 
 .birdie-companion__boundary {
   margin: 14px 0 0;
-  color: rgba(220, 201, 164, .56);
-  font-size: 9px;
-  letter-spacing: .04em;
+  color: rgba(247, 243, 235, .76);
+  font-size: 11px;
+  line-height: 1.4;
+  letter-spacing: .01em;
 }
 
 .birdie-companion__launcher {
@@ -595,11 +596,18 @@
   }
 
   .birdie-companion__bird {
-    display: none;
+    display: block;
+    left: auto;
+    right: 48px;
+    top: 4px;
+    opacity: .86;
+    transform: scale(.5);
+    transform-origin: top right;
+    pointer-events: none;
   }
 
   .birdie-companion__content h2 {
-    margin: 4px 30px 6px 0;
+    margin: 4px 66px 6px 0;
     font-size: 24px;
   }
 
@@ -631,22 +639,23 @@
   }
 
   .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__primary {
-    min-height: 38px;
+    min-height: 44px;
     padding: 8px 10px;
     font-size: 12px;
     white-space: nowrap;
   }
 
   .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__secondary {
+    min-height: 44px;
     padding: 7px 4px;
     font-size: 10.5px;
     white-space: nowrap;
   }
 
-  .birdie-companion__content:not(.birdie-companion__content--guide) .birdie-companion__boundary {
+  .birdie-companion__boundary {
     margin-top: 7px;
-    font-size: 7.5px;
-    line-height: 1.25;
+    font-size: 10px;
+    line-height: 1.35;
   }
 
   .birdie-companion__launcher {
