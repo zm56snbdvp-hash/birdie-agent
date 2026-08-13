@@ -20,6 +20,29 @@ test("Framer V2 policy is read and plan only", () => {
   assert.equal(policy.writeSurfaceExposed, false);
 });
 
+test("Framer V2 read policy uses a shared serialized connection with bounded retries", () => {
+  const policy = getFramerPlanPolicy();
+  assert.equal(policy.connectionMode, "SHARED_LONG_LIVED_SERIALIZED");
+  assert.equal(policy.retryAttempts, 4);
+  assert.equal(policy.pageRefCache, true);
+  assert.equal(policy.pageTextConcurrency, 4);
+  assert.match(serviceSource, /sharedFramer/);
+  assert.match(serviceSource, /serializeFramer/);
+  assert.match(serviceSource, /FRAMER_UPSTREAM_UNAVAILABLE/);
+});
+
+test("Framer page lookup caches page IDs and can re-read them directly", () => {
+  assert.match(serviceSource, /pageRefCache/);
+  assert.match(serviceSource, /framer\.getNode\(cachedId\)/);
+  assert.match(serviceSource, /framer\.getNode\(value\)/);
+});
+
+test("Framer page text reads are concurrency bounded instead of fully fan-out", () => {
+  assert.match(serviceSource, /PAGE_TEXT_CONCURRENCY = 4/);
+  assert.match(serviceSource, /nodes\.slice\(index, index \+ PAGE_TEXT_CONCURRENCY\)/);
+  assert.match(serviceSource, /Promise\.all\(chunk\.map\(readTextNode\)\)/);
+});
+
 test("Framer V2 exposes inventory and plan routes", () => {
   for (const route of [
     "/framer/site/pages",
