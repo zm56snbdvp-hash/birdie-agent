@@ -34,6 +34,10 @@ jobs:
         working-directory: client/birdie-app-v1
         run: npm install --ignore-scripts --no-audit --no-fund
 
+      - name: Typecheck Birdie App client
+        working-directory: client/birdie-app-v1
+        run: npm run typecheck
+
       - name: Build Birdie App client
         working-directory: client/birdie-app-v1
         run: npm run build

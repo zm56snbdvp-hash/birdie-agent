@@ -1,0 +1,645 @@
+.birdie-companion {
+  position: absolute;
+  z-index: 14;
+  inset: 0;
+  pointer-events: none;
+}
+
+.birdie-companion button {
+  font: inherit;
+}
+
+.birdie-companion__dialog,
+.birdie-companion__launcher {
+  pointer-events: auto;
+}
+
+.birdie-companion__dialog {
+  position: absolute;
+  left: clamp(12px, 3vw, 34px);
+  bottom: clamp(14px, 3vw, 30px);
+  width: min(570px, calc(100% - 28px));
+  padding: 24px 24px 18px 112px;
+  overflow: hidden;
+  color: #f7f3eb;
+  background:
+    linear-gradient(135deg, rgba(12, 33, 23, .995), rgba(29, 65, 45, .985)),
+    radial-gradient(circle at 18% 18%, rgba(199, 165, 74, .3), transparent 50%);
+  border: 1px solid rgba(199, 165, 74, .76);
+  border-radius: 27px;
+  box-shadow: 0 26px 76px rgba(13, 31, 22, .42);
+  backdrop-filter: blur(18px);
+  isolation: isolate;
+  animation: birdieCompanionIn .56s cubic-bezier(.2, .78, .22, 1) both;
+}
+
+.birdie-companion__aura {
+  position: absolute;
+  z-index: -1;
+  left: -48px;
+  top: -65px;
+  width: 224px;
+  height: 224px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 213, 125, .36), rgba(199, 165, 74, .08) 46%, transparent 72%);
+  animation: birdieCompanionAura 4.8s ease-in-out infinite;
+}
+
+.birdie-companion__bird {
+  position: absolute;
+  left: 26px;
+  top: 43px;
+  width: 69px;
+  height: 72px;
+  filter: drop-shadow(0 10px 16px rgba(0, 0, 0, .24));
+  animation: birdieCompanionFloat 3.8s ease-in-out infinite;
+}
+
+.birdie-companion__body,
+.birdie-companion__head,
+.birdie-companion__wing,
+.birdie-companion__eye,
+.birdie-companion__beak {
+  position: absolute;
+  display: block;
+}
+
+.birdie-companion__body {
+  left: 19px;
+  top: 28px;
+  width: 37px;
+  height: 39px;
+  border-radius: 48% 52% 55% 45%;
+  background: linear-gradient(145deg, #e5c466, #c7a54a 68%, #9e7a29);
+}
+
+.birdie-companion__head {
+  left: 25px;
+  top: 11px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #f7f3eb;
+}
+
+.birdie-companion__eye {
+  right: 6px;
+  top: 8px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #173226;
+}
+
+.birdie-companion__beak {
+  right: -9px;
+  top: 12px;
+  width: 12px;
+  height: 8px;
+  background: #d89035;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+.birdie-companion__wing {
+  top: 34px;
+  width: 24px;
+  height: 14px;
+  border-radius: 100% 20% 100% 20%;
+  background: #234734;
+  transform-origin: 80% 50%;
+  animation: birdieCompanionWing 1.35s ease-in-out infinite;
+}
+
+.birdie-companion__wing--left {
+  left: 5px;
+  transform: rotate(18deg);
+}
+
+.birdie-companion__wing--right {
+  right: 0;
+  transform: scaleX(-1) rotate(18deg);
+  animation-delay: -.12s;
+}
+
+.birdie-companion__close {
+  position: absolute;
+  right: 14px;
+  top: 12px;
+  width: 35px;
+  height: 35px;
+  border: 0;
+  border-radius: 50%;
+  color: #f7f3eb;
+  background: rgba(247, 243, 235, .08);
+  cursor: pointer;
+  font-size: 23px;
+  line-height: 1;
+}
+
+.birdie-companion__close:hover,
+.birdie-companion__close:focus-visible {
+  background: rgba(247, 243, 235, .16);
+  outline: 2px solid #c7a54a;
+  outline-offset: 2px;
+}
+
+.birdie-companion__content h2 {
+  max-width: 420px;
+  margin: 6px 34px 9px 0;
+  color: #f7f3eb;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(27px, 4.2vw, 40px);
+  font-weight: 500;
+  line-height: 1.03;
+  letter-spacing: -.025em;
+}
+
+.birdie-companion__content > p:not(.birdie-companion__eyebrow) {
+  max-width: 420px;
+  margin: 0;
+  color: rgba(247, 243, 235, .82);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.birdie-companion__eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: #dcc9a4;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+
+.birdie-companion__eyebrow span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #c7a54a;
+  animation: birdieCompanionPulse 2.5s ease-out infinite;
+}
+
+
+.birdie-companion__world-cue {
+  display: grid;
+  gap: 5px;
+  max-width: 420px;
+  margin-top: 15px;
+  padding: 12px 14px;
+  border: 1px solid rgba(199, 165, 74, .42);
+  border-radius: 15px;
+  color: #f7f3eb;
+  background: linear-gradient(110deg, rgba(199, 165, 74, .16), rgba(247, 243, 235, .055));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+
+.birdie-companion__world-cue small,
+.birdie-companion__world-cue strong,
+.birdie-companion__world-cue span {
+  display: block;
+}
+
+.birdie-companion__world-cue small {
+  color: #c7a54a;
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.birdie-companion__world-cue strong {
+  color: #f7f3eb;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.birdie-companion__world-cue span {
+  color: rgba(247, 243, 235, .72);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.birdie-companion__world-cue--compact {
+  margin-top: 12px;
+  padding: 9px 11px;
+  background: rgba(199, 165, 74, .09);
+}
+
+.birdie-companion__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+}
+
+.birdie-companion__primary,
+.birdie-companion__secondary,
+.birdie-companion__back {
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.birdie-companion__primary {
+  min-height: 42px;
+  padding: 10px 17px;
+  border: 1px solid #d7b960;
+  color: #173226;
+  background: linear-gradient(180deg, #d9bb62, #c7a54a);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .42);
+  font-weight: 820;
+}
+
+.birdie-companion__secondary,
+.birdie-companion__back {
+  padding: 9px 12px;
+  border: 0;
+  color: #dcc9a4;
+  background: transparent;
+  font-size: 12px;
+}
+
+.birdie-companion__primary:hover,
+.birdie-companion__primary:focus-visible {
+  transform: translateY(-1px);
+  outline: 2px solid #f7f3eb;
+  outline-offset: 2px;
+}
+
+.birdie-companion__secondary:hover,
+.birdie-companion__secondary:focus-visible,
+.birdie-companion__back:hover,
+.birdie-companion__back:focus-visible {
+  color: #f7f3eb;
+  outline: 1px solid rgba(199, 165, 74, .65);
+  outline-offset: 2px;
+}
+
+.birdie-companion__destinations {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+
+.birdie-companion__destination {
+  position: relative;
+  min-height: 142px;
+  padding: 13px 25px 13px 13px;
+  border: 1px solid rgba(220, 201, 164, .27);
+  border-radius: 16px;
+  color: #f7f3eb;
+  background: rgba(247, 243, 235, .065);
+  cursor: pointer;
+  text-align: left;
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+
+
+.birdie-companion__destination em {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 19px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  color: #173226;
+  background: #c7a54a;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, .16);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 850;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.birdie-companion__destination small,
+.birdie-companion__destination strong,
+.birdie-companion__destination span {
+  display: block;
+}
+
+.birdie-companion__destination small {
+  color: #c7a54a;
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.birdie-companion__destination strong {
+  margin-top: 5px;
+  font-size: 14px;
+}
+
+.birdie-companion__destination span {
+  margin-top: 6px;
+  color: rgba(247, 243, 235, .7);
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.birdie-companion__destination i {
+  position: absolute;
+  right: 10px;
+  top: 12px;
+  color: #dcc9a4;
+  font-style: normal;
+}
+
+.birdie-companion__destination:hover,
+.birdie-companion__destination:focus-visible,
+.birdie-companion__destination.is-active {
+  transform: translateY(-2px);
+  border-color: rgba(199, 165, 74, .82);
+  background: rgba(199, 165, 74, .13);
+  outline: none;
+}
+
+.birdie-companion__destination.is-recommended {
+  padding-bottom: 38px;
+  border-color: rgba(199, 165, 74, .66);
+  background: linear-gradient(160deg, rgba(199, 165, 74, .14), rgba(247, 243, 235, .055));
+}
+
+.birdie-companion__destination.is-recommended::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 1px solid rgba(199, 165, 74, .34);
+  border-radius: inherit;
+  animation: birdieRecommendationPulse 3.2s ease-in-out infinite;
+}
+
+.birdie-companion__destination.is-active {
+  box-shadow: inset 0 0 0 1px rgba(199, 165, 74, .25);
+}
+
+.birdie-companion__boundary {
+  margin: 14px 0 0;
+  color: rgba(220, 201, 164, .56);
+  font-size: 9px;
+  letter-spacing: .04em;
+}
+
+.birdie-companion__launcher {
+  position: absolute;
+  left: clamp(12px, 3vw, 34px);
+  bottom: clamp(14px, 3vw, 28px);
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: min(360px, calc(100% - 28px));
+  min-height: 72px;
+  padding: 9px 14px 9px 9px;
+  overflow: hidden;
+  border: 1px solid rgba(199, 165, 74, .76);
+  border-radius: 999px;
+  color: #f7f3eb;
+  background: linear-gradient(110deg, rgba(16, 38, 27, .97), rgba(35, 71, 52, .94));
+  box-shadow: 0 18px 52px rgba(13, 31, 22, .36);
+  backdrop-filter: blur(16px);
+  cursor: pointer;
+  text-align: left;
+  isolation: isolate;
+  animation: birdieLauncherIn .42s cubic-bezier(.2, .78, .22, 1) both;
+}
+
+.birdie-companion__launcher:hover,
+.birdie-companion__launcher:focus-visible {
+  transform: translateY(-2px);
+  outline: 2px solid #c7a54a;
+  outline-offset: 3px;
+}
+
+.birdie-companion__launcher-aura {
+  position: absolute;
+  z-index: -1;
+  left: -10px;
+  top: -22px;
+  width: 105px;
+  height: 105px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 213, 125, .28), transparent 70%);
+  animation: birdieCompanionAura 4.8s ease-in-out infinite;
+}
+
+.birdie-companion__mini-bird {
+  position: relative;
+  display: block;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: rgba(247, 243, 235, .08);
+}
+
+.birdie-companion__mini-body,
+.birdie-companion__mini-head,
+.birdie-companion__mini-wing {
+  position: absolute;
+  display: block;
+}
+
+.birdie-companion__mini-body {
+  left: 18px;
+  top: 24px;
+  width: 23px;
+  height: 22px;
+  border-radius: 50% 50% 55% 45%;
+  background: #c7a54a;
+}
+
+.birdie-companion__mini-head {
+  left: 24px;
+  top: 13px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #f7f3eb;
+  box-shadow: 8px 5px 0 -6px #173226;
+}
+
+.birdie-companion__mini-wing {
+  top: 28px;
+  width: 15px;
+  height: 9px;
+  border-radius: 100% 20% 100% 20%;
+  background: #234734;
+  animation: birdieCompanionWing 1.6s ease-in-out infinite;
+}
+
+.birdie-companion__mini-wing--left { left: 9px; }
+.birdie-companion__mini-wing--right { right: 4px; transform: scaleX(-1); }
+
+.birdie-companion__launcher-copy {
+  min-width: 0;
+}
+
+.birdie-companion__launcher-copy small,
+.birdie-companion__launcher-copy strong {
+  display: block;
+}
+
+.birdie-companion__launcher-copy small {
+  color: #c7a54a;
+  font-size: 9px;
+  font-weight: 820;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.birdie-companion__launcher-copy strong {
+  margin-top: 2px;
+  overflow: hidden;
+  color: #f7f3eb;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.birdie-companion__launcher-arrow {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  height: 31px;
+  border-radius: 50%;
+  color: #173226;
+  background: #c7a54a;
+  font-weight: 850;
+}
+
+.birdie-destination-highlight {
+  animation: birdieDestinationHighlight 2.2s ease both;
+}
+
+@keyframes birdieCompanionIn {
+  from { opacity: 0; transform: translateY(18px) scale(.975); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes birdieLauncherIn {
+  from { opacity: 0; transform: translateY(10px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes birdieCompanionFloat {
+  0%, 100% { transform: translateY(0) rotate(-1deg); }
+  50% { transform: translateY(-7px) rotate(2deg); }
+}
+
+@keyframes birdieCompanionWing {
+  0%, 100% { rotate: 0deg; }
+  50% { rotate: -18deg; }
+}
+
+@keyframes birdieCompanionAura {
+  0%, 100% { transform: scale(.9); opacity: .55; }
+  50% { transform: scale(1.12); opacity: .95; }
+}
+
+@keyframes birdieCompanionPulse {
+  0% { box-shadow: 0 0 0 0 rgba(199, 165, 74, .5); }
+  70% { box-shadow: 0 0 0 7px rgba(199, 165, 74, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(199, 165, 74, 0); }
+}
+
+@keyframes birdieRecommendationPulse {
+  0%, 100% { opacity: .28; box-shadow: 0 0 0 0 rgba(199, 165, 74, 0); }
+  50% { opacity: .86; box-shadow: 0 0 0 4px rgba(199, 165, 74, .09); }
+}
+
+@keyframes birdieDestinationHighlight {
+  18%, 72% {
+    transform: translateY(-2px);
+    box-shadow: 0 0 0 3px rgba(199, 165, 74, .72), 0 20px 48px rgba(35, 71, 52, .18);
+  }
+}
+
+@media (max-width: 720px) {
+  .birdie-companion__dialog {
+    left: 10px;
+    bottom: 10px;
+    width: calc(100% - 20px);
+    max-height: calc(100% - 20px);
+    padding: 20px 18px 15px 84px;
+    overflow: auto;
+  }
+
+  .birdie-companion__bird {
+    left: 13px;
+    transform: scale(.78);
+    transform-origin: top left;
+  }
+
+  .birdie-companion__destinations {
+    grid-template-columns: 1fr;
+  }
+
+  .birdie-companion__destination {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 430px) {
+  .birdie-companion__dialog {
+    padding-left: 18px;
+  }
+
+  .birdie-companion__bird {
+    display: none;
+  }
+
+  .birdie-companion__content h2 {
+    font-size: 28px;
+  }
+
+  .birdie-companion__launcher {
+    grid-template-columns: 48px minmax(0, 1fr) 28px;
+    min-height: 64px;
+  }
+
+  .birdie-companion__mini-bird {
+    width: 48px;
+    height: 48px;
+    transform: scale(.9);
+  }
+
+  .birdie-companion__launcher-copy strong {
+    display: -webkit-box;
+    overflow: hidden;
+    white-space: normal;
+    line-height: 1.16;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .birdie-companion__dialog,
+  .birdie-companion__launcher,
+  .birdie-companion__aura,
+  .birdie-companion__bird,
+  .birdie-companion__wing,
+  .birdie-companion__launcher-aura,
+  .birdie-companion__mini-wing,
+  .birdie-companion__eyebrow span,
+  .birdie-companion__destination.is-recommended::after,
+  .birdie-destination-highlight {
+    animation: none !important;
+  }
+
+  .birdie-companion__destination,
+  .birdie-companion__launcher,
+  .birdie-companion__primary {
+    transition: none !important;
+  }
+}

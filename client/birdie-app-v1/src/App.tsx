@@ -3,6 +3,8 @@ import { sandboxAdapter, type BallPassportDto, type PersonalBirdieReplyDto, type
 import { formatRoundDetail } from "./roundDetail";
 import { ThreeHotelScene } from "./ThreeHotelScene";
 import { WorldAtmosphere, type WorldHotspotId } from "./WorldAtmosphere";
+import { BirdieCompanion } from "./BirdieCompanion";
+import { useBirdieWorldBridge } from "./useBirdieWorldBridge";
 
 const birdieId = "BIRDIE-SANDBOX-001";
 
@@ -13,6 +15,7 @@ const linkedPanelStyle = {
 };
 
 export default function App() {
+  const { worldContext, onSceneZoneChange } = useBirdieWorldBridge();
   const [rounds, setRounds] = useState<RoundSummaryDto[]>([]);
   const [selectedRound, setSelectedRound] = useState<RoundDetailDto | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -74,8 +77,13 @@ export default function App() {
       <section className="hero"><div><p className="eyebrow">Birdie App V1 · Sandbox</p><h1>Welcome home, golfer.</h1><p className="lede">Your rounds, living balls and Birdie now have somewhere to come home to.</p></div><div className="avatar" aria-label="Avatar preset">B</div></section>
 
       <div className="world-composition">
-        <ThreeHotelScene />
+        <ThreeHotelScene onZoneChange={onSceneZoneChange} />
         <WorldAtmosphere onOpenHotspot={openWorldHotspot} activeHotspot={worldTarget} />
+        <BirdieCompanion
+          worldContext={worldContext}
+          activeDestination={worldTarget}
+          onChoose={openWorldHotspot}
+        />
       </div>
       <div className="world-pulse" aria-label="Sandbox world atmosphere status">
         <span><i /> Golden hour</span>
@@ -87,6 +95,7 @@ export default function App() {
 
       <section className="hotspots">
         <article
+          id="golf-history"
           ref={golfHistoryRef}
           className="panel golf-history"
           style={worldTarget === "golf-history" ? linkedPanelStyle : undefined}
@@ -99,6 +108,7 @@ export default function App() {
         </article>
 
         <article
+          id="ball-vault"
           ref={ballVaultRef}
           className="panel ball-vault"
           style={worldTarget === "ball-vault" ? linkedPanelStyle : undefined}
@@ -110,6 +120,7 @@ export default function App() {
         </article>
 
         <article
+          id="personal-birdie"
           ref={personalBirdieRef}
           className="panel personal-birdie"
           style={worldTarget === "personal-birdie" ? linkedPanelStyle : undefined}

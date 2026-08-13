@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 type Direction = "forward" | "back" | "left" | "right";
-type WorldZone = "Arrival Path" | "Hotel Entrance" | "Putting Green" | "Terrace" | "Hotel Grounds";
+export type WorldZone = "Arrival Path" | "Hotel Entrance" | "Putting Green" | "Terrace" | "Hotel Grounds";
+
+export interface ThreeHotelSceneProps {
+  /** Renderer/UI-only projection. Exact coordinates never leave this scene. */
+  onZoneChange?: (zone: WorldZone) => void;
+}
 
 const COLORS = {
   forest: 0x234734,
@@ -193,16 +198,22 @@ function pushOutsideCircle(x: number, z: number, cx: number, cz: number, radius:
   return { x: cx + dx * scale, z: cz + dz * scale };
 }
 
-export function ThreeHotelScene() {
+export function ThreeHotelScene({ onZoneChange }: ThreeHotelSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const heldRef = useRef<Set<Direction>>(new Set());
   const zoneRef = useRef<WorldZone>("Arrival Path");
+  const onZoneChangeRef = useRef(onZoneChange);
   const [worldZone, setWorldZone] = useState<WorldZone>("Arrival Path");
   const [webglAvailable, setWebglAvailable] = useState(true);
 
   useEffect(() => {
+    onZoneChangeRef.current = onZoneChange;
+  }, [onZoneChange]);
+
+  useEffect(() => {
     const mount = mountRef.current;
     if (!mount) return;
+    onZoneChangeRef.current?.(zoneRef.current);
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -601,6 +612,7 @@ export function ThreeHotelScene() {
       if (zone !== zoneRef.current) {
         zoneRef.current = zone;
         setWorldZone(zone);
+        onZoneChangeRef.current?.(zone);
       }
 
       const { leftLegPivot, rightLegPivot, leftArmPivot, rightArmPivot, torso } = avatar.userData as {

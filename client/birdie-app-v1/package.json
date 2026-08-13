@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "typecheck": "tsc --noEmit --strict --jsx react-jsx --moduleResolution bundler --module esnext --target es2022 --lib ES2022,DOM --allowSyntheticDefaultImports --esModuleInterop --skipLibCheck src/*.tsx src/*.ts"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",
@@ -15,5 +16,9 @@
     "react-dom": "^19.1.0",
     "three": "^0.179.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.179.0"
+  }
 }
