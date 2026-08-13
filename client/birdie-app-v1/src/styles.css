@@ -66,9 +66,10 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .touch-controls > button:active, .touch-controls div button:active { transform: translateY(2px) scale(.96); background: #173226; }
 .touch-controls div { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
 
-.hotspots { display: grid; grid-template-columns: 1.5fr 1.25fr 1fr; gap: 16px; align-items: start; }
-.panel { background: rgba(255,255,255,.92); border-radius: 20px; padding: 20px; min-height: 220px; box-shadow: 0 8px 30px rgba(0,0,0,.06); border: 1px solid rgba(220,201,164,.45); backdrop-filter: blur(6px); }
+.hotspots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.panel { min-width: 0; background: rgba(255,255,255,.92); border-radius: 20px; padding: 20px; min-height: 220px; box-shadow: 0 8px 30px rgba(0,0,0,.06); border: 1px solid rgba(220,201,164,.45); backdrop-filter: blur(6px); }
 .round, .passport-card { width: 100%; display: grid; gap: 5px; padding: 14px; background: #f7f3eb; border: 1px solid transparent; border-radius: 14px; color: #234734; text-align: left; cursor: pointer; }
+.round, .passport-card, .arrival-loop-guide__copy { min-width: 0; overflow-wrap: anywhere; }
 .round:hover, .round:focus-visible, .passport-card:hover, .passport-card:focus-visible { border-color: #c7a54a; outline: none; box-shadow: 0 5px 16px rgba(199,165,74,.12); }
 .round span, .round small, .passport-card span, .passport-card small { color: #2f2f2f; }
 .round-detail, .passport-detail { margin-top: 16px; padding-top: 16px; border-top: 1px solid #dcc9a4; }
@@ -83,7 +84,7 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .hole span, .hole small, .journey-event span, .journey-event small { color: #2f2f2f; }
 .detail-state { font-size: 13px; color: #2f2f2f; }
 .passport-card { grid-template-columns: auto 1fr; align-items: center; gap: 12px; }
-.passport-card > div:last-child { display: grid; gap: 4px; }
+.passport-card > div:last-child { display: grid; min-width: 0; gap: 4px; }
 .ball-orb { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle at 35% 30%, #fff 0 18%, #dcc9a4 19% 48%, #234734 49% 100%); color: #fff; font-weight: 800; border: 2px solid #c7a54a; box-shadow: inset -7px -8px 14px rgba(0,0,0,.15); }
 .journey { display: grid; gap: 8px; }
 .personal-birdie { border-color: rgba(199,165,74,.52); }
@@ -99,6 +100,14 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
 .birdie-reply small { opacity: .72; }
 .birdie-scope { margin-top: 12px; font-size: 12px; color: #2f2f2f; }
 .birdie-scope summary { cursor: pointer; color: #234734; font-weight: 700; }
+
+.arrival-loop-guide { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; margin: -6px -6px 16px; padding: 13px; border: 1px solid rgba(199,165,74,.58); border-radius: 16px; color: #f7f3eb; background: linear-gradient(125deg, #173226, #234734); box-shadow: 0 10px 26px rgba(23,50,38,.16); }
+.arrival-loop-guide__copy { display: grid; gap: 3px; }
+.arrival-loop-guide__copy p { margin: 0; color: #c7a54a; font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.arrival-loop-guide__copy strong { font-family: Georgia, "Times New Roman", serif; font-size: 18px; font-weight: 500; }
+.arrival-loop-guide__copy span { color: rgba(247,243,235,.76); font-size: 10px; line-height: 1.4; }
+.arrival-loop-guide button { min-height: 38px; padding: 8px 12px; border: 1px solid #d7b960; border-radius: 999px; color: #173226; background: #c7a54a; cursor: pointer; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.arrival-loop-guide button:hover, .arrival-loop-guide button:focus-visible { transform: translateY(-1px); outline: 2px solid #f7f3eb; outline-offset: 2px; }
 
 @keyframes cloudDrift {
   from { transform: translateX(0); }
@@ -134,6 +143,11 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
   .touch-controls { display: block; }
 }
 
+@media (max-width: 980px) {
+  .hotspots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .personal-birdie { grid-column: 1 / -1; }
+}
+
 @media (max-width: 760px) {
   .app-shell { padding: 16px; }
   .hero { align-items: flex-start; }
@@ -153,5 +167,8 @@ h1 { font-size: clamp(42px, 8vw, 82px); line-height: .95; margin: 8px 0 16px; }
   .touch-controls { right: 10px; bottom: 10px; width: 164px; padding: 10px; border-radius: 20px; }
   .touch-controls > button, .touch-controls div button { width: 46px; height: 46px; border-radius: 14px; }
   .hotspots { grid-template-columns: 1fr; }
+  .personal-birdie { grid-column: auto; }
+  .arrival-loop-guide { grid-template-columns: 1fr; }
+  .arrival-loop-guide button { width: 100%; }
   .holes { grid-template-columns: 1fr; }
 }

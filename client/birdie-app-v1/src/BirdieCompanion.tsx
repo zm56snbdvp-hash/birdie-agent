@@ -25,6 +25,8 @@ export interface BirdieCompanionProps {
   targetIds?: Partial<Record<BirdieCompanionDestination, string>>;
   /** Owner review may start open; consumer shells may start docked after their own gate. */
   initiallyOpen?: boolean;
+  /** In-memory request from the arrival guide to reopen the existing guide phase. */
+  guideRequestId?: number;
 }
 
 function prefersReducedMotion() {
@@ -53,7 +55,8 @@ export function BirdieCompanion({
   activeDestination,
   onChoose,
   targetIds,
-  initiallyOpen = true
+  initiallyOpen = true,
+  guideRequestId = 0
 }: BirdieCompanionProps) {
   const [open, setOpen] = useState(initiallyOpen);
   const [introduced, setIntroduced] = useState(false);
@@ -62,6 +65,7 @@ export function BirdieCompanion({
     useState<BirdieCompanionDestination | null>(activeDestination ?? null);
   const firstActionRef = useRef<HTMLButtonElement | null>(null);
   const launcherRef = useRef<HTMLButtonElement | null>(null);
+  const handledGuideRequestRef = useRef(guideRequestId);
 
   const worldCue = useMemo(
     () => getBirdieWorldCue(worldContext),
@@ -75,6 +79,14 @@ export function BirdieCompanion({
   useEffect(() => {
     if (activeDestination) setLastDestination(activeDestination);
   }, [activeDestination]);
+
+  useEffect(() => {
+    if (handledGuideRequestRef.current === guideRequestId) return;
+    handledGuideRequestRef.current = guideRequestId;
+    setIntroduced(true);
+    setPhase("guide");
+    setOpen(true);
+  }, [guideRequestId]);
 
   useEffect(() => {
     if (!open) return;
