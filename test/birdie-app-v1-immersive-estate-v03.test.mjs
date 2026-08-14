@@ -26,14 +26,24 @@ const index = await readFile(join(clientRoot, "index.html"), "utf8");
 const vite = await readFile(join(clientRoot, "vite.config.ts"), "utf8");
 const packageJson = JSON.parse(await readFile(join(clientRoot, "package.json"), "utf8"));
 
-test("Immersive Estate has one explicit V0.3.3 presentation contract", () => {
-  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.3"/);
+test("Immersive Estate has one explicit V0.3.4 presentation contract", () => {
+  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.4"/);
   const districtRegistry = contract.match(/ESTATE_DISTRICT_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const districts = [...districtRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(districts, ["arrival-court", "hotel", "golf-course", "terrace", "stables", "estate-grounds"]);
   const interactionRegistry = contract.match(/ESTATE_INTERACTION_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const interactions = [...interactionRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(interactions, ["hotel-reception", "greenkeeper", "stable-guide"]);
+});
+
+test("V0.3.4 gives the estate a ceremonial court and lived-in grounds", () => {
+  assert.match(scene, /addArrivalCourtDetails\(scene, materials, qualityShadows\)/);
+  assert.match(scene, /addLakeEstateDetails\(scene, materials, qualityShadows\)/);
+  assert.match(scene, /addGolfEstateDetails\(scene, materials\)/);
+  assert.match(scene, /addStableEstateDetails\(scene, materials, qualityShadows\)/);
+  assert.match(scene, /new THREE\.InstancedMesh\([\s\S]*?reedGeometry/);
+  assert.match(scene, /new THREE\.TorusGeometry\(8\.8, 0\.13/);
+  assert.match(scene, /new THREE\.ConeGeometry\(4\.2, 2\.35, 8\)/);
 });
 
 test("V0.3.3 translates the estate reference into one connected landscape", () => {

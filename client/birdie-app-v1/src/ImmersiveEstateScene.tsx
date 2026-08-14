@@ -366,7 +366,7 @@ function addLandscapeEllipse(
     material
   );
   ellipse.rotation.x = -Math.PI / 2;
-  ellipse.rotation.y = rotation;
+  ellipse.rotation.z = rotation;
   ellipse.scale.set(radiusX, radiusZ, 1);
   ellipse.position.set(x, height, z);
   ellipse.receiveShadow = true;
@@ -490,6 +490,265 @@ function addDistantRidge(
     rock.receiveShadow = true;
     scene.add(rock);
   });
+}
+
+function addArrivalCourtDetails(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean
+) {
+  const islandX = 5.5;
+  const islandZ = 39.5;
+  addLandscapeEllipse(scene, materials.stone, islandX, islandZ, 5.2, 4.4, 0.105);
+  addLandscapeEllipse(scene, materials.meadowDark, islandX, islandZ, 4.65, 3.85, 0.12);
+
+  const hedge = new THREE.Mesh(
+    new THREE.TorusGeometry(3.75, 0.48, 8, 42),
+    materials.foliageLight
+  );
+  hedge.rotation.x = Math.PI / 2;
+  hedge.scale.z = 0.82;
+  hedge.position.set(islandX, 0.55, islandZ);
+  hedge.castShadow = qualityShadows;
+  scene.add(hedge);
+
+  const basin = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.55, 1.8, 0.62, 24),
+    materials.stone
+  );
+  basin.position.set(islandX, 0.34, islandZ);
+  basin.castShadow = qualityShadows;
+  scene.add(basin);
+  const fountainWater = new THREE.Mesh(
+    new THREE.CylinderGeometry(1.35, 1.35, 0.12, 24),
+    materials.water
+  );
+  fountainWater.position.set(islandX, 0.69, islandZ);
+  scene.add(fountainWater);
+  const fountainColumn = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.22, 0.42, 2.2, 10),
+    materials.stone
+  );
+  fountainColumn.position.set(islandX, 1.7, islandZ);
+  fountainColumn.castShadow = qualityShadows;
+  scene.add(fountainColumn);
+  const fountainFinial = new THREE.Mesh(
+    new THREE.SphereGeometry(0.42, 12, 8),
+    materials.gold
+  );
+  fountainFinial.position.set(islandX, 3.0, islandZ);
+  fountainFinial.castShadow = qualityShadows;
+  scene.add(fountainFinial);
+
+  const flowerMaterials = [
+    materials.flowerWhite,
+    materials.flowerGold,
+    materials.flowerViolet
+  ] as const;
+  for (let index = 0; index < 18; index += 1) {
+    const angle = (index / 18) * Math.PI * 2;
+    const flower = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 7, 5),
+      flowerMaterials[index % flowerMaterials.length]
+    );
+    flower.position.set(
+      islandX + Math.cos(angle) * 2.75,
+      0.38,
+      islandZ + Math.sin(angle) * 2.15
+    );
+    flower.castShadow = qualityShadows;
+    scene.add(flower);
+  }
+
+  for (const x of [-5.1, 5.1]) {
+    const pier = new THREE.Mesh(
+      new THREE.BoxGeometry(1.05, 3.5, 1.05),
+      materials.stone
+    );
+    pier.position.set(x, 1.75, 52.2);
+    pier.castShadow = qualityShadows;
+    scene.add(pier);
+    const cap = new THREE.Mesh(
+      new THREE.SphereGeometry(0.38, 10, 8),
+      materials.gold
+    );
+    cap.position.set(x, 3.75, 52.2);
+    scene.add(cap);
+  }
+}
+
+function addLakeEstateDetails(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean
+) {
+  const pavilion = new THREE.Group();
+  const deck = new THREE.Mesh(
+    new THREE.CylinderGeometry(3.2, 3.4, 0.35, 10),
+    materials.wood
+  );
+  deck.position.y = 0.28;
+  deck.castShadow = qualityShadows;
+  pavilion.add(deck);
+  for (let index = 0; index < 6; index += 1) {
+    const angle = (index / 6) * Math.PI * 2;
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.13, 0.17, 3.4, 8),
+      materials.stone
+    );
+    post.position.set(Math.cos(angle) * 2.35, 2.0, Math.sin(angle) * 2.35);
+    post.castShadow = qualityShadows;
+    pavilion.add(post);
+  }
+  const roof = new THREE.Mesh(
+    new THREE.ConeGeometry(4.2, 2.35, 8),
+    materials.roof
+  );
+  roof.position.y = 4.35;
+  roof.castShadow = qualityShadows;
+  pavilion.add(roof);
+  const finial = new THREE.Mesh(
+    new THREE.SphereGeometry(0.24, 9, 7),
+    materials.gold
+  );
+  finial.position.y = 5.7;
+  pavilion.add(finial);
+  pavilion.position.set(29, 0.08, -44);
+  scene.add(pavilion);
+
+  const reedPositions = [
+    [5, -42, 1.1], [8, -49, 0.9], [15, -54, 1.0], [37, -54, 1.05],
+    [48, -48, 0.9], [51, -41, 1.1], [45, -34, 0.92], [12, -34, 0.88]
+  ] as const;
+  const reedGeometry = new THREE.CylinderGeometry(0.07, 0.1, 1.8, 5);
+  const reeds = new THREE.InstancedMesh(
+    reedGeometry,
+    materials.meadowLight,
+    reedPositions.length * 5
+  );
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const rotation = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  let reedIndex = 0;
+  reedPositions.forEach(([x, z, reedScale]) => {
+    for (let offset = 0; offset < 5; offset += 1) {
+      position.set(
+        x + (offset - 2) * 0.28,
+        0.9 * reedScale,
+        z + ((offset % 2) - 0.5) * 0.32
+      );
+      scale.setScalar(reedScale * (0.88 + offset * 0.04));
+      matrix.compose(position, rotation, scale);
+      reeds.setMatrixAt(reedIndex, matrix);
+      reedIndex += 1;
+    }
+  });
+  reeds.instanceMatrix.needsUpdate = true;
+  reeds.castShadow = qualityShadows;
+  scene.add(reeds);
+
+  for (const [x, y, z, scaleValue] of [
+    [-46.5, 0.45, 35.5, 1.1], [-44.6, 0.52, 37.2, 0.9],
+    [-42.6, 0.42, 35.2, 0.78], [-47.8, 0.38, 38.1, 0.72]
+  ] as const) {
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(0.8, 0),
+      materials.rock
+    );
+    rock.position.set(x, y, z);
+    rock.scale.set(scaleValue * 1.4, scaleValue, scaleValue);
+    rock.castShadow = qualityShadows;
+    scene.add(rock);
+  }
+}
+
+function addGolfEstateDetails(
+  scene: THREE.Scene,
+  materials: SceneMaterials
+) {
+  const flagMaterial = materials.gold.clone();
+  flagMaterial.side = THREE.DoubleSide;
+  for (const [x, z, rotation] of [
+    [-53, 15, 0.2],
+    [-31, 24, -0.45]
+  ] as const) {
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.045, 0.045, 3.25, 7),
+      materials.cream
+    );
+    pole.position.set(x, 1.62, z);
+    scene.add(pole);
+    const courseFlag = new THREE.Mesh(
+      new THREE.PlaneGeometry(1.1, 0.6),
+      flagMaterial
+    );
+    courseFlag.position.set(x + 0.52, 2.86, z);
+    courseFlag.rotation.y = rotation;
+    scene.add(courseFlag);
+  }
+
+  for (const [x, z] of [[-40, 36], [-37, 36], [-57, 37], [-54, 37]] as const) {
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.22, 8, 6),
+      x % 2 === 0 ? materials.gold : materials.cream
+    );
+    marker.position.set(x, 0.25, z);
+    scene.add(marker);
+  }
+}
+
+function addStableEstateDetails(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean
+) {
+  for (const y of [0.9, 1.65]) {
+    const rail = new THREE.Mesh(
+      new THREE.TorusGeometry(8.8, 0.13, 7, 54),
+      materials.stableTrim
+    );
+    rail.rotation.x = Math.PI / 2;
+    rail.scale.z = 0.72;
+    rail.position.set(43, y, 26);
+    rail.castShadow = qualityShadows;
+    scene.add(rail);
+  }
+  for (let index = 0; index < 16; index += 1) {
+    const angle = (index / 16) * Math.PI * 2;
+    const post = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.13, 0.17, 2.2, 7),
+      materials.wood
+    );
+    post.position.set(
+      43 + Math.cos(angle) * 8.8,
+      1.1,
+      26 + Math.sin(angle) * 6.34
+    );
+    post.castShadow = qualityShadows;
+    scene.add(post);
+  }
+
+  const shelter = new THREE.Group();
+  for (const x of [-2.8, 2.8]) {
+    for (const z of [-1.9, 1.9]) {
+      const post = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 3.6, 0.22),
+        materials.wood
+      );
+      post.position.set(x, 1.8, z);
+      shelter.add(post);
+    }
+  }
+  const shelterRoof = new THREE.Mesh(
+    new THREE.BoxGeometry(7.4, 0.35, 5.4),
+    materials.roof
+  );
+  shelterRoof.position.y = 3.75;
+  shelterRoof.rotation.z = -0.08;
+  shelter.add(shelterRoof);
+  shelter.position.set(51, 0, 17);
+  scene.add(shelter);
 }
 
 function addInstancedTrees(
@@ -968,6 +1227,7 @@ export function ImmersiveEstateScene({
     });
     addDistantRidge(scene, materials);
     addWaterLandscape(scene, materials, qualityShadows);
+    addLakeEstateDetails(scene, materials, qualityShadows);
 
     addPathSegment(scene, materials, 0, 53, 0, 8, 6.4);
     addPathSegment(scene, materials, 0, 8, 0, -10, 7.2);
@@ -993,6 +1253,7 @@ export function ImmersiveEstateScene({
     arrivalRing.rotation.x = -Math.PI / 2;
     arrivalRing.position.set(0, 0.09, 44);
     scene.add(arrivalRing);
+    addArrivalCourtDetails(scene, materials, qualityShadows);
 
     const hotel = new THREE.Group();
     const hotelMain = new THREE.Mesh(
@@ -1158,7 +1419,7 @@ export function ImmersiveEstateScene({
         materials.fairway
       );
       fairway.rotation.x = -Math.PI / 2;
-      fairway.rotation.y = rotation;
+      fairway.rotation.z = rotation;
       fairway.scale.set(sx, sz, 1);
       fairway.position.set(x, 0.045, z);
       fairway.receiveShadow = true;
@@ -1170,7 +1431,7 @@ export function ImmersiveEstateScene({
           offset === 0 ? materials.meadowLight : materials.green
         );
         stripe.rotation.x = -Math.PI / 2;
-        stripe.rotation.y = rotation;
+        stripe.rotation.z = rotation;
         stripe.scale.set(sx * 0.18, sz * 0.92, 1);
         stripe.position.set(x + offset * sx, 0.054, z);
         stripe.receiveShadow = true;
@@ -1220,6 +1481,7 @@ export function ImmersiveEstateScene({
     );
     flag.position.set(-42.85, 3.25, 2.5);
     scene.add(flag);
+    addGolfEstateDetails(scene, materials);
 
     const stable = new THREE.Group();
     const barn = new THREE.Mesh(
@@ -1257,21 +1519,13 @@ export function ImmersiveEstateScene({
     stable.add(crossTwo);
     scene.add(stable);
 
-    const paddock = new THREE.Mesh(
-      new THREE.TorusGeometry(8.8, 0.16, 8, 54),
-      materials.stableTrim
-    );
-    paddock.rotation.x = Math.PI / 2;
-    paddock.scale.z = 0.72;
-    paddock.position.set(43, 0.16, 26);
-    scene.add(paddock);
-
     addFence(scene, materials, 29, 12, 57, 12);
     addFence(scene, materials, 57, 12, 57, 37);
     addFence(scene, materials, 57, 37, 29, 37);
     addFence(scene, materials, 29, 37, 29, 18);
     scene.add(makeHorse(materials, 40, 25, 0.4));
     scene.add(makeHorse(materials, 49, 30, -0.55));
+    addStableEstateDetails(scene, materials, qualityShadows);
 
     addGardenDetails(scene, materials, qualityShadows);
     addInstancedTrees(scene, materials, qualityShadows);
