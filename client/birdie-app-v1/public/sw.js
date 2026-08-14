@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "birdieworld-mobile-beta-";
-const CACHE_NAME = `${CACHE_PREFIX}v0.1-immersive-estate-v03-shell-v3`;
+const CACHE_NAME = `${CACHE_PREFIX}v0.1-immersive-estate-v03-shell-v4`;
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -16,7 +16,10 @@ const BUILD_ASSETS = Array.isArray(BUILD_ASSET_MANIFEST)
 
 async function precacheAppShell() {
   const cache = await caches.open(CACHE_NAME);
-  await cache.addAll([...APP_SHELL, ...BUILD_ASSETS]);
+  const requests = [...APP_SHELL, ...BUILD_ASSETS].map(
+    (path) => new Request(path, { cache: "reload" })
+  );
+  await cache.addAll(requests);
 }
 
 self.addEventListener("install", (event) => {
@@ -43,13 +46,14 @@ async function networkFirst(request) {
     if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    return (await cache.match(request)) || (await cache.match("/"));
+    return (await cache.match(request, { ignoreVary: true })) ||
+      (await cache.match("/", { ignoreVary: true }));
   }
 }
 
 async function cacheFirst(request) {
   const cache = await caches.open(CACHE_NAME);
-  const cached = await cache.match(request);
+  const cached = await cache.match(request, { ignoreVary: true });
   if (cached) return cached;
   const response = await fetch(request);
   if (response.ok) await cache.put(request, response.clone());

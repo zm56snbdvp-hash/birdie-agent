@@ -1078,7 +1078,9 @@ export function ImmersiveEstateScene({
     const animate = () => {
       if (!running) return;
       frame = window.requestAnimationFrame(animate);
-      const dt = Math.min(clock.getDelta(), 0.05);
+      // Keep walking tied to elapsed time on low-FPS mobile/software WebGL.
+      // The 250 ms cap still limits one collision step to 2.05 world units.
+      const dt = Math.min(clock.getDelta(), 0.25);
 
       if (!pausedRef.current) {
         simulationElapsed += dt;

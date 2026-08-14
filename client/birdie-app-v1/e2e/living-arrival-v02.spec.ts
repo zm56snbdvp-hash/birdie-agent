@@ -418,6 +418,27 @@ test("installable PWA gains control and reloads offline with bundled runtime", a
   const runtimeRequests = await page.locator("script[src]").evaluateAll((scripts) => scripts.map((script) => (script as HTMLScriptElement).src));
   const appOrigin = new URL(page.url()).origin;
   expect(runtimeRequests.every((url) => new URL(url).origin === appOrigin)).toBe(true);
+  const precacheEvidence = await page.evaluate(async () => {
+    const names = (await caches.keys()).filter((name) => name.startsWith("birdieworld-mobile-beta-"));
+    const cache = names.length === 1 ? await caches.open(names[0]) : null;
+    const entries = cache ? await cache.keys() : [];
+    return {
+      names,
+      assets: await Promise.all(entries
+        .filter((request) => new URL(request.url).pathname.startsWith("/assets/"))
+        .map(async (request) => {
+          const response = await cache!.match(request);
+          return {
+            url: request.url,
+            bytes: response ? (await response.clone().arrayBuffer()).byteLength : 0
+          };
+        }))
+    };
+  });
+  expect(precacheEvidence.names).toHaveLength(1);
+  expect(precacheEvidence.assets).toHaveLength(3);
+  expect(precacheEvidence.assets.every(({ bytes }) => bytes > 0)).toBe(true);
+  expect(runtimeRequests.every((url) => precacheEvidence.assets.some((asset) => asset.url === url))).toBe(true);
 
   await page.context().setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });

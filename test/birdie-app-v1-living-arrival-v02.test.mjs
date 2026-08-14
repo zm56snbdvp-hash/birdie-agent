@@ -106,6 +106,7 @@ test("WebGL is preflighted before Three renderer construction", () => {
 test("movement keys are guarded, pausable and touch controls are accessible", () => {
   assert.match(scene, /isEditableTarget\(event\.target\)/);
   assert.match(scene, /pausedRef\.current/);
+  assert.match(scene, /Math\.min\(clock\.getDelta\(\), 0\.25\)/);
   assert.match(scene, /data-estate-scene-focus="true"/);
   assert.match(scene, /data-estate-paused=/);
   for (const label of [
