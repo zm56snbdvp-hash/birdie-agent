@@ -269,7 +269,7 @@ export default function App() {
       data-estate-district={activeDistrict}
       data-estate-overlay-open={overlayOpen ? "true" : "false"}
     >
-      <h1 className="sr-only">BirdieWorld Immersive Estate V0.3</h1>
+      <h1 className="sr-only">BirdieWorld Immersive Estate V0.3.1</h1>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{arrivalAnnouncement}</p>
 
       <section className="estate-world" role="region" aria-label="Begehbares Birdie & Breakfast Grundstück">

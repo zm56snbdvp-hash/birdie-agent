@@ -58,11 +58,11 @@ test("desktop is a fullscreen estate and all three function tabs return to Birdi
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
 
-  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3");
+  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3.1");
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.1" })).toBeAttached();
   const main = page.locator("main");
-  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3");
+  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3.1");
   await expect(main).toHaveAttribute("data-living-arrival", "birdie-as-host-v0.2");
   await expect(main).toHaveAttribute("data-host-stage", "welcomed");
 
@@ -161,7 +161,7 @@ test("forced WebGL fallback keeps the whole estate, NPCs and function menu opera
   await expect(welcome).toHaveCount(0);
   await expect(page.locator("main")).toHaveAttribute("data-host-stage", "oriented");
 
-  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3']");
+  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3.1']");
   await waitForSceneOutcome(page);
   await expect(fallback).toBeVisible();
   await expect(page.locator("[data-estate-world-surface='true']")).toBeFocused();
@@ -324,32 +324,87 @@ test("390 x 844 touch shell stays fullscreen and movement never hijacks typing",
   await mobileMap.getByRole("button", { name: "Karte schließen" }).click();
 
   const scene = await waitForSceneOutcome(page);
-  const touch = scene.locator("[data-estate-touch-controls]");
+  const touch = scene.locator("[data-estate-touch-controls='drag']");
   if (await touch.isVisible()) {
-    const movementControls = [
-      touch.getByRole("button", { name: "Vorwärts gehen" }),
-      touch.getByRole("button", { name: "Rückwärts gehen" }),
-      touch.getByRole("button", { name: "Nach links gehen" }),
-      touch.getByRole("button", { name: "Nach rechts gehen" })
-    ];
-    for (const control of movementControls) {
-      const box = await control.boundingBox();
-      expect(box).not.toBeNull();
-      expect(box!.width).toBeGreaterThanOrEqual(44);
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+    await expect(scene).toHaveAttribute("data-estate-camera-mode", "third-person-follow");
+    await expect(scene).toHaveAttribute("data-estate-touch-input", "drag-to-move");
+    const surface = scene.locator("[data-estate-scene-focus='true']");
+    const surfaceBox = await surface.boundingBox();
+    expect(surfaceBox).not.toBeNull();
+    const startX = surfaceBox!.x + surfaceBox!.width * 0.5;
+    const startY = surfaceBox!.y + surfaceBox!.height * 0.58;
+    const cdp = await context.newCDPSession(page);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: startX, y: startY, id: 7, force: 1, radiusX: 4, radiusY: 4 }]
+    });
+    await expect(scene).toHaveAttribute("data-estate-drag-active", "true");
+    await expect(touch).toHaveAttribute("data-estate-drag-joystick", "active");
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: startX, y: startY - 82, id: 7, force: 1, radiusX: 4, radiusY: 4 }]
+    });
+    await expect(scene.locator("[data-estate-drag-hint]"))
+      .toHaveAttribute("data-estate-drag-hint", "dismissed");
+    await page.waitForTimeout(350);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: startX + 24, y: startY - 82, id: 7, force: 1, radiusX: 4, radiusY: 4 }]
+    });
+    await expect(scene).toHaveAttribute("data-estate-drag-active", "true");
+    await page.waitForTimeout(300);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: startX, y: startY - 82, id: 7, force: 1, radiusX: 4, radiusY: 4 }]
+    });
+    await page.waitForTimeout(6_050);
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: []
+    });
+    await expect(scene).toHaveAttribute("data-estate-drag-active", "false");
+    await expect.poll(() => page.locator("main").getAttribute("data-estate-district")).not.toBe("arrival-court");
+    await attachScreenshot(page, testInfo, "mobile-third-person-after-thumb-drag");
+    const alternativeToggle = scene.getByRole("button", { name: "Alternative Richtungstasten umschalten" });
+    const toggleBox = await alternativeToggle.boundingBox();
+    expect(toggleBox).not.toBeNull();
+    expect(toggleBox!.width).toBeGreaterThanOrEqual(44);
+    expect(toggleBox!.height).toBeGreaterThanOrEqual(44);
+    await alternativeToggle.click();
+    const alternativePad = scene.locator("[data-estate-touch-controls='directional-alternative']");
+    const interactionPrompt = page.locator("button.estate-interaction-prompt");
+    await expect(alternativePad).toBeVisible();
+    await expect(interactionPrompt).toBeVisible();
+    const alternativePadBox = await alternativePad.boundingBox();
+    const interactionPromptBox = await interactionPrompt.boundingBox();
+    expect(alternativePadBox).not.toBeNull();
+    expect(interactionPromptBox).not.toBeNull();
+    expect(interactionPromptBox!.x + interactionPromptBox!.width)
+      .toBeLessThanOrEqual(alternativePadBox!.x);
+    for (const control of await alternativePad.getByRole("button").all()) {
+      const controlBox = await control.boundingBox();
+      expect(controlBox).not.toBeNull();
+      expect(controlBox!.width).toBeGreaterThanOrEqual(44);
+      expect(controlBox!.height).toBeGreaterThanOrEqual(44);
       expect(await control.evaluate((element) => {
         const rect = element.getBoundingClientRect();
         const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
         return hit === element || element.contains(hit);
       })).toBe(true);
     }
-    const forward = movementControls[0];
-    await forward.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true, buttons: 1 });
-    await page.waitForTimeout(6_700);
-    await forward.dispatchEvent("pointerup", { pointerType: "touch", isPrimary: true, buttons: 0 });
-    await expect.poll(() => page.locator("main").getAttribute("data-estate-district")).not.toBe("arrival-court");
-    const interactionPrompt = page.locator("button.estate-interaction-prompt");
-    await expect(interactionPrompt).toBeVisible();
+    await alternativeToggle.click();
+    await expect(alternativePad).not.toBeVisible();
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: startX, y: startY, id: 8, force: 1, radiusX: 4, radiusY: 4 }]
+    });
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: startX, y: startY - 28, id: 8, force: 1, radiusX: 4, radiusY: 4 }]
+    });
+    await expect(scene).toHaveAttribute("data-estate-drag-active", "true");
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+    await expect(scene).toHaveAttribute("data-estate-drag-active", "false");
     expect(await interactionPrompt.evaluate((element) => {
       const rect = element.getBoundingClientRect();
       const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
@@ -358,7 +413,7 @@ test("390 x 844 touch shell stays fullscreen and movement never hijacks typing",
     await interactionPrompt.click();
     await expect(page.getByRole("dialog", { name: "Willkommen im Birdie Hotel" })).toBeVisible();
     await page.getByRole("button", { name: "Weiter erkunden" }).click();
-    console.log("BIRDIE_TOUCH_EVIDENCE=HELD_TOUCH_MOVEMENT_CHANGED_DISTRICT");
+    console.log("BIRDIE_TOUCH_EVIDENCE=DRAG_TO_MOVE_CHANGED_DISTRICT_THIRD_PERSON_ACTIVE");
   } else {
     await expect(page.locator("[data-estate-fallback]")).toBeVisible();
     testInfo.annotations.push({
@@ -442,7 +497,7 @@ test("installable PWA gains control and reloads offline with bundled runtime", a
 
   await page.context().setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.1" })).toBeAttached();
   await expect(page.getByRole("navigation", { name: "BirdieWorld Funktionen" })).toBeVisible();
   await page.context().setOffline(false);
   expect(runtimeErrors).toEqual([]);

@@ -85,10 +85,10 @@ test("the Host Spine stays transient and grants no new runtime authority", () =>
   assert.doesNotMatch(host, /identity|permission|authority|quest|coin|multiplayer|voice|gps/i);
 });
 
-test("the first-ten-second surface keeps the German hospitality narrative in V0.3", () => {
+test("the first-ten-second surface keeps the German hospitality narrative in V0.3.1", () => {
   assert.match(index, /<html lang="de">/);
-  assert.match(index, /<title>BirdieWorld – Immersive Estate V0\.3<\/title>/);
-  assert.match(app, /BirdieWorld Immersive Estate V0\.3/);
+  assert.match(index, /<title>BirdieWorld – Immersive Estate V0\.3\.1<\/title>/);
+  assert.match(app, /BirdieWorld Immersive Estate V0\.3\.1/);
   assert.match(companion, /Schön, dass du da bist\./);
   assert.match(companion, /Ich bin Birdie\. Komm erst einmal an/);
   assert.match(companion, /Welt betreten/);
@@ -151,7 +151,9 @@ test("basic mobile accessibility remains visible and touch-sized", () => {
   assert.match(companionStyles, /\.birdie-companion__close \{[\s\S]*?width: 46px;[\s\S]*?height: 46px;/);
   assert.match(companionStyles, /\.birdie-companion__primary \{[\s\S]*?min-height: 44px;/);
   assert.match(companionStyles, /@media \(max-width: 430px\)[\s\S]*?\.birdie-companion__bird \{[\s\S]*?display: block;/);
+  assert.match(styles, /\.immersive-estate-scene__touch-alternative > summary \{[\s\S]*?width: 48px;[\s\S]*?height: 48px;/);
   assert.match(styles, /\.immersive-estate-scene__touch button \{[^}]*width: 48px;[^}]*height: 48px;/);
+  assert.match(styles, /\.immersive-estate-scene__thumbstick-knob \{[\s\S]*?width: 54px;[\s\S]*?height: 54px;/);
   assert.match(styles, /\.estate-function-nav button \{[\s\S]*?min-height: 54px;/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });

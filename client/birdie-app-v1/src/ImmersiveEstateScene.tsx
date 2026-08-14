@@ -15,6 +15,10 @@ import {
 
 type MovementDirection = "forward" | "back" | "left" | "right";
 
+const DRAG_DEAD_ZONE = 10;
+const DRAG_MAX_RADIUS = 72;
+const CAMERA_SAMPLE_STEP = 0.45;
+
 export interface ImmersiveEstateSceneProps {
   onDistrictChange?: (district: EstateDistrictId) => void;
   onInteraction?: (interaction: EstateInteractionEvent) => void;
@@ -155,6 +159,36 @@ function isBlocked(x: number, z: number) {
   return ROUND_COLLISIONS.some(
     (circle) => Math.hypot(x - circle.x, z - circle.z) < circle.radius
   );
+}
+
+function resolveCameraDistance(
+  avatarX: number,
+  avatarZ: number,
+  backwardX: number,
+  backwardZ: number,
+  desiredDistance: number
+) {
+  let lastClearDistance = 0;
+  for (
+    let distance = CAMERA_SAMPLE_STEP;
+    distance <= desiredDistance;
+    distance += CAMERA_SAMPLE_STEP
+  ) {
+    const x = avatarX + backwardX * distance;
+    const z = avatarZ + backwardZ * distance;
+    const blockedByBuilding = BUILDING_COLLISIONS.some(
+      (rect) =>
+        x > rect.minX - 0.8 &&
+        x < rect.maxX + 0.8 &&
+        z > rect.minZ - 0.8 &&
+        z < rect.maxZ + 0.8
+    );
+    if (blockedByBuilding) {
+      return Math.max(0, lastClearDistance - 0.1);
+    }
+    lastClearDistance = distance;
+  }
+  return desiredDistance;
 }
 
 function resolveMovement(
@@ -418,6 +452,13 @@ function makeAvatar(materials: SceneMaterials, castShadow: boolean) {
   );
   cap.position.y = 2.72;
   group.add(cap);
+  const capBrim = new THREE.Mesh(
+    new THREE.BoxGeometry(0.54, 0.07, 0.3),
+    materials.gold
+  );
+  capBrim.position.set(0, 2.67, -0.35);
+  capBrim.castShadow = castShadow;
+  group.add(capBrim);
 
   const leftLeg = new THREE.Group();
   const rightLeg = new THREE.Group();
@@ -450,7 +491,7 @@ function makeAvatar(materials: SceneMaterials, castShadow: boolean) {
   });
 
   group.position.set(0, 0.08, 46);
-  group.rotation.y = Math.PI;
+  group.rotation.y = 0;
   return { group, torso, leftLeg, rightLeg, leftArm, rightArm };
 }
 
@@ -561,11 +602,15 @@ export function ImmersiveEstateScene({
   className
 }: ImmersiveEstateSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const joystickRef = useRef<HTMLDivElement | null>(null);
   const heldRef = useRef<Set<MovementDirection>>(new Set());
+  const nudgeTimerRef = useRef<number | null>(null);
+  const nudgeDirectionRef = useRef<MovementDirection | null>(null);
   const pausedRef = useRef(paused);
   const districtRef = useRef<EstateDistrictId>("arrival-court");
   const nearbyIdRef = useRef<EstateInteractionId | null>(null);
   const triggerInteractionRef = useRef<() => void>(() => undefined);
+  const endDragRef = useRef<() => void>(() => undefined);
   const updatePausedLoopRef = useRef<(nextPaused: boolean) => void>(() => undefined);
   const onDistrictChangeRef = useRef(onDistrictChange);
   const onInteractionRef = useRef(onInteraction);
@@ -578,6 +623,8 @@ export function ImmersiveEstateScene({
   const [lastInteractionId, setLastInteractionId] =
     useState<EstateInteractionId | null>(null);
   const [interactionAnnouncement, setInteractionAnnouncement] = useState("");
+  const [dragActive, setDragActive] = useState(false);
+  const [dragHintVisible, setDragHintVisible] = useState(true);
   const [webglStatus, setWebglStatus] = useState<EstateWebglStatus>(
     forceFallback ? "unavailable" : "initializing"
   );
@@ -600,9 +647,24 @@ export function ImmersiveEstateScene({
 
   useEffect(() => {
     pausedRef.current = paused;
-    if (paused) heldRef.current.clear();
+    if (paused) {
+      heldRef.current.clear();
+      endDragRef.current();
+    }
     updatePausedLoopRef.current(paused);
   }, [paused]);
+
+  useEffect(
+    () => () => {
+      if (nudgeTimerRef.current !== null) {
+        window.clearTimeout(nudgeTimerRef.current);
+      }
+      if (nudgeDirectionRef.current) {
+        heldRef.current.delete(nudgeDirectionRef.current);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -678,9 +740,9 @@ export function ImmersiveEstateScene({
     scene.background = new THREE.Color(COLORS.sky);
     scene.fog = new THREE.FogExp2(0xd8b88d, 0.0095);
 
-    const camera = new THREE.OrthographicCamera(-20, 20, 20, -20, 0.1, 240);
-    camera.position.set(20, 23, 70);
-    camera.lookAt(0, 0, 46);
+    const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 260);
+    camera.position.set(0, 8.5, 60);
+    camera.lookAt(0, 1.8, 40);
 
     const materials = createMaterials();
     scene.add(new THREE.HemisphereLight(0xffead0, COLORS.forestDeep, 2.05));
@@ -1000,15 +1062,19 @@ export function ImmersiveEstateScene({
     const { birdie, leftWing, rightWing } = makeBirdie(materials);
     scene.add(birdie);
 
+    let cameraDistance = 13;
+    let cameraHeight = 7.4;
+    let cameraLookAhead = 5.8;
     const resize = () => {
       const width = Math.max(1, mount.clientWidth);
       const height = Math.max(320, mount.clientHeight);
       const aspect = width / height;
-      const viewHeight = width < 640 ? 35 : 30;
-      camera.left = (-viewHeight * aspect) / 2;
-      camera.right = (viewHeight * aspect) / 2;
-      camera.top = viewHeight / 2;
-      camera.bottom = -viewHeight / 2;
+      const compact = width < 640;
+      camera.aspect = aspect;
+      camera.fov = compact ? 62 : 54;
+      cameraDistance = compact ? 13.8 : 13;
+      cameraHeight = compact ? 8.2 : 7.4;
+      cameraLookAhead = compact ? 6.4 : 5.8;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
     };
@@ -1019,15 +1085,26 @@ export function ImmersiveEstateScene({
     const velocity = new THREE.Vector2();
     const input = new THREE.Vector2();
     const targetVelocity = new THREE.Vector2();
-    const cameraTarget = new THREE.Vector3(20, 23, 70);
-    const lookTarget = new THREE.Vector3(0, 1.1, 46);
+    const dragControl = new THREE.Vector2();
+    const dragBasisForward = new THREE.Vector2(0, -1);
+    const dragBasisRight = new THREE.Vector2(1, 0);
+    const cameraDirection = new THREE.Vector3();
+    const avatarForward = new THREE.Vector3(0, 0, -1);
+    const avatarRight = new THREE.Vector3(1, 0, 0);
+    const cameraTarget = new THREE.Vector3(0, 8.5, 60);
+    const desiredLookTarget = new THREE.Vector3(0, 1.8, 40);
+    const lookTarget = new THREE.Vector3(0, 1.8, 40);
     const clock = new THREE.Clock(false);
     let simulationElapsed = 0;
     let walkPhase = 0;
-    let targetRotation = Math.PI;
+    let targetRotation = 0;
     let frame = 0;
     let running = false;
     let renderUsable = true;
+    let activePointerId: number | null = null;
+    let pointerOriginX = 0;
+    let pointerOriginY = 0;
+    let dragHintDismissed = false;
 
     triggerInteractionRef.current = () => {
       if (pausedRef.current) return;
@@ -1039,8 +1116,123 @@ export function ImmersiveEstateScene({
       onInteractionRef.current?.(event);
     };
 
+    const updateJoystickVisual = (
+      originX: number,
+      originY: number,
+      knobX: number,
+      knobY: number,
+      distance: number
+    ) => {
+      const joystick = joystickRef.current;
+      if (!joystick) return;
+      joystick.style.setProperty("--estate-stick-origin-x", `${originX}px`);
+      joystick.style.setProperty("--estate-stick-origin-y", `${originY}px`);
+      joystick.style.setProperty("--estate-stick-knob-x", `${knobX}px`);
+      joystick.style.setProperty("--estate-stick-knob-y", `${knobY}px`);
+      joystick.style.setProperty(
+        "--estate-stick-angle",
+        `${Math.atan2(knobY, knobX)}rad`
+      );
+      joystick.style.setProperty("--estate-stick-distance", `${distance}px`);
+    };
+    const finishDrag = (pointerId?: number) => {
+      if (
+        activePointerId === null ||
+        (pointerId !== undefined && pointerId !== activePointerId)
+      ) {
+        return;
+      }
+      const finishedPointerId = activePointerId;
+      activePointerId = null;
+      dragControl.set(0, 0);
+      updateJoystickVisual(pointerOriginX, pointerOriginY, 0, 0, 0);
+      setDragActive(false);
+      try {
+        if (mount.hasPointerCapture(finishedPointerId)) {
+          mount.releasePointerCapture(finishedPointerId);
+        }
+      } catch {
+        // Synthetic and already-cancelled pointers may not own capture.
+      }
+    };
+    endDragRef.current = () => finishDrag();
+
+    const onPointerDown = (event: PointerEvent) => {
+      if (
+        pausedRef.current ||
+        !event.isPrimary ||
+        event.button !== 0 ||
+        activePointerId !== null
+      ) {
+        return;
+      }
+      const bounds = mount.getBoundingClientRect();
+      activePointerId = event.pointerId;
+      pointerOriginX = event.clientX - bounds.left;
+      pointerOriginY = event.clientY - bounds.top;
+      camera.getWorldDirection(cameraDirection);
+      cameraDirection.y = 0;
+      if (cameraDirection.lengthSq() > 0.0001) cameraDirection.normalize();
+      else cameraDirection.set(0, 0, -1);
+      dragBasisForward.set(cameraDirection.x, cameraDirection.z).normalize();
+      dragBasisRight.set(-dragBasisForward.y, dragBasisForward.x);
+      dragControl.set(0, 0);
+      updateJoystickVisual(pointerOriginX, pointerOriginY, 0, 0, 0);
+      setDragActive(true);
+      try {
+        mount.setPointerCapture(event.pointerId);
+      } catch {
+        // Pointer capture can be unavailable for synthetic events.
+      }
+      mount.focus({ preventScroll: true });
+      event.preventDefault();
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== activePointerId) return;
+      const bounds = mount.getBoundingClientRect();
+      const deltaX = event.clientX - bounds.left - pointerOriginX;
+      const deltaY = event.clientY - bounds.top - pointerOriginY;
+      const rawDistance = Math.hypot(deltaX, deltaY);
+      const visualDistance = Math.min(rawDistance, DRAG_MAX_RADIUS);
+      const directionX = rawDistance > 0 ? deltaX / rawDistance : 0;
+      const directionY = rawDistance > 0 ? deltaY / rawDistance : 0;
+      const strength = THREE.MathUtils.clamp(
+        (rawDistance - DRAG_DEAD_ZONE) /
+          (DRAG_MAX_RADIUS - DRAG_DEAD_ZONE),
+        0,
+        1
+      );
+      const localRight = directionX * strength;
+      const localForward = -directionY * strength;
+      dragControl.set(
+        dragBasisRight.x * localRight +
+          dragBasisForward.x * localForward,
+        dragBasisRight.y * localRight +
+          dragBasisForward.y * localForward
+      );
+      updateJoystickVisual(
+        pointerOriginX,
+        pointerOriginY,
+        directionX * visualDistance,
+        directionY * visualDistance,
+        visualDistance
+      );
+      if (strength > 0 && !dragHintDismissed) {
+        dragHintDismissed = true;
+        setDragHintVisible(false);
+      }
+      event.preventDefault();
+    };
+    const onPointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
+    mount.addEventListener("pointerdown", onPointerDown, { passive: false });
+    mount.addEventListener("pointermove", onPointerMove, { passive: false });
+    mount.addEventListener("pointerup", onPointerEnd);
+    mount.addEventListener("pointercancel", onPointerEnd);
+    mount.addEventListener("lostpointercapture", onPointerEnd);
+
     const clearInput = () => {
       heldRef.current.clear();
+      dragControl.set(0, 0);
       velocity.set(0, 0);
       targetVelocity.set(0, 0);
     };
@@ -1063,8 +1255,12 @@ export function ImmersiveEstateScene({
     };
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("blur", clearInput);
-    window.addEventListener("pointerup", clearInput);
+    const onWindowBlur = () => {
+      finishDrag();
+      clearInput();
+    };
+    window.addEventListener("blur", onWindowBlur);
+    window.addEventListener("pointerup", onPointerEnd);
 
     const onReducedMotionChange = (event: MediaQueryListEvent) => {
       reducedMotion = event.matches;
@@ -1089,6 +1285,7 @@ export function ImmersiveEstateScene({
         if (heldRef.current.has("back")) input.y += 1;
         if (heldRef.current.has("left")) input.x -= 1;
         if (heldRef.current.has("right")) input.x += 1;
+        input.add(dragControl);
         if (input.lengthSq() > 1) input.normalize();
 
         targetVelocity.copy(input).multiplyScalar(8.2);
@@ -1155,25 +1352,44 @@ export function ImmersiveEstateScene({
         );
         if (nextNearby !== nearbyIdRef.current) publishNearby(nextNearby);
 
-        cameraTarget.set(
-          avatar.group.position.x + 20,
-          23,
-          avatar.group.position.z + 24
+        avatarForward.set(
+          -Math.sin(avatar.group.rotation.y),
+          0,
+          -Math.cos(avatar.group.rotation.y)
         );
-        lookTarget.set(
+        avatarRight.set(
+          Math.cos(avatar.group.rotation.y),
+          0,
+          -Math.sin(avatar.group.rotation.y)
+        );
+        const safeCameraDistance = resolveCameraDistance(
           avatar.group.position.x,
-          1.15,
-          avatar.group.position.z
+          avatar.group.position.z,
+          -avatarForward.x,
+          -avatarForward.z,
+          cameraDistance
         );
-        const cameraResponse = 1 - Math.exp(-dt * (reducedMotion ? 9 : 4.8));
+        cameraTarget
+          .copy(avatar.group.position)
+          .addScaledVector(avatarForward, -safeCameraDistance);
+        cameraTarget.y += cameraHeight;
+        desiredLookTarget
+          .copy(avatar.group.position)
+          .addScaledVector(avatarForward, cameraLookAhead);
+        desiredLookTarget.y += 1.7;
+        const cameraResponse = 1 - Math.exp(-dt * (reducedMotion ? 9 : 5.4));
+        const lookResponse = 1 - Math.exp(-dt * (reducedMotion ? 10 : 7.2));
         camera.position.lerp(cameraTarget, cameraResponse);
+        lookTarget.lerp(desiredLookTarget, lookResponse);
         camera.lookAt(lookTarget);
 
-        birdie.position.set(
-          avatar.group.position.x + 2.3,
-          reducedMotion ? 3.8 : 3.8 + Math.sin(simulationElapsed * 2.1) * 0.18,
-          avatar.group.position.z - 1.4
-        );
+        birdie.position
+          .copy(avatar.group.position)
+          .addScaledVector(avatarRight, 2.15)
+          .addScaledVector(avatarForward, -0.45);
+        birdie.position.y = reducedMotion
+          ? 3.8
+          : 3.8 + Math.sin(simulationElapsed * 2.1) * 0.18;
         birdie.rotation.y = avatar.group.rotation.y - 0.5;
         if (!reducedMotion) {
           const wingBeat = Math.sin(simulationElapsed * 10) * 0.45;
@@ -1212,6 +1428,7 @@ export function ImmersiveEstateScene({
       running = false;
       window.cancelAnimationFrame(frame);
       clock.stop();
+      finishDrag();
       clearInput();
     };
     const onVisibilityChange = () => {
@@ -1241,14 +1458,20 @@ export function ImmersiveEstateScene({
     return () => {
       stopLoop();
       triggerInteractionRef.current = () => undefined;
+      endDragRef.current = () => undefined;
       updatePausedLoopRef.current = () => undefined;
       heldRef.current.clear();
       resizeObserver.disconnect();
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("blur", clearInput);
-      window.removeEventListener("pointerup", clearInput);
+      window.removeEventListener("blur", onWindowBlur);
+      window.removeEventListener("pointerup", onPointerEnd);
+      mount.removeEventListener("pointerdown", onPointerDown);
+      mount.removeEventListener("pointermove", onPointerMove);
+      mount.removeEventListener("pointerup", onPointerEnd);
+      mount.removeEventListener("pointercancel", onPointerEnd);
+      mount.removeEventListener("lostpointercapture", onPointerEnd);
       reduceMotionQuery.removeEventListener("change", onReducedMotionChange);
       renderer.domElement.removeEventListener("webglcontextlost", onContextLost);
       if (renderer.domElement.parentElement === mount) {
@@ -1265,6 +1488,24 @@ export function ImmersiveEstateScene({
   };
   const release = (direction: MovementDirection) => {
     heldRef.current.delete(direction);
+  };
+  const nudge = (direction: MovementDirection) => {
+    if (paused) return;
+    if (nudgeDirectionRef.current) {
+      heldRef.current.delete(nudgeDirectionRef.current);
+    }
+    heldRef.current.add(direction);
+    nudgeDirectionRef.current = direction;
+    if (nudgeTimerRef.current !== null) {
+      window.clearTimeout(nudgeTimerRef.current);
+    }
+    nudgeTimerRef.current = window.setTimeout(() => {
+      heldRef.current.delete(direction);
+      if (nudgeDirectionRef.current === direction) {
+        nudgeDirectionRef.current = null;
+      }
+      nudgeTimerRef.current = null;
+    }, 420);
   };
   const handleFallbackDistrict = (nextDistrict: EstateDistrictId) => {
     districtRef.current = nextDistrict;
@@ -1294,6 +1535,9 @@ export function ImmersiveEstateScene({
       data-scene-ready={webglStatus === "ready" ? "true" : "false"}
       data-estate-paused={paused ? "true" : "false"}
       data-estate-last-interaction={lastInteractionId ?? "none"}
+      data-estate-camera-mode="third-person-follow"
+      data-estate-touch-input="drag-to-move"
+      data-estate-drag-active={dragActive ? "true" : "false"}
       aria-label="Begehbares Birdie & Breakfast Grundstück"
     >
       <div
@@ -1303,7 +1547,7 @@ export function ImmersiveEstateScene({
         data-estate-scene-focus="true"
         data-estate-world-focus="true"
         tabIndex={paused || fallbackVisible ? -1 : 0}
-        aria-label="3D-Welt fokussieren. Bewegen mit WASD, Pfeiltasten oder Touch. Interagieren mit E oder Enter."
+        aria-label="3D-Welt fokussieren. Auf Touchgeräten den Daumen auf die Welt legen und in Gehrichtung ziehen. Alternativ mit WASD, Pfeiltasten oder den einblendbaren Richtungstasten bewegen. Interagieren mit E oder Enter."
         aria-describedby="estate-scene-controls-help"
         hidden={fallbackVisible}
       />
@@ -1334,6 +1578,26 @@ export function ImmersiveEstateScene({
           </div>
 
           <div
+            ref={joystickRef}
+            className="immersive-estate-scene__thumbstick"
+            data-estate-touch-controls="drag"
+            data-estate-drag-joystick={dragActive ? "active" : "idle"}
+            aria-hidden="true"
+          >
+            <span className="immersive-estate-scene__thumbstick-base" />
+            <span className="immersive-estate-scene__thumbstick-trail" />
+            <span className="immersive-estate-scene__thumbstick-knob">↑</span>
+          </div>
+
+          <p
+            className="immersive-estate-scene__drag-hint"
+            data-estate-drag-hint={dragHintVisible ? "visible" : "dismissed"}
+            aria-hidden="true"
+          >
+            Daumen auflegen &amp; ziehen
+          </p>
+
+          <div
             className="immersive-estate-scene__interaction"
             data-nearby-interaction={nearbyInteraction?.id ?? "none"}
           >
@@ -1354,11 +1618,16 @@ export function ImmersiveEstateScene({
             </button>
           </div>
 
-          <div
-            className="immersive-estate-scene__touch"
-            data-estate-touch-controls="directional"
-            aria-label="Bewegungssteuerung"
-          >
+          <details className="immersive-estate-scene__touch-alternative">
+            <summary aria-label="Alternative Richtungstasten umschalten">
+              <span aria-hidden="true">＋</span>
+            </summary>
+            <div
+              className="immersive-estate-scene__touch"
+              data-estate-touch-controls="directional-alternative"
+              role="group"
+              aria-label="Alternative Bewegungssteuerung"
+            >
             <button
               type="button"
               data-estate-move="forward"
@@ -1368,6 +1637,9 @@ export function ImmersiveEstateScene({
               onPointerUp={() => release("forward")}
               onPointerCancel={() => release("forward")}
               onPointerLeave={() => release("forward")}
+              onClick={(event) => {
+                if (event.detail === 0) nudge("forward");
+              }}
             >
               ↑
             </button>
@@ -1380,6 +1652,9 @@ export function ImmersiveEstateScene({
               onPointerUp={() => release("left")}
               onPointerCancel={() => release("left")}
               onPointerLeave={() => release("left")}
+              onClick={(event) => {
+                if (event.detail === 0) nudge("left");
+              }}
             >
               ←
             </button>
@@ -1392,6 +1667,9 @@ export function ImmersiveEstateScene({
               onPointerUp={() => release("back")}
               onPointerCancel={() => release("back")}
               onPointerLeave={() => release("back")}
+              onClick={(event) => {
+                if (event.detail === 0) nudge("back");
+              }}
             >
               ↓
             </button>
@@ -1404,10 +1682,14 @@ export function ImmersiveEstateScene({
               onPointerUp={() => release("right")}
               onPointerCancel={() => release("right")}
               onPointerLeave={() => release("right")}
+              onClick={(event) => {
+                if (event.detail === 0) nudge("right");
+              }}
             >
               →
             </button>
-          </div>
+            </div>
+          </details>
         </>
       )}
 

@@ -24,8 +24,8 @@ const index = await readFile(join(clientRoot, "index.html"), "utf8");
 const vite = await readFile(join(clientRoot, "vite.config.ts"), "utf8");
 const packageJson = JSON.parse(await readFile(join(clientRoot, "package.json"), "utf8"));
 
-test("Immersive Estate has one explicit V0.3 presentation contract", () => {
-  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3"/);
+test("Immersive Estate has one explicit V0.3.1 presentation contract", () => {
+  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.1"/);
   const districtRegistry = contract.match(/ESTATE_DISTRICT_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const districts = [...districtRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(districts, ["arrival-court", "hotel", "golf-course", "terrace", "stables", "estate-grounds"]);
@@ -107,6 +107,22 @@ test("WebGL lifecycle and performance guardrails are explicit", () => {
   assert.match(scene, /data-render-mode/);
   assert.match(scene, /data-estate-zone/);
   assert.match(scene, /data-nearby-interaction/);
+});
+
+test("one-thumb drag and a true third-person camera replace the visible D-pad as primary movement", () => {
+  assert.match(scene, /new THREE\.PerspectiveCamera/);
+  assert.doesNotMatch(scene, /new THREE\.OrthographicCamera/);
+  assert.match(scene, /data-estate-camera-mode="third-person-follow"/);
+  assert.match(scene, /data-estate-touch-input="drag-to-move"/);
+  assert.match(scene, /setPointerCapture/);
+  assert.match(scene, /DRAG_DEAD_ZONE/);
+  assert.match(scene, /dragBasisForward/);
+  assert.match(scene, /dragControl/);
+  assert.match(scene, /resolveCameraDistance/);
+  assert.match(scene, /data-estate-drag-joystick/);
+  assert.match(scene, /Alternative Richtungstasten umschalten/);
+  assert.match(styles, /\.immersive-estate-scene__thumbstick/);
+  assert.match(styles, /\.immersive-estate-scene__touch-alternative/);
 });
 
 test("the fallback retains hotel, golf, stables and all interactions", () => {

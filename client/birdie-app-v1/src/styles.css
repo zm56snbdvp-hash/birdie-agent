@@ -32,6 +32,7 @@ textarea { font: inherit; }
 button { -webkit-tap-highlight-color: transparent; }
 
 button:focus-visible,
+summary:focus-visible,
 textarea:focus-visible,
 [tabindex]:focus-visible {
   outline: 3px solid #f0ce75;
@@ -157,12 +158,125 @@ textarea:focus-visible,
 
 .immersive-estate-scene__interaction { display: none; }
 
-.immersive-estate-scene__touch {
+.immersive-estate-scene__thumbstick {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: none;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  --estate-stick-origin-x: 50%;
+  --estate-stick-origin-y: 50%;
+  --estate-stick-knob-x: 0px;
+  --estate-stick-knob-y: 0px;
+  --estate-stick-angle: 0rad;
+  --estate-stick-distance: 0px;
+}
+
+.immersive-estate-scene__thumbstick[data-estate-drag-joystick="active"] { opacity: 1; }
+
+.immersive-estate-scene__thumbstick-base,
+.immersive-estate-scene__thumbstick-knob,
+.immersive-estate-scene__thumbstick-trail {
+  position: absolute;
+  left: var(--estate-stick-origin-x);
+  top: var(--estate-stick-origin-y);
+}
+
+.immersive-estate-scene__thumbstick-base {
+  width: 112px;
+  height: 112px;
+  border: 1px solid rgba(240, 206, 117, .72);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(23,50,38,.2), rgba(12,30,21,.64));
+  box-shadow: 0 16px 42px rgba(7,20,13,.3), inset 0 0 0 8px rgba(247,243,235,.045);
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(7px);
+}
+
+.immersive-estate-scene__thumbstick-trail {
+  width: var(--estate-stick-distance);
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(240,206,117,.18), rgba(240,206,117,.92));
+  box-shadow: 0 0 14px rgba(240,206,117,.32);
+  transform: translateY(-50%) rotate(var(--estate-stick-angle));
+  transform-origin: 0 50%;
+}
+
+.immersive-estate-scene__thumbstick-knob {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border: 1px solid rgba(255,239,188,.92);
+  border-radius: 50%;
+  color: #173226;
+  background: #f0ce75;
+  box-shadow: 0 10px 28px rgba(7,20,13,.34);
+  font-size: 22px;
+  font-weight: 900;
+  transform: translate(calc(-50% + var(--estate-stick-knob-x)), calc(-50% + var(--estate-stick-knob-y))) rotate(calc(var(--estate-stick-angle) + 1.5708rad));
+}
+
+.immersive-estate-scene__drag-hint {
+  position: absolute;
+  left: 50%;
+  top: 54%;
+  z-index: 5;
+  display: none;
+  margin: 0;
+  padding: 8px 13px;
+  border: 1px solid rgba(240,206,117,.44);
+  border-radius: 999px;
+  color: #f7f3eb;
+  background: rgba(17,39,28,.68);
+  box-shadow: 0 10px 28px rgba(7,20,13,.2);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .03em;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  backdrop-filter: blur(9px);
+}
+
+.immersive-estate-scene__drag-hint[data-estate-drag-hint="dismissed"] { display: none; }
+
+.immersive-estate-scene__touch-alternative {
   position: absolute;
   right: max(20px, env(safe-area-inset-right));
   bottom: max(24px, env(safe-area-inset-bottom));
   z-index: 7;
   display: none;
+  user-select: none;
+}
+
+.immersive-estate-scene__touch-alternative > summary {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-left: auto;
+  border: 1px solid rgba(220, 201, 164, .52);
+  border-radius: 16px;
+  color: #f7f3eb;
+  background: rgba(18, 42, 29, .74);
+  box-shadow: 0 12px 30px rgba(7,20,13,.24);
+  list-style: none;
+  touch-action: manipulation;
+  backdrop-filter: blur(12px);
+}
+
+.immersive-estate-scene__touch-alternative > summary::-webkit-details-marker { display: none; }
+.immersive-estate-scene__touch-alternative[open] > summary span { transform: rotate(45deg); }
+
+.immersive-estate-scene__touch {
+  position: absolute;
+  right: 0;
+  bottom: 57px;
+  z-index: 7;
+  display: grid;
   grid-template: repeat(2, 54px) / repeat(3, 54px);
   gap: 7px;
   padding: 9px;
@@ -666,7 +780,12 @@ textarea:focus-visible,
 @keyframes estateLoading { to { transform: rotate(360deg); } }
 
 @media (pointer: coarse) {
-  .immersive-estate-scene__touch { display: grid; }
+  .immersive-estate-scene__thumbstick { display: block; }
+  .immersive-estate-scene__drag-hint[data-estate-drag-hint="visible"] { display: block; }
+  .immersive-estate-scene__touch-alternative {
+    bottom: max(88px, calc(22px + env(safe-area-inset-bottom)));
+    display: block;
+  }
 }
 
 @media (max-width: 900px) {
@@ -732,9 +851,11 @@ textarea:focus-visible,
   .estate-function-nav small { display: none; }
   .estate-function-nav strong { font-size: 9px; white-space: normal; line-height: 1.08; }
 
-  .immersive-estate-scene__touch {
+  .immersive-estate-scene__touch-alternative {
     right: max(10px, env(safe-area-inset-right));
     bottom: calc(78px + env(safe-area-inset-bottom));
+  }
+  .immersive-estate-scene__touch {
     grid-template: repeat(2, 48px) / repeat(3, 48px);
     gap: 5px;
     padding: 7px;
@@ -844,7 +965,7 @@ textarea:focus-visible,
   .estate-brand strong { font-size: 13px; }
   .estate-function-nav button { grid-template-columns: 30px minmax(0, 1fr); }
   .estate-function-nav button > span:first-child { width: 30px; height: 30px; }
-  .estate-interaction-prompt { right: 166px; }
+  .estate-interaction-prompt { right: 178px; }
   .estate-fallback__content { top: 49%; }
 }
 
