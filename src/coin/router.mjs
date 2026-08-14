@@ -33,6 +33,21 @@ export async function routeCoinRequest({ req, res, url, json, readBody, service 
     return true;
   }
 
+  const instagramMatch = match(
+    url.pathname,
+    /^\/coin\/profiles\/([^/]+)\/instagram$/
+  );
+  if (req.method === "POST" && instagramMatch) {
+    json(
+      res,
+      200,
+      resultBody(
+        await service.linkInstagramHandle(instagramMatch[0], await readBody(req))
+      )
+    );
+    return true;
+  }
+
   const ledgerMatch = match(url.pathname, /^\/coin\/profiles\/([^/]+)\/ledger$/);
   if (req.method === "GET" && ledgerMatch) {
     json(res, 200, resultBody(await service.getLedger(ledgerMatch[0])));

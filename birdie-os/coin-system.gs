@@ -109,6 +109,7 @@ function handleBirdieCoinAction_(request) {
   switch (String(request.action || "")) {
     case "coinCreateProfile": return birdieCoinCreateProfile_(request);
     case "coinGetProfile": return birdieCoinGetProfile_(request);
+    case "coinLinkInstagramHandle": return birdieCoinLinkInstagramHandle_(request);
     case "coinGetLedger": return birdieCoinGetLedger_(request);
     case "coinAwardBadge": return birdieCoinAwardBadge_(request);
     case "coinCreateClaim": return birdieCoinCreateClaim_(request);
@@ -185,6 +186,80 @@ function birdieCoinEnsureRegistrationCredit_(profile, actor) {
 function birdieCoinGetProfile_(request) {
   var profile = birdieCoinRequireProfile_(request.birdieId);
   return birdieCoinSuccess_(birdieCoinProfileView_(profile));
+}
+
+function birdieCoinLinkInstagramHandle_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var birdieId = birdieCoinRequired_(request.birdieId, "birdieId");
+    var instagramHandle = birdieCoinNormalizeInstagramHandle_(request.instagramHandle);
+    var idempotencyKey = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
+    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.PROFILES);
+    var target = birdieCoinFind_(sheet, "birdieId", birdieId);
+
+    if (!target) throw new Error("BIRDIE_PROFILE_NOT_FOUND");
+    if (String(target.object.status) !== "ACTIVE") {
+      throw new Error("BIRDIE_PROFILE_NOT_ACTIVE");
+    }
+
+    var conflict = birdieCoinObjects_(sheet).some(function (profile) {
+      if (String(profile.status) !== "ACTIVE") return false;
+      if (String(profile.birdieId) === birdieId) return false;
+      var existingHandle = String(profile.instagramHandle || "").trim();
+      return existingHandle &&
+        birdieCoinNormalizeInstagramHandle_(existingHandle) === instagramHandle;
+    });
+    if (conflict) throw new Error("INSTAGRAM_HANDLE_ALREADY_LINKED");
+
+    var targetExistingHandle = String(target.object.instagramHandle || "").trim();
+    if (targetExistingHandle) {
+      if (birdieCoinNormalizeInstagramHandle_(targetExistingHandle) === instagramHandle) {
+        return birdieCoinSuccess_({
+          profile: birdieCoinProfileView_(target.object),
+          idempotent: true
+        });
+      }
+      throw new Error("INSTAGRAM_HANDLE_CHANGE_REQUIRES_REVIEW");
+    }
+
+    target.object.instagramHandle = instagramHandle;
+    target.object.updatedAt = birdieCoinNow_();
+    birdieCoinWriteObject_(sheet, target.row, target.object);
+    SpreadsheetApp.flush();
+
+    var readback = birdieCoinFind_(sheet, "birdieId", birdieId);
+    var readbackMatches = false;
+    if (readback &&
+        String(readback.object.birdieId) === birdieId &&
+        String(readback.object.status) === "ACTIVE") {
+      try {
+        readbackMatches = birdieCoinNormalizeInstagramHandle_(
+          readback.object.instagramHandle
+        ) === instagramHandle;
+      } catch (readbackError) {
+        readbackMatches = false;
+      }
+    }
+    if (!readbackMatches) {
+      throw new Error("INSTAGRAM_HANDLE_READBACK_MISMATCH");
+    }
+
+    birdieCoinAudit_(
+      "INSTAGRAM_HANDLE_LINKED",
+      "PROFILE",
+      birdieId,
+      request.source,
+      { instagramHandle: instagramHandle },
+      idempotencyKey
+    );
+    return birdieCoinSuccess_({
+      profile: birdieCoinProfileView_(readback.object),
+      idempotent: false
+    });
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function birdieCoinGetLedger_(request) {
@@ -676,6 +751,16 @@ function birdieCoinRequired_(value, field) {
   var result = String(value === undefined || value === null ? "" : value).trim();
   if (!result) throw new Error("MISSING_FIELD:" + field);
   return result;
+}
+
+function birdieCoinNormalizeInstagramHandle_(value) {
+  var handle = birdieCoinRequired_(value, "instagramHandle")
+    .toLowerCase()
+    .replace(/^@/, "");
+  if (!/^[a-z0-9._]{1,30}$/.test(handle)) {
+    throw new Error("INVALID_INSTAGRAM_HANDLE");
+  }
+  return handle;
 }
 
 function birdieCoinPositiveInteger_(value, field) {
