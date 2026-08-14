@@ -181,6 +181,20 @@ Multiplayer is explicitly **not implemented in V1**, but the following constrain
 
 The current React/Three.js vertical slice must consume a sandbox adapter that returns these DTO shapes. UI components may transform DTOs into view models, but must not reach directly into BirdieOS sheets or internal company APIs.
 
+## Unity estate presentation handoff
+
+The estate's presentation geometry now has a separate, machine-readable contract
+at `client/birdie-app-v1/src/contracts/birdieworld-estate-handoff-v1.json`.
+The current Three.js scene consumes it for world bounds, spawn, camera, district
+rules, collision shapes, interaction anchors, tree instances, palette and
+lighting. A Unity client must consume the same values and apply the declared
+Z-axis/yaw adapter at its import boundary.
+
+This manifest is deliberately not a domain-state DTO. It contains no personal
+data, business authority, persistence, quest state or multiplayer state. See
+`docs/BIRDIEWORLD_UNITY_HANDOFF_V1.md` for the ordered Unity implementation and
+acceptance gates.
+
 The next implementation gate is to locate/materialize the archived client workspace, introduce this sandbox adapter there, and wire Golf History to the already verified Round Mode semantics. Until that workspace is available in the repository/runtime, the architecture lock is complete but the client integration portion of TASK-066 remains open.
 
 ## Acceptance for TASK-066 architecture gate

@@ -13,12 +13,22 @@ import {
   type EstateInteractionId,
   type EstateWebglStatus
 } from "./estateContract";
+import {
+  ESTATE_COLLISION_CIRCLES as ROUND_COLLISIONS,
+  ESTATE_COLLISION_RECTANGLES as BUILDING_COLLISIONS,
+  ESTATE_DISTRICT_RESOLVERS,
+  ESTATE_INTERACTION_ANCHORS as PRIVATE_INTERACTION_POINTS,
+  ESTATE_TREE_INSTANCES as TREE_POSITIONS,
+  ESTATE_WORLD_HANDOFF_VERSION,
+  ESTATE_WORLD_COLORS as COLORS,
+  ESTATE_WORLD_MANIFEST
+} from "./estateWorldManifest";
 
 type MovementDirection = "forward" | "back" | "left" | "right";
 
 const DRAG_DEAD_ZONE = 10;
 const DRAG_MAX_RADIUS = 72;
-const CAMERA_SAMPLE_STEP = 0.45;
+const CAMERA_SAMPLE_STEP = ESTATE_WORLD_MANIFEST.camera.collisionSampleStep;
 
 export const ESTATE_COLOR_GRADE_VERSION = "golden-estate-v0.3.5" as const;
 
@@ -34,93 +44,6 @@ export interface ImmersiveEstateSceneProps {
   avatarStyle?: EstateAvatarStyleId;
   className?: string;
 }
-
-interface PrivateInteractionPoint {
-  id: EstateInteractionId;
-  x: number;
-  z: number;
-  radius: number;
-}
-
-interface CollisionRectangle {
-  minX: number;
-  maxX: number;
-  minZ: number;
-  maxZ: number;
-}
-
-interface CollisionCircle {
-  x: number;
-  z: number;
-  radius: number;
-}
-
-const COLORS = {
-  forestNight: 0x10271c,
-  forestDeep: 0x173624,
-  forest: 0x28563a,
-  forestLight: 0x66834a,
-  grass: 0x526f3b,
-  meadowDark: 0x34563a,
-  meadowLight: 0x758c4b,
-  fairway: 0x88a94f,
-  green: 0x9cbb63,
-  cream: 0xf7f1e5,
-  path: 0xd8c5a0,
-  pathEdge: 0x9b8664,
-  gold: 0xd0aa43,
-  hotel: 0xbca186,
-  roof: 0x252a27,
-  stable: 0x824735,
-  stableTrim: 0xe8d5b6,
-  wood: 0x674633,
-  water: 0x2d6b70,
-  waterEdge: 0x24483c,
-  sand: 0xe0c98f,
-  stone: 0x958b79,
-  rock: 0x56605a,
-  flowerWhite: 0xf5ead5,
-  flowerGold: 0xe0ad39,
-  flowerViolet: 0x8f668b,
-  trunk: 0x584033,
-  charcoal: 0x2b2e2b,
-  windowGlass: 0x4c321e,
-  warmLight: 0xffc36b,
-  skyHaze: 0xd4a068,
-  fog: 0xb58b67
-} as const;
-
-const PRIVATE_INTERACTION_POINTS: readonly PrivateInteractionPoint[] = [
-  { id: "hotel-reception", x: 0, z: -8.2, radius: 8.5 },
-  { id: "greenkeeper", x: -42, z: 5, radius: 8.5 },
-  { id: "stable-guide", x: 41, z: -4.5, radius: 8.5 }
-] as const;
-
-const BUILDING_COLLISIONS: readonly CollisionRectangle[] = [
-  { minX: -22.6, maxX: 22.6, minZ: -32.6, maxZ: -13.2 },
-  { minX: 29.2, maxX: 54.8, minZ: -25.8, maxZ: -9.2 }
-] as const;
-
-const ROUND_COLLISIONS: readonly CollisionCircle[] = [
-  { x: -33, z: -21, radius: 8.5 }
-] as const;
-
-const TREE_POSITIONS = [
-  [-65, -46, 1.4], [-58, -43, 1.0], [-49, -49, 1.3], [-38, -47, 0.9],
-  [-25, -50, 1.2], [-12, -49, 1.0], [9, -49, 1.2], [21, -48, 0.95],
-  [36, -48, 1.25], [52, -46, 1.0], [64, -42, 1.35], [66, -28, 1.0],
-  [65, -12, 1.15], [65, 8, 1.0], [66, 24, 1.2], [63, 42, 1.0],
-  [54, 51, 1.3], [40, 50, 0.9], [26, 52, 1.1], [12, 51, 0.85],
-  [-14, 52, 0.9], [-29, 52, 1.2], [-44, 50, 1.0], [-57, 48, 1.3],
-  [-65, 37, 1.0], [-66, 21, 1.2], [-65, 4, 1.0], [-66, -14, 1.25],
-  [-57, -29, 0.9], [-49, 34, 0.8], [-38, 39, 0.9], [31, 38, 0.85],
-  [46, 36, 0.95], [-18, 24, 0.78], [18, 24, 0.8], [-21, -34, 0.9],
-  [20, -35, 0.9], [-57, -35, 1.05], [-44, -38, 0.88], [-30, -41, 1.0],
-  [-16, -43, 0.82], [17, -43, 0.86], [31, -40, 1.05], [45, -37, 0.9],
-  [57, -32, 1.1], [-56, 8, 0.82], [-53, 28, 0.94], [-41, 34, 0.8],
-  [36, 3, 0.72], [52, 2, 0.86], [18, 1, 0.68], [-17, 2, 0.72],
-  [-28, -29, 0.76], [25, -30, 0.7], [8, -39, 0.65], [-7, -40, 0.7]
-] as const;
 
 function createWebglRenderTarget() {
   const canvas = document.createElement("canvas");
@@ -158,11 +81,30 @@ function isEditableTarget(target: EventTarget | null) {
 }
 
 function identifyDistrict(x: number, z: number): EstateDistrictId {
-  if (z > 30 && Math.abs(x) < 18) return "arrival-court";
-  if (x < -18) return "golf-course";
-  if (x >= 14 && x <= 24 && z >= -20 && z <= -7) return "terrace";
-  if (x > 20) return "stables";
-  if (Math.abs(x) < 18 && z < 24) return "hotel";
+  for (const district of ESTATE_DISTRICT_RESOLVERS) {
+    const rule = district.rule;
+    if (rule.kind === "fallback") return district.id;
+    if (rule.kind === "half-plane") {
+      const value = rule.axis === "x" ? x : z;
+      if (
+        (rule.lessThan !== undefined && value < rule.lessThan) ||
+        (rule.greaterThan !== undefined && value > rule.greaterThan)
+      ) {
+        return district.id;
+      }
+      continue;
+    }
+    const matches =
+      (rule.minXInclusive === undefined || x >= rule.minXInclusive) &&
+      (rule.minXExclusive === undefined || x > rule.minXExclusive) &&
+      (rule.maxXInclusive === undefined || x <= rule.maxXInclusive) &&
+      (rule.maxXExclusive === undefined || x < rule.maxXExclusive) &&
+      (rule.minZInclusive === undefined || z >= rule.minZInclusive) &&
+      (rule.minZExclusive === undefined || z > rule.minZExclusive) &&
+      (rule.maxZInclusive === undefined || z <= rule.maxZInclusive) &&
+      (rule.maxZExclusive === undefined || z < rule.maxZExclusive);
+    if (matches) return district.id;
+  }
   return "estate-grounds";
 }
 
@@ -217,8 +159,9 @@ function resolveMovement(
   requestedX: number,
   requestedZ: number
 ) {
-  let x = THREE.MathUtils.clamp(requestedX, -67, 67);
-  let z = THREE.MathUtils.clamp(requestedZ, -52, 53);
+  const bounds = ESTATE_WORLD_MANIFEST.player.movementBounds;
+  let x = THREE.MathUtils.clamp(requestedX, bounds.minX, bounds.maxX);
+  let z = THREE.MathUtils.clamp(requestedZ, bounds.minZ, bounds.maxZ);
 
   if (isBlocked(x, previousZ)) x = previousX;
   if (isBlocked(x, z)) z = previousZ;
@@ -226,7 +169,7 @@ function resolveMovement(
 }
 
 function nearestInteraction(x: number, z: number): EstateInteractionId | null {
-  let nearest: PrivateInteractionPoint | null = null;
+  let nearest: (typeof PRIVATE_INTERACTION_POINTS)[number] | null = null;
   let nearestDistance = Number.POSITIVE_INFINITY;
   for (const point of PRIVATE_INTERACTION_POINTS) {
     const distance = Math.hypot(x - point.x, z - point.z);
@@ -938,8 +881,9 @@ function makeAvatar(
     pivot.add(arm);
   });
 
-  group.position.set(0, 0.08, 46);
-  group.rotation.y = 0;
+  const spawn = ESTATE_WORLD_MANIFEST.player.spawn;
+  group.position.set(spawn.x, spawn.y, spawn.z);
+  group.rotation.y = THREE.MathUtils.degToRad(spawn.yawDegrees);
   return { group, torso, leftLeg, rightLeg, leftArm, rightArm };
 }
 
@@ -1178,7 +1122,7 @@ export function ImmersiveEstateScene({
     renderer.domElement.setAttribute("aria-hidden", "true");
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.06;
+    renderer.toneMappingExposure = ESTATE_WORLD_MANIFEST.visual.lighting.exposure;
     renderer.shadowMap.enabled = qualityShadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setPixelRatio(
@@ -1188,16 +1132,41 @@ export function ImmersiveEstateScene({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(COLORS.skyHaze);
-    scene.fog = new THREE.FogExp2(COLORS.fog, 0.0068);
+    scene.fog = new THREE.FogExp2(
+      COLORS.fog,
+      ESTATE_WORLD_MANIFEST.visual.lighting.fog.density
+    );
 
-    const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 260);
+    const cameraSpec = ESTATE_WORLD_MANIFEST.camera;
+    const camera = new THREE.PerspectiveCamera(
+      cameraSpec.desktop.fieldOfViewDegrees,
+      1,
+      cameraSpec.nearClip,
+      cameraSpec.farClip
+    );
     camera.position.set(0, 8.5, 60);
     camera.lookAt(0, 1.8, 40);
 
     const materials = createMaterials();
-    scene.add(new THREE.HemisphereLight(0xffe0ad, COLORS.forestNight, 1.82));
-    const sun = new THREE.DirectionalLight(COLORS.warmLight, 3.35);
-    sun.position.set(-42, 48, 28);
+    const lighting = ESTATE_WORLD_MANIFEST.visual.lighting;
+    scene.add(
+      new THREE.HemisphereLight(
+        Number.parseInt(lighting.hemisphere.skyColor.slice(1), 16),
+        COLORS[
+          lighting.hemisphere.groundColorToken as keyof typeof COLORS
+        ],
+        lighting.hemisphere.intensity
+      )
+    );
+    const sun = new THREE.DirectionalLight(
+      COLORS[lighting.sun.colorToken as keyof typeof COLORS],
+      lighting.sun.intensity
+    );
+    sun.position.set(
+      lighting.sun.position.x,
+      lighting.sun.position.y,
+      lighting.sun.position.z
+    );
     sun.castShadow = qualityShadows;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -82;
@@ -1208,8 +1177,15 @@ export function ImmersiveEstateScene({
     sun.shadow.camera.far = 155;
     scene.add(sun);
 
-    const coolFill = new THREE.DirectionalLight(0x8fae9d, 0.42);
-    coolFill.position.set(38, 20, -42);
+    const coolFill = new THREE.DirectionalLight(
+      Number.parseInt(lighting.coolFill.color.slice(1), 16),
+      lighting.coolFill.intensity
+    );
+    coolFill.position.set(
+      lighting.coolFill.position.x,
+      lighting.coolFill.position.y,
+      lighting.coolFill.position.z
+    );
     scene.add(coolFill);
 
     const ground = new THREE.Mesh(
@@ -1613,19 +1589,27 @@ export function ImmersiveEstateScene({
     const { birdie, leftWing, rightWing } = makeBirdie(materials);
     scene.add(birdie);
 
-    let cameraDistance = 13;
-    let cameraHeight = 7.4;
-    let cameraLookAhead = 5.8;
+    let cameraDistance = cameraSpec.desktop.distance;
+    let cameraHeight = cameraSpec.desktop.height;
+    let cameraLookAhead = cameraSpec.desktop.lookAhead;
     const resize = () => {
       const width = Math.max(1, mount.clientWidth);
       const height = Math.max(320, mount.clientHeight);
       const aspect = width / height;
-      const compact = width < 640;
+      const compact = width <= cameraSpec.compact.maxViewportWidth;
       camera.aspect = aspect;
-      camera.fov = compact ? 62 : 54;
-      cameraDistance = compact ? 13.8 : 13;
-      cameraHeight = compact ? 8.2 : 7.4;
-      cameraLookAhead = compact ? 6.4 : 5.8;
+      camera.fov = compact
+        ? cameraSpec.compact.fieldOfViewDegrees
+        : cameraSpec.desktop.fieldOfViewDegrees;
+      cameraDistance = compact
+        ? cameraSpec.compact.distance
+        : cameraSpec.desktop.distance;
+      cameraHeight = compact
+        ? cameraSpec.compact.height
+        : cameraSpec.desktop.height;
+      cameraLookAhead = compact
+        ? cameraSpec.compact.lookAhead
+        : cameraSpec.desktop.lookAhead;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height, false);
     };
@@ -1839,7 +1823,9 @@ export function ImmersiveEstateScene({
         input.add(dragControl);
         if (input.lengthSq() > 1) input.normalize();
 
-        targetVelocity.copy(input).multiplyScalar(8.2);
+        targetVelocity
+          .copy(input)
+          .multiplyScalar(ESTATE_WORLD_MANIFEST.player.movementSpeedMetersPerSecond);
         const movementResponse =
           1 - Math.exp(-dt * (input.lengthSq() > 0 ? 9.5 : 7));
         velocity.lerp(targetVelocity, movementResponse);
@@ -2079,6 +2065,7 @@ export function ImmersiveEstateScene({
     <section
       className={classNames}
       data-immersive-estate={ESTATE_CONTRACT_VERSION}
+      data-estate-handoff={ESTATE_WORLD_HANDOFF_VERSION}
       data-estate-district={district}
       data-estate-zone={district}
       data-estate-webgl={webglStatus}
