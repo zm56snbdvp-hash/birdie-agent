@@ -39,7 +39,7 @@ test("Immersive Estate has one explicit V0.3.5 presentation contract", () => {
 test("V0.3.5 carries one explicit golden-estate color grade across WebGL and arrival", () => {
   assert.match(scene, /ESTATE_COLOR_GRADE_VERSION = "golden-estate-v0\.3\.5"/);
   assert.match(scene, /dataset\.estateColorGrade = ESTATE_COLOR_GRADE_VERSION/);
-  assert.match(scene, /createGoldenSkyTexture\(\)/);
+  assert.match(scene, /scene\.background = new THREE\.Color\(COLORS\.skyHaze\)/);
   assert.match(scene, /ACESFilmicToneMapping/);
   assert.match(scene, /const coolFill = new THREE\.DirectionalLight/);
   for (const token of [

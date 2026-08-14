@@ -86,34 +86,9 @@ const COLORS = {
   charcoal: 0x2b2e2b,
   windowGlass: 0x4c321e,
   warmLight: 0xffc36b,
-  skyZenith: "#78908a",
-  skyHaze: "#d4a068",
-  skySun: "#f3c77f",
-  skyHorizon: "#708566",
+  skyHaze: 0xd4a068,
   fog: 0xb58b67
 } as const;
-
-function createGoldenSkyTexture() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 16;
-  canvas.height = 512;
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-
-  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
-  gradient.addColorStop(0, COLORS.skyZenith);
-  gradient.addColorStop(0.42, COLORS.skyHaze);
-  gradient.addColorStop(0.67, COLORS.skySun);
-  gradient.addColorStop(1, COLORS.skyHorizon);
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, canvas.width, canvas.height);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.magFilter = THREE.LinearFilter;
-  texture.minFilter = THREE.LinearFilter;
-  return texture;
-}
 
 const PRIVATE_INTERACTION_POINTS: readonly PrivateInteractionPoint[] = [
   { id: "hotel-reception", x: 0, z: -8.2, radius: 8.5 },
@@ -1212,8 +1187,7 @@ export function ImmersiveEstateScene({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const skyTexture = createGoldenSkyTexture();
-    scene.background = skyTexture ?? new THREE.Color(COLORS.fog);
+    scene.background = new THREE.Color(COLORS.skyHaze);
     scene.fog = new THREE.FogExp2(COLORS.fog, 0.0068);
 
     const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 260);
@@ -2055,7 +2029,6 @@ export function ImmersiveEstateScene({
         mount.removeChild(renderer.domElement);
       }
       disposeScene(scene);
-      skyTexture?.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     };
