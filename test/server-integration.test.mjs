@@ -113,7 +113,9 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const baseUrl = `http://127.0.0.1:${agentPort}`;
   const rootResponse = await fetch(`${baseUrl}/`);
   const root = await rootResponse.json();
-  assert.equal(root.version, "2.8.0");
+  assert.equal(root.version, "2.9.0");
+  assert.equal(root.meta, "SIGNED_WEBHOOK_CONTROLLED");
+  assert.equal(root.birdieWorld, "AUTH_GATE_NOT_CONFIGURED");
 
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);
@@ -125,6 +127,9 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   assert.equal(catalogueResponse.status, 404);
   assert.ok(catalogue.routes.includes("POST /coin/profiles/{birdieId}/instagram"));
   assert.ok(catalogue.routes.includes("POST /family/mcp"));
+  assert.ok(catalogue.routes.includes("POST /meta/webhook"));
+  assert.ok(catalogue.routes.includes("GET /birdie-app/v1/world"));
+  assert.ok(catalogue.routes.includes("POST /admin/birdie-app/v1/reconcile"));
   assert.ok(
     catalogue.routes.includes(
       "POST /coin/social-events/{eventId}/instagram-comment/claim"

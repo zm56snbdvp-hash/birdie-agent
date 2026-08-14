@@ -1,11 +1,10 @@
 # TASK-038 Provider Deployment Runbook
 
-This is the operator handoff for Birdie Agent `2.8.0`. The source candidate
-starts from PR #29 head `ab891ae5a1a0f2ea215374c9fac850c573f4c326`, which
-integrates TASK-038 into current `main`
-`5bc3941ea6ab46eb1b58756b39b5b99b757df796`. Deploy only the final reviewed
-release SHA containing the independent exact-only, audit, global-uniqueness
-and crash-recovery hardening; never deploy the older feature head by itself.
+This is the operator handoff for Birdie Agent `2.8.0`. PR #29 passed 134/134
+tests and was squash-merged into `main` at the immutable reviewed release SHA
+`6275e0e0a9dab88b1c034cbc76e110c661538981`. Deploy that exact SHA for the
+TASK-038 provider release; never deploy an older feature or candidate head by
+itself.
 
 The provider order is mandatory:
 
