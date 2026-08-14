@@ -97,11 +97,11 @@ test("desktop is a fullscreen estate and all three function tabs return to Birdi
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
 
-  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3.2");
+  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3.3");
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.2" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.3" })).toBeAttached();
   const main = page.locator("main");
-  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3.2");
+  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3.3");
   await expect(main).toHaveAttribute("data-living-arrival", "birdie-as-host-v0.2");
   await expect(main).toHaveAttribute("data-host-stage", "noticed");
 
@@ -201,7 +201,7 @@ test("forced WebGL fallback keeps the whole estate, NPCs and function menu opera
   await expect(welcome).toHaveCount(0);
   await expect(page.locator("main")).toHaveAttribute("data-host-stage", "oriented");
 
-  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3.2']");
+  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3.3']");
   await waitForSceneOutcome(page);
   await expect(fallback).toBeVisible();
   await expect(page.locator("[data-estate-world-surface='true']")).toBeFocused();
@@ -544,7 +544,7 @@ test("installable PWA gains control and reloads offline with bundled runtime", a
 
   await page.context().setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.2" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.3" })).toBeAttached();
   await expect(page.getByRole("dialog", { name: "Das Taxi wartet am Tor." })).toBeVisible();
   await enterWorld(page, "after-hours");
   await expect(page.getByRole("navigation", { name: "BirdieWorld Funktionen" })).toBeVisible();

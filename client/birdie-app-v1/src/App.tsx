@@ -287,7 +287,7 @@ export default function App() {
       data-estate-arrival-state={arrivalComplete ? "arrived" : "approaching"}
       data-estate-avatar-style={avatarStyle}
     >
-      <h1 className="sr-only">BirdieWorld Immersive Estate V0.3.2</h1>
+      <h1 className="sr-only">BirdieWorld Immersive Estate V0.3.3</h1>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{arrivalAnnouncement}</p>
 
       <section className="estate-world" role="region" aria-label="Begehbares Birdie & Breakfast Grundstück">

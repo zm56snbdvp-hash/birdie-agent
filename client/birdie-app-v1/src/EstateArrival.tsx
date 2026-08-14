@@ -34,6 +34,9 @@ export function EstateArrival({
       data-session-only="true"
     >
       <div className="estate-arrival__sky" aria-hidden="true">
+        <span className="estate-arrival__golf" />
+        <span className="estate-arrival__lake" />
+        <span className="estate-arrival__stables" />
         <span className="estate-arrival__hotel" />
         <span className="estate-arrival__tree estate-arrival__tree--left" />
         <span className="estate-arrival__tree estate-arrival__tree--right" />
@@ -102,4 +105,3 @@ export function EstateArrival({
     </section>
   );
 }
-

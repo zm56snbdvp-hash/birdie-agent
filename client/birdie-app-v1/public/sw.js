@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "birdieworld-mobile-beta-";
-const CACHE_NAME = `${CACHE_PREFIX}v0.1-immersive-estate-v032-shell-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v0.1-immersive-estate-v033-shell-v1`;
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",

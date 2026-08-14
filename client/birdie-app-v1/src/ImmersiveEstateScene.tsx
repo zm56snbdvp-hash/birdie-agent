@@ -54,26 +54,26 @@ interface CollisionCircle {
 }
 
 const COLORS = {
-  forestDeep: 0x173226,
-  forest: 0x284e39,
-  forestLight: 0x4f7654,
-  grass: 0x55775a,
-  fairway: 0x729765,
-  green: 0x8db373,
+  forestDeep: 0x132c20,
+  forest: 0x244b32,
+  forestLight: 0x567846,
+  grass: 0x506f3e,
+  fairway: 0x78a253,
+  green: 0x91b968,
   cream: 0xf7f1e5,
-  path: 0xd9ccb0,
-  pathEdge: 0xb9a67f,
+  path: 0xd6c39f,
+  pathEdge: 0x9e8a68,
   gold: 0xc7a54a,
-  hotel: 0xb99a78,
-  roof: 0x203c2e,
+  hotel: 0xb8a187,
+  roof: 0x292d28,
   stable: 0x874b39,
   stableTrim: 0xe6d5ba,
   wood: 0x6d4d37,
-  water: 0x578797,
+  water: 0x376b70,
   sand: 0xdcc590,
   charcoal: 0x2f302d,
   warmLight: 0xffc876,
-  sky: 0xe8bd88
+  sky: 0xd89d68
 } as const;
 
 const PRIVATE_INTERACTION_POINTS: readonly PrivateInteractionPoint[] = [
@@ -83,7 +83,7 @@ const PRIVATE_INTERACTION_POINTS: readonly PrivateInteractionPoint[] = [
 ] as const;
 
 const BUILDING_COLLISIONS: readonly CollisionRectangle[] = [
-  { minX: -14.6, maxX: 14.6, minZ: -30.6, maxZ: -13.2 },
+  { minX: -22.6, maxX: 22.6, minZ: -32.6, maxZ: -13.2 },
   { minX: 29.2, maxX: 54.8, minZ: -25.8, maxZ: -9.2 }
 ] as const;
 
@@ -101,7 +101,11 @@ const TREE_POSITIONS = [
   [-65, 37, 1.0], [-66, 21, 1.2], [-65, 4, 1.0], [-66, -14, 1.25],
   [-57, -29, 0.9], [-49, 34, 0.8], [-38, 39, 0.9], [31, 38, 0.85],
   [46, 36, 0.95], [-18, 24, 0.78], [18, 24, 0.8], [-21, -34, 0.9],
-  [20, -35, 0.9]
+  [20, -35, 0.9], [-57, -35, 1.05], [-44, -38, 0.88], [-30, -41, 1.0],
+  [-16, -43, 0.82], [17, -43, 0.86], [31, -40, 1.05], [45, -37, 0.9],
+  [57, -32, 1.1], [-56, 8, 0.82], [-53, 28, 0.94], [-41, 34, 0.8],
+  [36, 3, 0.72], [52, 2, 0.86], [18, 1, 0.68], [-17, 2, 0.72],
+  [-28, -29, 0.76], [25, -30, 0.7], [8, -39, 0.65], [-7, -40, 0.7]
 ] as const;
 
 function createWebglRenderTarget() {
@@ -237,6 +241,8 @@ function disposeScene(scene: THREE.Scene) {
 
 interface SceneMaterials {
   grass: THREE.MeshStandardMaterial;
+  meadowDark: THREE.MeshStandardMaterial;
+  meadowLight: THREE.MeshStandardMaterial;
   fairway: THREE.MeshStandardMaterial;
   green: THREE.MeshStandardMaterial;
   path: THREE.MeshStandardMaterial;
@@ -251,7 +257,13 @@ interface SceneMaterials {
   stableTrim: THREE.MeshStandardMaterial;
   wood: THREE.MeshStandardMaterial;
   water: THREE.MeshStandardMaterial;
+  waterEdge: THREE.MeshStandardMaterial;
   sand: THREE.MeshStandardMaterial;
+  stone: THREE.MeshStandardMaterial;
+  rock: THREE.MeshStandardMaterial;
+  flowerWhite: THREE.MeshStandardMaterial;
+  flowerGold: THREE.MeshStandardMaterial;
+  flowerViolet: THREE.MeshStandardMaterial;
   trunk: THREE.MeshStandardMaterial;
   foliage: THREE.MeshStandardMaterial;
   foliageLight: THREE.MeshStandardMaterial;
@@ -262,6 +274,8 @@ interface SceneMaterials {
 function createMaterials(): SceneMaterials {
   return {
     grass: new THREE.MeshStandardMaterial({ color: COLORS.grass, roughness: 1 }),
+    meadowDark: new THREE.MeshStandardMaterial({ color: 0x36583a, roughness: 1 }),
+    meadowLight: new THREE.MeshStandardMaterial({ color: 0x688b4a, roughness: 1 }),
     fairway: new THREE.MeshStandardMaterial({ color: COLORS.fairway, roughness: 1 }),
     green: new THREE.MeshStandardMaterial({ color: COLORS.green, roughness: 1 }),
     path: new THREE.MeshStandardMaterial({ color: COLORS.path, roughness: 1 }),
@@ -282,10 +296,16 @@ function createMaterials(): SceneMaterials {
     wood: new THREE.MeshStandardMaterial({ color: COLORS.wood, roughness: 0.98 }),
     water: new THREE.MeshStandardMaterial({
       color: COLORS.water,
-      roughness: 0.3,
-      metalness: 0.05
+      roughness: 0.2,
+      metalness: 0.08
     }),
+    waterEdge: new THREE.MeshStandardMaterial({ color: 0x263e34, roughness: 1 }),
     sand: new THREE.MeshStandardMaterial({ color: COLORS.sand, roughness: 1 }),
+    stone: new THREE.MeshStandardMaterial({ color: 0x8f8778, roughness: 0.98 }),
+    rock: new THREE.MeshStandardMaterial({ color: 0x59605a, roughness: 1 }),
+    flowerWhite: new THREE.MeshStandardMaterial({ color: 0xf4ead7, roughness: 0.9 }),
+    flowerGold: new THREE.MeshStandardMaterial({ color: 0xd7aa42, roughness: 0.9 }),
+    flowerViolet: new THREE.MeshStandardMaterial({ color: 0x80658f, roughness: 0.9 }),
     trunk: new THREE.MeshStandardMaterial({ color: 0x5d4334, roughness: 1 }),
     foliage: new THREE.MeshStandardMaterial({ color: COLORS.forestDeep, roughness: 1 }),
     foliageLight: new THREE.MeshStandardMaterial({ color: COLORS.forestLight, roughness: 1 }),
@@ -329,6 +349,147 @@ function addPathSegment(
     mesh.receiveShadow = true;
     scene.add(mesh);
   }
+}
+
+function addLandscapeEllipse(
+  scene: THREE.Scene,
+  material: THREE.Material,
+  x: number,
+  z: number,
+  radiusX: number,
+  radiusZ: number,
+  height = 0.045,
+  rotation = 0
+) {
+  const ellipse = new THREE.Mesh(
+    new THREE.CircleGeometry(1, 40),
+    material
+  );
+  ellipse.rotation.x = -Math.PI / 2;
+  ellipse.rotation.y = rotation;
+  ellipse.scale.set(radiusX, radiusZ, 1);
+  ellipse.position.set(x, height, z);
+  ellipse.receiveShadow = true;
+  scene.add(ellipse);
+  return ellipse;
+}
+
+function addWaterLandscape(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean
+) {
+  addLandscapeEllipse(scene, materials.waterEdge, 26, -43, 28, 15.5, 0.025, -0.08);
+  addLandscapeEllipse(scene, materials.water, 26, -43, 25.7, 13.3, 0.06, -0.08);
+  addLandscapeEllipse(scene, materials.grass, 29, -44, 4.5, 3.2, 0.09, 0.2);
+  addLandscapeEllipse(scene, materials.meadowLight, 29, -44, 3.4, 2.4, 0.1, 0.2);
+
+  const creekPoints = [
+    [-26, 48, 4.6, 2.2, -0.42],
+    [-31, 43, 5.5, 2.4, -0.58],
+    [-37, 39, 5.6, 2.1, -0.7],
+    [-43, 36, 4.8, 1.9, -0.72]
+  ] as const;
+  creekPoints.forEach(([x, z, radiusX, radiusZ, rotation]) => {
+    addLandscapeEllipse(
+      scene,
+      materials.water,
+      x,
+      z,
+      radiusX,
+      radiusZ,
+      0.065,
+      rotation
+    );
+  });
+
+  const bridge = new THREE.Group();
+  for (const x of [-2.2, -1.1, 0, 1.1, 2.2]) {
+    const plank = new THREE.Mesh(
+      new THREE.BoxGeometry(0.88, 0.2, 5.8),
+      materials.wood
+    );
+    plank.position.set(x, 0.32, 0);
+    plank.castShadow = qualityShadows;
+    bridge.add(plank);
+  }
+  bridge.position.set(-30, 0, 45);
+  bridge.rotation.y = -0.48;
+  scene.add(bridge);
+}
+
+function addGardenDetails(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean
+) {
+  const shrubPositions = [
+    [-11, -9, 1.1], [-8, -7, 0.8], [8, -7, 0.82], [11, -9, 1.1],
+    [-14, 16, 0.9], [-11, 19, 0.72], [11, 19, 0.72], [14, 16, 0.9],
+    [-9, 31, 0.74], [9, 31, 0.74], [-20, -10, 0.82], [25, -8, 0.8],
+    [-34, 11, 0.74], [-48, 10, 0.8], [31, 9, 0.76], [52, 9, 0.8]
+  ] as const;
+  const shrubGeometry = new THREE.IcosahedronGeometry(0.85, 1);
+  const shrubs = new THREE.InstancedMesh(
+    shrubGeometry,
+    materials.foliageLight,
+    shrubPositions.length
+  );
+  const matrix = new THREE.Matrix4();
+  const position = new THREE.Vector3();
+  const rotation = new THREE.Quaternion();
+  const scale = new THREE.Vector3();
+  shrubPositions.forEach(([x, z, shrubScale], index) => {
+    position.set(x, 0.72 * shrubScale, z);
+    scale.set(shrubScale * 1.35, shrubScale, shrubScale);
+    matrix.compose(position, rotation, scale);
+    shrubs.setMatrixAt(index, matrix);
+  });
+  shrubs.instanceMatrix.needsUpdate = true;
+  shrubs.castShadow = qualityShadows;
+  shrubs.receiveShadow = true;
+  scene.add(shrubs);
+
+  const flowerPositions = [
+    [-12.5, 12], [-10.8, 13.2], [-9.4, 11.7], [9.2, 11.8], [10.8, 13.2],
+    [12.4, 12], [-8.8, 29.5], [-7.6, 30.8], [7.6, 30.8], [8.8, 29.5],
+    [-19.6, -8.7], [-18.4, -7.8], [23.8, -7.7], [25.1, -8.8]
+  ] as const;
+  const flowerMaterials = [
+    materials.flowerWhite,
+    materials.flowerGold,
+    materials.flowerViolet
+  ] as const;
+  flowerPositions.forEach(([x, z], index) => {
+    const flower = new THREE.Mesh(
+      new THREE.SphereGeometry(0.2, 7, 5),
+      flowerMaterials[index % flowerMaterials.length]
+    );
+    flower.position.set(x, 0.28, z);
+    flower.castShadow = qualityShadows;
+    scene.add(flower);
+  });
+}
+
+function addDistantRidge(
+  scene: THREE.Scene,
+  materials: SceneMaterials
+) {
+  const ridge = [
+    [-65, -63, 17, 11, 9], [-48, -66, 15, 14, 10], [-28, -67, 18, 12, 11],
+    [53, -67, 16, 12, 10], [68, -63, 19, 15, 11]
+  ] as const;
+  ridge.forEach(([x, z, sx, sy, sz]) => {
+    const rock = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1, 0),
+      materials.rock
+    );
+    rock.position.set(x, sy * 0.38, z);
+    rock.scale.set(sx, sy, sz);
+    rock.rotation.set(0.1, x * 0.01, -0.08);
+    rock.receiveShadow = true;
+    scene.add(rock);
+  });
 }
 
 function addInstancedTrees(
@@ -743,7 +904,7 @@ export function ImmersiveEstateScene({
     renderer.domElement.setAttribute("aria-hidden", "true");
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
+    renderer.toneMappingExposure = 0.98;
     renderer.shadowMap.enabled = qualityShadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setPixelRatio(
@@ -753,16 +914,16 @@ export function ImmersiveEstateScene({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(COLORS.sky);
-    scene.fog = new THREE.FogExp2(0xd8b88d, 0.0095);
+    scene.fog = new THREE.FogExp2(0xb98b67, 0.0074);
 
     const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 260);
     camera.position.set(0, 8.5, 60);
     camera.lookAt(0, 1.8, 40);
 
     const materials = createMaterials();
-    scene.add(new THREE.HemisphereLight(0xffead0, COLORS.forestDeep, 2.05));
-    const sun = new THREE.DirectionalLight(0xffd49c, 2.8);
-    sun.position.set(-35, 54, 36);
+    scene.add(new THREE.HemisphereLight(0xffe2b4, COLORS.forestDeep, 1.7));
+    const sun = new THREE.DirectionalLight(0xffc878, 3.1);
+    sun.position.set(-42, 48, 28);
     sun.castShadow = qualityShadows;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.left = -82;
@@ -780,6 +941,10 @@ export function ImmersiveEstateScene({
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     scene.add(ground);
+
+    addLandscapeEllipse(scene, materials.meadowDark, -51, -7, 25, 52, 0.02, -0.08);
+    addLandscapeEllipse(scene, materials.meadowLight, 43, 10, 28, 42, 0.021, 0.12);
+    addLandscapeEllipse(scene, materials.meadowDark, 3, -45, 42, 14, 0.022, 0);
 
     const hillMaterial = new THREE.MeshStandardMaterial({
       color: 0x41664a,
@@ -801,6 +966,8 @@ export function ImmersiveEstateScene({
       hill.receiveShadow = true;
       scene.add(hill);
     });
+    addDistantRidge(scene, materials);
+    addWaterLandscape(scene, materials, qualityShadows);
 
     addPathSegment(scene, materials, 0, 53, 0, 8, 6.4);
     addPathSegment(scene, materials, 0, 8, 0, -10, 7.2);
@@ -882,7 +1049,80 @@ export function ImmersiveEstateScene({
         hotel.add(windowMesh);
       }
     }
+
+    for (const side of [-1, 1]) {
+      const wing = new THREE.Mesh(
+        new THREE.BoxGeometry(10, 7.4, 13),
+        materials.hotel
+      );
+      wing.position.set(side * 17, 3.7, -23.5);
+      wing.castShadow = qualityShadows;
+      wing.receiveShadow = true;
+      hotel.add(wing);
+
+      const wingRoof = new THREE.Mesh(
+        new THREE.ConeGeometry(8.8, 4.4, 4),
+        materials.roof
+      );
+      wingRoof.rotation.y = Math.PI / 4;
+      wingRoof.scale.z = 0.72;
+      wingRoof.position.set(side * 17, 9.5, -23.5);
+      wingRoof.castShadow = qualityShadows;
+      hotel.add(wingRoof);
+
+      const tower = new THREE.Mesh(
+        new THREE.CylinderGeometry(3.1, 3.3, 9.8, 8),
+        materials.hotel
+      );
+      tower.position.set(side * 21, 4.9, -19);
+      tower.castShadow = qualityShadows;
+      hotel.add(tower);
+      const towerRoof = new THREE.Mesh(
+        new THREE.ConeGeometry(4.4, 4.7, 8),
+        materials.roof
+      );
+      towerRoof.position.set(side * 21, 12.1, -19);
+      towerRoof.castShadow = qualityShadows;
+      hotel.add(towerRoof);
+
+      for (const y of [3.1, 5.9]) {
+        const wingWindow = new THREE.Mesh(
+          new THREE.BoxGeometry(1.8, 1.55, 0.22),
+          materials.glass
+        );
+        wingWindow.position.set(side * 17, y, -16.9);
+        hotel.add(wingWindow);
+      }
+    }
+
+    for (const x of [-8, 0, 8]) {
+      const chimney = new THREE.Mesh(
+        new THREE.BoxGeometry(1.25, 3.2, 1.25),
+        materials.stone
+      );
+      chimney.position.set(x, 12.2, -22);
+      chimney.castShadow = qualityShadows;
+      hotel.add(chimney);
+    }
     scene.add(hotel);
+
+    const conservatory = new THREE.Group();
+    const glassHouse = new THREE.Mesh(
+      new THREE.BoxGeometry(12.5, 4.8, 7.2),
+      materials.glass
+    );
+    glassHouse.position.set(-15.5, 2.4, -12.5);
+    glassHouse.castShadow = qualityShadows;
+    conservatory.add(glassHouse);
+    for (const x of [-20, -17, -14, -11]) {
+      const mullion = new THREE.Mesh(
+        new THREE.BoxGeometry(0.22, 5.1, 7.5),
+        materials.stone
+      );
+      mullion.position.set(x, 2.55, -12.5);
+      conservatory.add(mullion);
+    }
+    scene.add(conservatory);
 
     const terrace = new THREE.Mesh(
       new THREE.BoxGeometry(19, 0.22, 7.2),
@@ -923,6 +1163,19 @@ export function ImmersiveEstateScene({
       fairway.position.set(x, 0.045, z);
       fairway.receiveShadow = true;
       scene.add(fairway);
+
+      for (const offset of [-0.45, 0, 0.45]) {
+        const stripe = new THREE.Mesh(
+          new THREE.CircleGeometry(1, 32),
+          offset === 0 ? materials.meadowLight : materials.green
+        );
+        stripe.rotation.x = -Math.PI / 2;
+        stripe.rotation.y = rotation;
+        stripe.scale.set(sx * 0.18, sz * 0.92, 1);
+        stripe.position.set(x + offset * sx, 0.054, z);
+        stripe.receiveShadow = true;
+        scene.add(stripe);
+      }
     });
     const puttingGreen = new THREE.Mesh(
       new THREE.CircleGeometry(7.2, 36),
@@ -1004,6 +1257,15 @@ export function ImmersiveEstateScene({
     stable.add(crossTwo);
     scene.add(stable);
 
+    const paddock = new THREE.Mesh(
+      new THREE.TorusGeometry(8.8, 0.16, 8, 54),
+      materials.stableTrim
+    );
+    paddock.rotation.x = Math.PI / 2;
+    paddock.scale.z = 0.72;
+    paddock.position.set(43, 0.16, 26);
+    scene.add(paddock);
+
     addFence(scene, materials, 29, 12, 57, 12);
     addFence(scene, materials, 57, 12, 57, 37);
     addFence(scene, materials, 57, 37, 29, 37);
@@ -1011,6 +1273,7 @@ export function ImmersiveEstateScene({
     scene.add(makeHorse(materials, 40, 25, 0.4));
     scene.add(makeHorse(materials, 49, 30, -0.55));
 
+    addGardenDetails(scene, materials, qualityShadows);
     addInstancedTrees(scene, materials, qualityShadows);
 
     const receptionShirt = new THREE.MeshStandardMaterial({
