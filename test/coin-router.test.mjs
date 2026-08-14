@@ -68,3 +68,30 @@ test("admin queue route forwards the Birdie OS queue", async () => {
   });
   assert.deepEqual(recorder.calls[0].body.data, { claims: [], redemptions: [] });
 });
+
+test("existing profile Instagram route links through the Coin service", async () => {
+  const recorder = responseRecorder();
+  const body = {
+    instagramHandle: "@second.shot.kev",
+    idempotencyKey: "profile-instagram:BIRDIE-123:second.shot.kev"
+  };
+  const calls = [];
+
+  const handled = await routeCoinRequest({
+    req: { method: "POST" },
+    res: {},
+    url: new URL("http://localhost/coin/profiles/BIRDIE-123/instagram"),
+    json: recorder.json,
+    readBody: async () => body,
+    service: {
+      async linkInstagramHandle(birdieId, input) {
+        calls.push({ birdieId, input });
+        return { profile: { birdieId }, idempotent: false };
+      }
+    }
+  });
+
+  assert.equal(handled, true);
+  assert.deepEqual(calls, [{ birdieId: "BIRDIE-123", input: body }]);
+  assert.equal(recorder.calls[0].status, 200);
+});

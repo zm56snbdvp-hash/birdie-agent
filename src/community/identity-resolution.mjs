@@ -19,7 +19,7 @@ function candidateBirdieId(candidate) {
   return String(candidate?.birdieId ?? candidate?.matchedBirdieId ?? "").trim();
 }
 
-function activeExactProfileEvidence(workItem, profiles) {
+function activeHandleProfileEvidence(workItem, profiles) {
   const externalHandle = normalizeInstagramHandle(workItem?.externalUserId);
   const matches = (Array.isArray(profiles) ? profiles : []).filter((profile) => {
     return (
@@ -36,7 +36,7 @@ function activeExactProfileEvidence(workItem, profiles) {
       explicitLink: false,
       conflictingEvidence: false,
       confidence: 0,
-      reason: "No explicit Instagram identity link matches an ACTIVE Birdie Profile."
+      reason: "No normalized Instagram handle matches an ACTIVE Birdie Profile."
     };
   }
 
@@ -44,26 +44,26 @@ function activeExactProfileEvidence(workItem, profiles) {
     return {
       candidates: matches,
       candidateCount: 1,
-      explicitLink: true,
+      explicitLink: false,
       conflictingEvidence: false,
-      confidence: 100,
-      reason: "Exactly one ACTIVE Birdie Profile has this explicit Instagram handle link."
+      confidence: 60,
+      reason: "Exactly one ACTIVE Birdie Profile matches the normalized Instagram handle only."
     };
   }
 
   return {
     candidates: matches,
     candidateCount: matches.length,
-    explicitLink: true,
+    explicitLink: false,
     conflictingEvidence: true,
-    confidence: 100,
-    reason: "Multiple ACTIVE Birdie Profiles share the same explicit Instagram handle link."
+    confidence: 60,
+    reason: "Multiple ACTIVE Birdie Profiles share the normalized Instagram handle."
   };
 }
 
 function normalizeEvidence(workItem, evidenceOrProfiles) {
   if (Array.isArray(evidenceOrProfiles)) {
-    return activeExactProfileEvidence(workItem, evidenceOrProfiles);
+    return activeHandleProfileEvidence(workItem, evidenceOrProfiles);
   }
 
   const input = evidenceOrProfiles && typeof evidenceOrProfiles === "object"

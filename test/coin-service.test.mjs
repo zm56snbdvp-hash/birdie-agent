@@ -49,6 +49,52 @@ test("profile input is normalized before it reaches Birdie OS", async () => {
   });
 });
 
+test("existing profile Instagram handle is normalized and narrowly forwarded", async () => {
+  const { service, calls } = serviceWithRecorder();
+
+  await service.linkInstagramHandle("BIRDIE-123", {
+    instagramHandle: " @Second.Shot.Kev ",
+    idempotencyKey: "profile-instagram:BIRDIE-123:second.shot.kev",
+    displayName: "must not pass",
+    email: "must-not-pass@example.com",
+    accountType: "B2B",
+    publicWall: true,
+    status: "INACTIVE",
+    amount: 999
+  });
+
+  assert.deepEqual(calls[0], {
+    action: "coinLinkInstagramHandle",
+    birdieId: "BIRDIE-123",
+    instagramHandle: "second.shot.kev",
+    idempotencyKey: "profile-instagram:BIRDIE-123:second.shot.kev",
+    source: "Birdie Agent"
+  });
+});
+
+test("invalid existing-profile Instagram handles are rejected", async () => {
+  const invalidHandles = [
+    "https://instagram.com/foo",
+    "foo/bar",
+    "",
+    "   ",
+    "foo bar",
+    "@@foo"
+  ];
+
+  for (const instagramHandle of invalidHandles) {
+    const { service, calls } = serviceWithRecorder();
+    await assert.rejects(
+      service.linkInstagramHandle("BIRDIE-123", {
+        instagramHandle,
+        idempotencyKey: "profile-instagram:BIRDIE-123:invalid"
+      }),
+      (error) => ["INVALID_INSTAGRAM_HANDLE", "MISSING_FIELD"].includes(error.code)
+    );
+    assert.equal(calls.length, 0);
+  }
+});
+
 test("legacy supporter profiles require founder approval", async () => {
   const { service } = serviceWithRecorder();
 

@@ -32,9 +32,22 @@ function requireIdempotencyKey(body) {
   return requireString(body.idempotencyKey, "idempotencyKey", 160);
 }
 
-function normalizeInstagramHandle(value) {
-  const handle = optionalString(value, "instagramHandle", 80);
-  return handle ? handle.replace(/^@+/, "") : undefined;
+function normalizeInstagramHandle(value, { required = false } = {}) {
+  const rawHandle = required
+    ? requireString(value, "instagramHandle", 80)
+    : optionalString(value, "instagramHandle", 80);
+
+  if (rawHandle === undefined) return undefined;
+
+  const handle = String(rawHandle).trim().toLowerCase().replace(/^@/, "");
+  if (!/^[a-z0-9._]{1,30}$/.test(handle)) {
+    throw new CoinValidationError(
+      "INVALID_INSTAGRAM_HANDLE",
+      "instagramHandle must contain only a-z, 0-9, periods, or underscores and be at most 30 characters"
+    );
+  }
+
+  return handle;
 }
 
 export function createCoinService({ birdieOSPost }) {
@@ -80,6 +93,17 @@ export function createCoinService({ birdieOSPost }) {
     async getProfile(birdieId) {
       return post("coinGetProfile", {
         birdieId: requireString(birdieId, "birdieId", 80)
+      });
+    },
+
+    async linkInstagramHandle(birdieId, input) {
+      const body = requireObject(input);
+
+      return post("coinLinkInstagramHandle", {
+        birdieId: requireString(birdieId, "birdieId", 80),
+        instagramHandle: normalizeInstagramHandle(body.instagramHandle, { required: true }),
+        idempotencyKey: requireIdempotencyKey(body),
+        source: "Birdie Agent"
       });
     },
 
