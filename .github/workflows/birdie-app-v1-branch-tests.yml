@@ -1,0 +1,79 @@
+name: Birdie App V1 branch tests
+
+on:
+  push:
+    branches:
+      - feature/birdie-app-v1-vertical-slice
+      - release/birdieworld-v035-rc
+  pull_request:
+    branches:
+      - feature/birdie-round-mode-v0
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Install Birdie App client dependencies
+        working-directory: client/birdie-app-v1
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Typecheck Birdie App client
+        working-directory: client/birdie-app-v1
+        run: npm run typecheck
+
+      - name: Typecheck Birdie App browser gates
+        working-directory: client/birdie-app-v1
+        run: npm run typecheck:e2e
+
+      - name: Build Birdie App client
+        working-directory: client/birdie-app-v1
+        run: npm run build
+
+      - name: Verify BirdieWorld release preparation contract
+        run: npm run check:birdieworld-release
+
+      - name: Install Chromium for Birdie App browser gates
+        working-directory: client/birdie-app-v1
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Birdie App desktop, mobile and fallback browser gates
+        working-directory: client/birdie-app-v1
+        run: npm run test:e2e
+
+      - name: Upload owner-review build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: birdie-app-v1-owner-review-${{ github.sha }}
+          path: client/birdie-app-v1/dist
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload Birdie App browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: birdie-app-v1-browser-evidence-${{ github.sha }}
+          path: |
+            client/birdie-app-v1/playwright-report
+            client/birdie-app-v1/test-results
+          if-no-files-found: warn
+          retention-days: 7

@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.mjs",
     "smoke": "node scripts/smoke-test.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "check:birdieworld-release": "node scripts/birdieworld-release-gate.mjs --mode=prepare",
+    "check:birdieworld-production": "node scripts/birdieworld-release-gate.mjs --mode=production"
   },
   "engines": {
     "node": ">=22"

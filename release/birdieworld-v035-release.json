@@ -1,0 +1,20 @@
+{
+  "releaseId": "birdieworld-v0.3.5-unity-handoff-rc1",
+  "version": "0.3.5",
+  "targetBranch": "main",
+  "sourcePullRequest": 20,
+  "sourceHead": "146252a3541541c01576e68d47001dbe4448bcd6",
+  "applicationDirectory": "client/birdie-app-v1",
+  "unityContract": "client/birdie-app-v1/src/contracts/birdieworld-estate-handoff-v1.json",
+  "requiredFiles": [
+    "client/birdie-app-v1/index.html",
+    "client/birdie-app-v1/public/manifest.webmanifest",
+    "client/birdie-app-v1/public/sw.js",
+    "client/birdie-app-v1/src/contracts/birdieworld-estate-handoff-v1.json",
+    "docs/BIRDIEWORLD_UNITY_HANDOFF_V1.md",
+    "docs/BIRDIEWORLD_PRODUCTION_RUNBOOK_V035.md"
+  ],
+  "productionConfirmation": "GO_BIRDIEWORLD_PRODUCTION_V035",
+  "phoneReviewConfirmation": "PASSED",
+  "mainIntegrationConfirmation": "PASSED"
+}
