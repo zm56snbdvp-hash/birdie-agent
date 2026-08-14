@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test:e2e": "playwright test",
     "typecheck:e2e": "tsc --noEmit --strict --moduleResolution bundler --module esnext --target es2022 --lib ES2022,DOM --allowSyntheticDefaultImports --esModuleInterop --skipLibCheck e2e/*.ts playwright.config.ts",
-    "typecheck": "tsc --noEmit --strict --jsx react-jsx --moduleResolution bundler --module esnext --target es2022 --lib ES2022,DOM --allowSyntheticDefaultImports --esModuleInterop --skipLibCheck src/*.tsx src/*.ts"
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.0",

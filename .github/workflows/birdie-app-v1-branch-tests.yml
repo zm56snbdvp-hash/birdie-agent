@@ -32,7 +32,7 @@ jobs:
 
       - name: Install Birdie App client dependencies
         working-directory: client/birdie-app-v1
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Typecheck Birdie App client
         working-directory: client/birdie-app-v1

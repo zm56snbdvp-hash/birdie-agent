@@ -37,16 +37,16 @@ test("arrival destinations reuse the locked V1 destination type", () => {
 });
 
 test("choosing a hotspot records an arrival before navigation", () => {
-  assert.match(app, /arriveAtBirdieDestination\(current, hotspot\)/);
-  assert.match(app, /target\?\.scrollIntoView/);
+  assert.match(app, /arriveAtBirdieDestination\(current, destination\)/);
+  assert.match(app, /setActiveDestination\(destination\)/);
 });
 
 test("the destination renders a visible return guide", () => {
   assert.match(loop, /Du bist angekommen/);
   assert.match(guide, /Zurück zu Birdie/);
-  assert.match(app, /renderArrivalGuide\("golf-history"\)/);
-  assert.match(app, /renderArrivalGuide\("ball-vault"\)/);
-  assert.match(app, /renderArrivalGuide\("personal-birdie"\)/);
+  assert.match(app, /renderArrivalGuide\(destination\)/);
+  assert.match(app, /destination === "golf-history"/);
+  assert.match(app, /destination === "ball-vault"/);
 });
 
 test("returning closes the arrival and requests the Birdie guide", () => {
@@ -57,9 +57,10 @@ test("returning closes the arrival and requests the Birdie guide", () => {
   assert.match(companion, /setOpen\(true\)/);
 });
 
-test("return navigation leads back to the existing world composition", () => {
-  assert.match(app, /worldCompositionRef/);
-  assert.match(app, /worldCompositionRef\.current\?\.scrollIntoView/);
+test("return navigation closes the overlay and restores the Birdie guide", () => {
+  assert.match(app, /setActiveDestination\(null\)/);
+  assert.match(app, /returnToBirdieHost\(current\)/);
+  assert.match(app, /setGuideRequestId\(\(current\) => current \+ 1\)/);
 });
 
 test("loop performs no network, model or cross-window call", () => {
@@ -68,17 +69,19 @@ test("loop performs no network, model or cross-window call", () => {
   }
 });
 
-test("desktop hotspot cards use equal minmax columns", () => {
-  assert.match(styles, /\.hotspots \{[^}]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /\.panel \{[^}]*min-width: 0/);
+test("desktop uses a full-height world with overlay feature panels", () => {
+  assert.match(styles, /\.estate-app \{[\s\S]*?height: 100dvh;/);
+  assert.match(styles, /\.estate-panel-overlay \{[\s\S]*?position: absolute;/);
+  assert.match(styles, /\.estate-feature-panel__body \{[\s\S]*?overflow: auto;/);
 });
 
-test("tablet cards collapse without squeezing Personal Birdie", () => {
-  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
-  assert.match(styles, /@media \(max-width: 980px\)[\s\S]*?\.personal-birdie \{ grid-column: 1 \/ -1/);
+test("tablet keeps the world primary while narrowing the function dock", () => {
+  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*?\.estate-function-nav \{ width: 162px;/);
+  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*?\.estate-panel-overlay \{ padding-left: 194px;/);
 });
 
-test("phone cards stay single-column and copy can wrap", () => {
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.hotspots \{ grid-template-columns: 1fr/);
+test("phone uses a bottom function dock and internally scrollable sheets", () => {
+  assert.match(styles, /@media \(max-width: 680px\)[\s\S]*?\.estate-function-nav \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(styles, /@media \(max-width: 680px\)[\s\S]*?\.estate-panel-overlay \{/);
   assert.match(styles, /overflow-wrap: anywhere/);
 });

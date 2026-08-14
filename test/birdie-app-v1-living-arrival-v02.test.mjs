@@ -16,15 +16,18 @@ const loop = await readSource("arrivalLoop.ts");
 const guide = await readSource("ArrivalLoopGuide.tsx");
 const destinations = await readSource("birdieDestinations.ts");
 const context = await readSource("worldContext.ts");
-const scene = await readSource("ThreeHotelScene.tsx");
-const fallback = await readSource("WebglFallbackWorld.tsx");
+const scene = await readSource("ImmersiveEstateScene.tsx");
+const fallback = await readSource("EstateFallbackWorld.tsx");
+const estate = await readSource("estateContract.ts");
+const featurePanel = await readSource("EstateFeaturePanel.tsx");
+const hud = await readSource("EstateHud.tsx");
 const heartbeat = await readSource("WorldHeartbeat.tsx");
 const atmosphere = await readSource("WorldAtmosphere.tsx");
 const styles = await readSource("styles.css");
 const companionStyles = await readSource("birdieCompanion.css");
 const index = await readFile(join(clientRoot, "index.html"), "utf8");
 
-const hostSurface = [host, companion, app, heartbeat, fallback].join("\n");
+const hostSurface = [host, companion, app, heartbeat, fallback, estate, hud].join("\n");
 const forbiddenRuntimeTokens = [
   /\bfetch\s*\(/,
   /XMLHttpRequest/,
@@ -62,7 +65,7 @@ test("V0.2 wires every host stage to a visible session transition", () => {
   assert.match(host, /stage: "noticed"/);
   assert.match(companion, /onHostStageChangeRef\.current\?\.\("welcomed"\)/);
   assert.match(companion, /onHostStageChangeRef\.current\?\.\("oriented"\)/);
-  assert.match(app, /inviteFromBirdie\(current, hotspot\)/);
+  assert.match(app, /inviteFromBirdie\(current, destination\)/);
   assert.match(app, /returnToBirdieHost\(current\)/);
   assert.match(companion, /Da bist du wieder\./);
 });
@@ -82,12 +85,13 @@ test("the Host Spine stays transient and grants no new runtime authority", () =>
   assert.doesNotMatch(host, /identity|permission|authority|quest|coin|multiplayer|voice|gps/i);
 });
 
-test("the first-ten-second surface is one German hospitality narrative", () => {
+test("the first-ten-second surface keeps the German hospitality narrative in V0.3", () => {
   assert.match(index, /<html lang="de">/);
-  assert.match(index, /<title>BirdieWorld – Living Arrival V0\.2<\/title>/);
-  assert.match(app, /Du bist da\. Birdie auch\./);
+  assert.match(index, /<title>BirdieWorld – Immersive Estate V0\.3<\/title>/);
+  assert.match(app, /BirdieWorld Immersive Estate V0\.3/);
   assert.match(companion, /Schön, dass du da bist\./);
   assert.match(companion, /Ich bin Birdie\. Komm erst einmal an/);
+  assert.match(companion, /Welt betreten/);
 });
 
 test("WebGL is preflighted before Three renderer construction", () => {
@@ -99,12 +103,11 @@ test("WebGL is preflighted before Three renderer construction", () => {
   assert.match(scene, /context: renderTarget\.context/);
 });
 
-test("movement keys are scene-scoped and touch controls are accessible", () => {
-  assert.match(scene, /mount\.addEventListener\("keydown", onKeyDown\)/);
-  assert.match(scene, /mount\.addEventListener\("keyup", onKeyUp\)/);
-  assert.doesNotMatch(scene, /window\.addEventListener\("keydown", onKeyDown\)/);
-  assert.match(scene, /tabIndex=\{0\}/);
-  assert.match(scene, /\{webglAvailable && \(/);
+test("movement keys are guarded, pausable and touch controls are accessible", () => {
+  assert.match(scene, /isEditableTarget\(event\.target\)/);
+  assert.match(scene, /pausedRef\.current/);
+  assert.match(scene, /data-estate-scene-focus="true"/);
+  assert.match(scene, /data-estate-paused=/);
   for (const label of [
     "Vorwärts gehen",
     "Rückwärts gehen",
@@ -114,15 +117,10 @@ test("movement keys are scene-scoped and touch controls are accessible", () => {
 });
 
 test("the compatibility view preserves the spatial arrival story", () => {
-  assert.match(fallback, /data-webgl-fallback="spatial-v0\.2"/);
-  for (const landmark of [
-    "fallback-hotel",
-    "fallback-path",
-    "fallback-green",
-    "fallback-terrace",
-    "fallback-birdie"
-  ]) assert.match(fallback, new RegExp(landmark));
-  assert.match(fallback, /Ankunftsweg, Putting Green,/);
+  assert.match(fallback, /data-estate-fallback=\{ESTATE_CONTRACT_VERSION\}/);
+  for (const landmark of ["Birdie Hotel", "Golfplatz", "Reiterhof", "Ankunftshof"])
+    assert.match(fallback, new RegExp(landmark));
+  assert.match(fallback, /ESTATE_INTERACTIONS\.map/);
 });
 
 test("the living-world heartbeat is quiet, coarse and reset on return", () => {
@@ -130,15 +128,18 @@ test("the living-world heartbeat is quiet, coarse and reset on return", () => {
   assert.match(heartbeat, /nur in dieser Sitzung/);
   assert.doesNotMatch(heartbeat, /aria-live|role="status"/);
   assert.doesNotMatch(heartbeat, /timestamp|people|players|friends|online/i);
-  assert.match(app, /setWorldTarget\(null\)/);
+  assert.match(app, /<WorldHeartbeat/);
+  assert.match(app, /activeDestination=\{activeDestination\}/);
+  assert.match(app, /setActiveDestination\(null\)/);
 });
 
 test("destination and return navigation restore an accessible focus story", () => {
   assert.equal((app.match(/tabIndex=\{-1\}/g) ?? []).length, 3);
-  assert.match(app, /target\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(featurePanel, /closeRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(featurePanel, /event\.key !== "Escape"/);
   assert.match(app, /aria-live="polite"/);
-  assert.match(app, /prefersReducedMotion\(\) \? "auto" : "smooth"/);
-  assert.equal((app.match(/renderArrivalGuide\("/g) ?? []).length, 3);
+  assert.match(app, /renderArrivalGuide\(destination\)/);
+  assert.match(app, /setActiveDestination\(null\)/);
   assert.match(guide, /Zurück zu Birdie/);
   assert.match(companion, /const active = activeDestination === destination\.id/);
   assert.doesNotMatch(companion, /const active = lastDestination === destination\.id/);
@@ -149,6 +150,7 @@ test("basic mobile accessibility remains visible and touch-sized", () => {
   assert.match(companionStyles, /\.birdie-companion__close \{[\s\S]*?width: 44px;[\s\S]*?height: 44px;/);
   assert.match(companionStyles, /\.birdie-companion__primary \{[\s\S]*?min-height: 44px;/);
   assert.match(companionStyles, /@media \(max-width: 430px\)[\s\S]*?\.birdie-companion__bird \{[\s\S]*?display: block;/);
-  assert.match(styles, /\.world-hotspot \{[^}]*width: 48px;[^}]*height: 48px;/);
+  assert.match(styles, /\.immersive-estate-scene__touch button \{[^}]*width: 48px;[^}]*height: 48px;/);
+  assert.match(styles, /\.estate-function-nav button \{[\s\S]*?min-height: 54px;/);
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
 });

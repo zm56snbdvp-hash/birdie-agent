@@ -33,6 +33,10 @@ export interface BirdieCompanionProps {
   guideRequestId?: number;
   /** Reports only visible V0.2 welcome/orientation transitions to the session shell. */
   onHostStageChange?: (stage: Extract<BirdieHostJourneyStage, "welcomed" | "oriented">) => void;
+  /** Lets a world-first shell move the guide into the global dock after orientation. */
+  dockAfterOrientation?: boolean;
+  /** Restores focus to the walkable world after the first welcome. */
+  onEnterWorld?: () => void;
 }
 
 function prefersReducedMotion() {
@@ -63,7 +67,9 @@ export function BirdieCompanion({
   targetIds,
   initiallyOpen = true,
   guideRequestId = 0,
-  onHostStageChange
+  onHostStageChange,
+  dockAfterOrientation = false,
+  onEnterWorld
 }: BirdieCompanionProps) {
   const [open, setOpen] = useState(initiallyOpen);
   const [introduced, setIntroduced] = useState(false);
@@ -141,6 +147,14 @@ export function BirdieCompanion({
       onHostStageChangeRef.current?.(nextPhase === "guide" ? "oriented" : "welcomed");
     }
     setOpen(true);
+  };
+
+  const enterWithoutGuide = () => {
+    setIntroduced(true);
+    setReturnedToBirdie(false);
+    setOpen(false);
+    onHostStageChangeRef.current?.("oriented");
+    window.setTimeout(() => onEnterWorld?.(), 0);
   };
 
   const choose = (destination: BirdieCompanionDestination) => {
@@ -261,14 +275,18 @@ export function BirdieCompanion({
                     setReturnedToBirdie(false);
                     setPhase("guide");
                     onHostStageChangeRef.current?.("oriented");
+                    if (dockAfterOrientation) {
+                      setOpen(false);
+                      window.setTimeout(() => onEnterWorld?.(), 0);
+                    }
                   }}
                 >
-                  Zeig mir die Welt
+                  {dockAfterOrientation ? "Welt betreten" : "Zeig mir die Welt"}
                 </button>
                 <button
                   className="birdie-companion__secondary"
                   type="button"
-                  onClick={close}
+                  onClick={dockAfterOrientation ? enterWithoutGuide : close}
                 >
                   Ich schaue mich erst um
                 </button>

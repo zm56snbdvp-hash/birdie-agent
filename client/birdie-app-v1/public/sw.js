@@ -1,5 +1,5 @@
 const CACHE_PREFIX = "birdieworld-mobile-beta-";
-const CACHE_NAME = `${CACHE_PREFIX}v0.1-shell-v1`;
+const CACHE_NAME = `${CACHE_PREFIX}v0.1-immersive-estate-v03-shell-v3`;
 const APP_SHELL = [
   "/",
   "/manifest.webmanifest",
@@ -9,9 +9,18 @@ const APP_SHELL = [
   "/icons/birdieworld-icon-512.png",
   "/icons/birdieworld-icon-maskable-512.png"
 ];
+const BUILD_ASSET_MANIFEST = "__BIRDIEWORLD_BUILD_ASSETS__";
+const BUILD_ASSETS = Array.isArray(BUILD_ASSET_MANIFEST)
+  ? BUILD_ASSET_MANIFEST
+  : [];
+
+async function precacheAppShell() {
+  const cache = await caches.open(CACHE_NAME);
+  await cache.addAll([...APP_SHELL, ...BUILD_ASSETS]);
+}
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(precacheAppShell());
   self.skipWaiting();
 });
 

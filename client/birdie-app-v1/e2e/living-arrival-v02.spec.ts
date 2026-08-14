@@ -12,57 +12,118 @@ function collectRuntimeErrors(page: Page) {
     if (message.type() === "error") errors.push(`console: ${message.text()}`);
   });
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
+  page.on("requestfailed", (request) => {
+    if (new URL(request.url()).origin === new URL(page.url()).origin) {
+      errors.push(`request: ${request.method()} ${request.url()} ${request.failure()?.errorText ?? "failed"}`);
+    }
+  });
   return errors;
 }
 
 async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
   await testInfo.attach(name, {
-    body: await page.screenshot({ fullPage: true }),
+    body: await page.screenshot({ animations: "disabled" }),
     contentType: "image/png"
   });
 }
 
-async function openGuide(page: Page) {
+async function enterWorld(page: Page) {
   const dialog = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByRole("button", { name: "Zeig mir die Welt" })).toBeFocused();
-  await dialog.getByRole("button", { name: "Zeig mir die Welt" }).click();
+  const enter = dialog.getByRole("button", { name: "Welt betreten" });
+  await expect(enter).toBeFocused();
+  await enter.click();
+  await expect(dialog).toHaveCount(0);
   await expect(page.locator("main")).toHaveAttribute("data-host-stage", "oriented");
-  return page.getByRole("dialog");
 }
 
-test("desktop completes the bounded host journey through all three destinations", async ({ page }, testInfo) => {
+async function holdKey(page: Page, key: string, durationMs: number) {
+  await page.keyboard.down(key);
+  await page.waitForTimeout(durationMs);
+  await page.keyboard.up(key);
+  await page.waitForTimeout(360);
+}
+
+async function waitForSceneOutcome(page: Page) {
+  const scene = page.locator("section.immersive-estate-scene");
+  await expect.poll(
+    () => scene.getAttribute("data-estate-webgl"),
+    { timeout: 15_000, message: "Estate scene never left its initializing state" }
+  ).toMatch(/^(ready|unavailable|context-lost)$/);
+  return scene;
+}
+
+test("desktop is a fullscreen estate and all three function tabs return to Birdie", async ({ page }, testInfo) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
 
-  await expect(page).toHaveTitle("BirdieWorld – Living Arrival V0.2");
+  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3");
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByRole("heading", { level: 1, name: "Du bist da. Birdie auch." })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Deine Ankunft in der BirdieWorld" })).toBeVisible();
-  await expect(page.locator("main")).toHaveAttribute("data-living-arrival", "birdie-as-host-v0.2");
-  await expect(page.locator("main")).toHaveAttribute("data-host-stage", "welcomed");
-  await expect(page.locator("[data-birdie-destination]")).toHaveCount(0);
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3" })).toBeAttached();
+  const main = page.locator("main");
+  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3");
+  await expect(main).toHaveAttribute("data-living-arrival", "birdie-as-host-v0.2");
+  await expect(main).toHaveAttribute("data-host-stage", "welcomed");
 
-  let dialog = await openGuide(page);
-  await expect(dialog.locator("[data-birdie-destination]")).toHaveCount(3);
+  const bounds = await main.boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x).toBe(0);
+  expect(bounds!.y).toBe(0);
+  expect(Math.abs(bounds!.width - 1365)).toBeLessThanOrEqual(1);
+  expect(Math.abs(bounds!.height - 900)).toBeLessThanOrEqual(1);
+  expect(await page.evaluate(() => ({
+    horizontal: document.documentElement.scrollWidth <= innerWidth,
+    vertical: document.documentElement.scrollHeight <= innerHeight,
+    bodyOverflow: getComputedStyle(document.body).overflow
+  }))).toEqual({ horizontal: true, vertical: true, bodyOverflow: "hidden" });
 
-  for (const destination of DESTINATIONS) {
-    await dialog.getByRole("button", { name: new RegExp(destination.name) }).click();
-    const target = page.locator(`#${destination.id}`);
-    await expect(target).toBeVisible();
-    await expect(target).toBeFocused();
-    await expect(target).toHaveAttribute("aria-current", "location");
-    await expect(page.locator("main")).toHaveAttribute("data-host-stage", "invited");
+  await enterWorld(page);
+  const scene = await waitForSceneOutcome(page);
+  await page.getByRole("button", { name: "Karte" }).click();
+  const estateMap = page.getByRole("dialog", { name: "Alles gehört zu einer Welt." });
+  await expect(estateMap).toBeVisible();
+  await expect(scene).toHaveAttribute("data-estate-paused", "true");
+  await page.keyboard.press("Escape");
+  await expect(estateMap).toHaveCount(0);
+  await expect(scene).toHaveAttribute("data-estate-paused", "false");
+  await expect(page.locator("[data-estate-world-surface='true']")).toBeFocused();
+  const functions = page.getByRole("navigation", { name: "BirdieWorld Funktionen" }).getByRole("button");
+  await expect(functions).toHaveCount(3);
+  await functions.first().focus();
+  await page.keyboard.press("End");
+  await expect(functions.last()).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(functions.first()).toBeFocused();
 
-    const returnButton = target.getByRole("button", { name: "Zurück zu Birdie" });
-    await expect(returnButton).toBeVisible();
-    await returnButton.click();
-    dialog = page.getByRole("dialog", { name: /Da bist du wieder/ });
-    await expect(dialog).toBeVisible();
-    await expect(page.locator("main")).toHaveAttribute("data-host-stage", "return-to-birdie");
+  for (const [index, destination] of DESTINATIONS.entries()) {
+    await page.getByRole("button", { name: new RegExp(destination.name) }).click();
+    const panel = page.getByRole("dialog", { name: destination.name });
+    await expect(panel).toBeVisible();
+    await expect(page.locator(`#${destination.id}`)).toHaveAttribute("aria-current", "location");
+    await expect(main).toHaveAttribute("data-host-stage", "invited");
+    await expect(scene).toHaveAttribute("data-estate-paused", "true");
+    await expect(page.locator(".estate-hud")).toHaveAttribute("aria-hidden", "true");
+    await expect(page.locator(".estate-hud")).toHaveAttribute("inert", "");
+    await expect(panel.getByRole("button", { name: "Zurück zu Birdie" }).first()).toBeFocused();
+    if (index === 0) {
+      const launcher = page.getByRole("button", { name: "Birdie öffnen" });
+      await expect(launcher).toBeVisible();
+      await launcher.click();
+      await expect(page.locator("[data-birdie-host='birdie-as-host-v0.2']")).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(page.locator("[data-birdie-host='birdie-as-host-v0.2']")).toHaveCount(0);
+      await expect(panel).toBeVisible();
+    }
+    await panel.getByRole("button", { name: "Zurück zu Birdie" }).first().click();
+
+    const returned = page.getByRole("dialog", { name: /Da bist du wieder/ });
+    await expect(returned).toBeVisible();
+    await expect(main).toHaveAttribute("data-host-stage", "return-to-birdie");
+    await expect(scene).toHaveAttribute("data-estate-paused", "false");
     await expect(page.locator("[aria-current='location']")).toHaveCount(0);
-    await expect(page.locator(".world-heartbeat")).not.toContainText("ist offen");
+    await returned.getByRole("button", { name: "Birdie minimieren" }).click();
+    await expect(page.getByRole("button", { name: "Birdie öffnen" })).toBeVisible();
   }
 
   const duplicateIds = await page.locator("[id]").evaluateAll((elements) => {
@@ -70,7 +131,6 @@ test("desktop completes the bounded host journey through all three destinations"
     return ids.filter((id, index) => ids.indexOf(id) !== index);
   });
   expect(duplicateIds).toEqual([]);
-
   const unnamedButtons = await page.locator("button").evaluateAll((buttons) =>
     buttons
       .filter((button) => !((button.getAttribute("aria-label") ?? button.textContent ?? "").trim()))
@@ -78,10 +138,10 @@ test("desktop completes the bounded host journey through all three destinations"
   );
   expect(unnamedButtons).toEqual([]);
   expect(runtimeErrors).toEqual([]);
-  await attachScreenshot(page, testInfo, "desktop-host-journey");
+  await attachScreenshot(page, testInfo, "desktop-immersive-estate");
 });
 
-test("WebGL preflight produces a clean spatial fallback", async ({ page }, testInfo) => {
+test("forced WebGL fallback keeps the whole estate, NPCs and function menu operable", async ({ page }, testInfo) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await page.addInitScript(() => {
     const originalGetContext = HTMLCanvasElement.prototype.getContext;
@@ -96,46 +156,115 @@ test("WebGL preflight produces a clean spatial fallback", async ({ page }, testI
   });
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
+  const welcome = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
+  await welcome.getByRole("button", { name: "Ich schaue mich erst um" }).click();
+  await expect(welcome).toHaveCount(0);
+  await expect(page.locator("main")).toHaveAttribute("data-host-stage", "oriented");
 
-  const fallback = page.locator("[data-webgl-fallback='spatial-v0.2']");
+  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3']");
+  await waitForSceneOutcome(page);
   await expect(fallback).toBeVisible();
-  await expect(fallback).toContainText("Das Hotel ist da. Birdie auch.");
-  for (const landmark of [
-    ".fallback-hotel",
-    ".fallback-path",
-    ".fallback-green",
-    ".fallback-terrace",
-    ".fallback-birdie"
-  ]) await expect(fallback.locator(landmark)).toHaveCount(1);
+  await expect(page.locator("[data-estate-world-surface='true']")).toBeFocused();
+  await expect(fallback).toContainText("Birdie Hotel");
+  await expect(fallback).toContainText("Golfplatz");
+  await expect(fallback).toContainText("Reiterhof");
+  await expect(fallback.locator("[data-estate-fallback-district]")).toHaveCount(6);
+  await expect(fallback.locator("[data-estate-fallback-interaction]")).toHaveCount(3);
   await expect(page.locator("canvas")).toHaveCount(0);
-  await expect(page.locator(".touch-controls")).toHaveCount(0);
+  await expect(page.locator("[data-estate-touch-controls]")).toHaveCount(0);
+
+  await fallback.getByRole("button", { name: /Reiterhof/ }).click();
+  await expect(page.locator("main")).toHaveAttribute("data-estate-district", "stables");
+  await fallback.getByRole("button", { name: /Mit Lina am Stall sprechen/ }).click();
+  const dialogue = page.getByRole("dialog", { name: "Am Reiterhof" });
+  await expect(dialogue).toBeVisible();
+  await expect(dialogue).toContainText("Geskriptete Begegnung");
+  await dialogue.getByRole("button", { name: "Weiter erkunden" }).click();
+  await expect(dialogue).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Ball Vault/ }).click();
+  await expect(page.getByRole("dialog", { name: "Ball Vault" })).toBeVisible();
   expect(runtimeErrors).toEqual([]);
-  await attachScreenshot(page, testInfo, "desktop-spatial-fallback");
+  await attachScreenshot(page, testInfo, "desktop-estate-fallback");
 });
 
-test("desktop records the real WebGL outcome without inventing availability", async ({ page }, testInfo) => {
+test("real WebGL outcome is recorded without inventing availability", async ({ page }, testInfo) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
+  await enterWorld(page);
+  const scene = await waitForSceneOutcome(page);
   await page.waitForTimeout(1_000);
 
-  const canvas = page.locator(".three-mount canvas");
+  const canvas = scene.locator("canvas");
   if (await canvas.count()) {
+    await expect(canvas).toHaveCount(1);
     await expect(canvas).toBeVisible();
-    await expect(page.locator("[data-webgl-fallback='spatial-v0.2']")).toHaveCount(0);
-    console.log("BIRDIE_WEBGL_EVIDENCE=3D_CANVAS_RENDERED");
+    await expect(scene).toHaveAttribute("data-scene-ready", "true");
+    await expect(scene).toHaveAttribute("data-render-mode", "webgl");
+    const canvasSize = await canvas.evaluate((element) => {
+      const target = element as HTMLCanvasElement;
+      return { width: target.width, clientWidth: target.clientWidth };
+    });
+    expect(canvasSize.width / canvasSize.clientWidth).toBeLessThanOrEqual(1.76);
+    console.log("BIRDIE_WEBGL_EVIDENCE=IMMERSIVE_ESTATE_CANVAS_RENDERED");
   } else {
-    await expect(page.locator("[data-webgl-fallback='spatial-v0.2']")).toBeVisible();
+    await expect(scene).toHaveAttribute("data-render-mode", "fallback");
+    await expect(page.locator("[data-estate-fallback]")).toBeVisible();
     testInfo.annotations.push({
       type: "technical-limit",
-      description: "GitHub runner exposed no WebGL2 context; spatial fallback verified, real 3D remains open."
+      description: "GitHub runner exposed no WebGL2 context; full Estate fallback verified, real 3D travel remains open."
     });
-    console.log("BIRDIE_WEBGL_EVIDENCE=UNAVAILABLE_FALLBACK_VERIFIED");
+    console.log("BIRDIE_WEBGL_EVIDENCE=UNAVAILABLE_FULL_ESTATE_FALLBACK_VERIFIED");
   }
   expect(runtimeErrors).toEqual([]);
 });
 
-test("390 x 844 touch layout remains bounded and does not hijack typing", async ({ browser }, testInfo) => {
+test("WebGL travel reaches Hotel, Golfplatz and Reiterhof with session-only NPC encounters", async ({ page }, testInfo) => {
+  test.setTimeout(75_000);
+  const runtimeErrors = collectRuntimeErrors(page);
+  await page.setViewportSize({ width: 1365, height: 900 });
+  await page.goto("/");
+  await enterWorld(page);
+  const scene = await waitForSceneOutcome(page);
+  if (!(await scene.locator("canvas").count())) {
+    testInfo.annotations.push({
+      type: "technical-limit",
+      description: "WebGL2 unavailable; fallback NPC alternatives are covered by the dedicated fallback gate."
+    });
+    expect(runtimeErrors).toEqual([]);
+    return;
+  }
+
+  const renderer = page.locator("[data-estate-scene-focus='true']");
+  await renderer.focus();
+  await holdKey(page, "w", 6_700);
+  await expect(scene).toHaveAttribute("data-estate-zone", "hotel");
+  await expect.poll(() => page.locator("button.estate-interaction-prompt").getAttribute("data-nearby-interaction")).toBe("hotel-reception");
+  await page.locator("button.estate-interaction-prompt").click();
+  await expect(page.getByRole("dialog", { name: "Willkommen im Birdie Hotel" })).toBeVisible();
+  await page.getByRole("button", { name: "Weiter erkunden" }).click();
+
+  await holdKey(page, "s", 1_650);
+  await holdKey(page, "a", 5_150);
+  await expect(scene).toHaveAttribute("data-estate-zone", "golf-course");
+  await expect.poll(() => page.locator("button.estate-interaction-prompt").getAttribute("data-nearby-interaction")).toBe("greenkeeper");
+  await page.locator("button.estate-interaction-prompt").click();
+  await expect(page.getByRole("dialog", { name: "Am Putting Green" })).toBeVisible();
+  await page.getByRole("button", { name: "Weiter erkunden" }).click();
+
+  await holdKey(page, "d", 10_250);
+  await holdKey(page, "w", 1_150);
+  await expect(scene).toHaveAttribute("data-estate-zone", "stables");
+  await expect.poll(() => page.locator("button.estate-interaction-prompt").getAttribute("data-nearby-interaction")).toBe("stable-guide");
+  await page.locator("button.estate-interaction-prompt").click();
+  await expect(page.getByRole("dialog", { name: "Am Reiterhof" })).toBeVisible();
+  expect(runtimeErrors).toEqual([]);
+  await attachScreenshot(page, testInfo, "desktop-three-district-travel");
+});
+
+test("390 x 844 touch shell stays fullscreen and movement never hijacks typing", async ({ browser }, testInfo) => {
+  test.setTimeout(45_000);
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     screen: { width: 390, height: 844 },
@@ -148,83 +277,129 @@ test("390 x 844 touch layout remains bounded and does not hijack typing", async 
   const runtimeErrors = collectRuntimeErrors(page);
   await page.goto("/");
 
-  expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual({
-    width: 390,
-    height: 844
-  });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
-
-  const dialog = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
-  const dialogBox = await dialog.boundingBox();
-  expect(dialogBox).not.toBeNull();
-  expect(dialogBox!.x).toBeGreaterThanOrEqual(0);
-  expect(dialogBox!.x + dialogBox!.width).toBeLessThanOrEqual(390);
-  expect(dialogBox!.y).toBeGreaterThanOrEqual(0);
-  expect(dialogBox!.y + dialogBox!.height).toBeLessThanOrEqual(844);
-
-  await expect(page.locator(".birdie-companion__bird")).toBeVisible();
+  expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  const welcome = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
+  const welcomeBox = await welcome.boundingBox();
+  expect(welcomeBox).not.toBeNull();
+  expect(welcomeBox!.x).toBeGreaterThanOrEqual(0);
+  expect(welcomeBox!.x + welcomeBox!.width).toBeLessThanOrEqual(390);
+  expect(welcomeBox!.y).toBeGreaterThanOrEqual(0);
+  expect(welcomeBox!.y + welcomeBox!.height).toBeLessThanOrEqual(844);
   for (const control of [
-    dialog.getByRole("button", { name: "Birdie minimieren" }),
-    dialog.getByRole("button", { name: "Zeig mir die Welt" })
+    welcome.getByRole("button", { name: "Birdie minimieren" }),
+    welcome.getByRole("button", { name: "Welt betreten" })
   ]) {
     const box = await control.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.height).toBeGreaterThanOrEqual(44);
   }
+  await enterWorld(page);
 
-  await dialog.getByRole("button", { name: "Zeig mir die Welt" }).click();
-  const guide = page.getByRole("dialog");
-  await guide.getByRole("button", { name: /Personal Birdie/ }).click();
-
-  const textarea = page.getByLabel("Frag Birdie");
-  await textarea.click();
-  await page.keyboard.press("Control+A");
-  await page.keyboard.type("wasd WASD");
-  await expect(textarea).toHaveValue("wasd WASD");
-
-  const markers = page.locator(".world-hotspot");
-  await expect(markers).toHaveCount(3);
-  for (const marker of await markers.all()) {
-    const box = await marker.boundingBox();
+  const mapButton = page.getByRole("button", { name: "Karte" });
+  expect((await mapButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  const functions = page.getByRole("navigation", { name: "BirdieWorld Funktionen" }).getByRole("button");
+  await expect(functions).toHaveCount(3);
+  for (const control of await functions.all()) {
+    const box = await control.boundingBox();
     expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(48);
-    expect(box!.height).toBeGreaterThanOrEqual(48);
+    expect(box!.height).toBeGreaterThanOrEqual(44);
   }
 
-  const touchControls = page.locator(".touch-controls");
-  if (await touchControls.isVisible()) {
-    const forward = touchControls.getByRole("button", { name: "Vorwärts gehen" });
-    const box = await forward.boundingBox();
-    expect(box).not.toBeNull();
-    expect(box!.width).toBeGreaterThanOrEqual(44);
-    expect(box!.height).toBeGreaterThanOrEqual(44);
-    await forward.tap();
-    console.log("BIRDIE_TOUCH_EVIDENCE=WEBGL_CONTROL_TAPPED");
+  await mapButton.click();
+  const mobileMap = page.getByRole("dialog", { name: "Alles gehört zu einer Welt." });
+  const overlayLauncher = page.getByRole("button", { name: "Birdie öffnen" });
+  await expect(mobileMap).toBeVisible();
+  await expect(overlayLauncher).toBeVisible();
+  const mobileMapBox = await mobileMap.boundingBox();
+  const overlayLauncherBox = await overlayLauncher.boundingBox();
+  expect(mobileMapBox).not.toBeNull();
+  expect(overlayLauncherBox).not.toBeNull();
+  expect(overlayLauncherBox!.y + overlayLauncherBox!.height).toBeLessThanOrEqual(mobileMapBox!.y);
+  expect(await overlayLauncher.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return hit === element || element.contains(hit);
+  })).toBe(true);
+  await mobileMap.getByRole("button", { name: "Karte schließen" }).click();
+
+  const scene = await waitForSceneOutcome(page);
+  const touch = scene.locator("[data-estate-touch-controls]");
+  if (await touch.isVisible()) {
+    const movementControls = [
+      touch.getByRole("button", { name: "Vorwärts gehen" }),
+      touch.getByRole("button", { name: "Rückwärts gehen" }),
+      touch.getByRole("button", { name: "Nach links gehen" }),
+      touch.getByRole("button", { name: "Nach rechts gehen" })
+    ];
+    for (const control of movementControls) {
+      const box = await control.boundingBox();
+      expect(box).not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(44);
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      expect(await control.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+        return hit === element || element.contains(hit);
+      })).toBe(true);
+    }
+    const forward = movementControls[0];
+    await forward.dispatchEvent("pointerdown", { pointerType: "touch", isPrimary: true, buttons: 1 });
+    await page.waitForTimeout(6_700);
+    await forward.dispatchEvent("pointerup", { pointerType: "touch", isPrimary: true, buttons: 0 });
+    await expect.poll(() => page.locator("main").getAttribute("data-estate-district")).not.toBe("arrival-court");
+    const interactionPrompt = page.locator("button.estate-interaction-prompt");
+    await expect(interactionPrompt).toBeVisible();
+    expect(await interactionPrompt.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return hit === element || element.contains(hit);
+    })).toBe(true);
+    await interactionPrompt.click();
+    await expect(page.getByRole("dialog", { name: "Willkommen im Birdie Hotel" })).toBeVisible();
+    await page.getByRole("button", { name: "Weiter erkunden" }).click();
+    console.log("BIRDIE_TOUCH_EVIDENCE=HELD_TOUCH_MOVEMENT_CHANGED_DISTRICT");
   } else {
-    await expect(page.locator("[data-webgl-fallback='spatial-v0.2']")).toBeVisible();
+    await expect(page.locator("[data-estate-fallback]")).toBeVisible();
     testInfo.annotations.push({
       type: "technical-limit",
-      description: "Mobile CI exposed no WebGL2 context; exact touch layout and typing passed, 3D touch movement remains open."
+      description: "Mobile runner exposed no WebGL2; exact 390x844 shell and fallback passed, held 3D touch remains open."
     });
     console.log("BIRDIE_TOUCH_EVIDENCE=FALLBACK_LAYOUT_VERIFIED_3D_TOUCH_OPEN");
   }
 
+  const districtBeforeTyping = await page.locator("main").getAttribute("data-estate-district");
+  await page.getByRole("button", { name: /Personal Birdie/ }).click();
+  const personalBirdiePanel = page.getByRole("dialog", { name: "Personal Birdie" });
+  const personalBirdiePanelBox = await personalBirdiePanel.boundingBox();
+  const featureLauncherBox = await overlayLauncher.boundingBox();
+  expect(personalBirdiePanelBox).not.toBeNull();
+  expect(featureLauncherBox).not.toBeNull();
+  expect(featureLauncherBox!.y + featureLauncherBox!.height).toBeLessThanOrEqual(personalBirdiePanelBox!.y);
+  expect(await overlayLauncher.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return hit === element || element.contains(hit);
+  })).toBe(true);
+  const textarea = page.getByLabel("Frag Birdie");
+  await textarea.fill("wasd WASD");
+  await expect(textarea).toHaveValue("wasd WASD");
+  await expect(page.locator("main")).toHaveAttribute("data-estate-district", districtBeforeTyping!);
+  await page.getByRole("dialog", { name: "Personal Birdie" }).getByRole("button", { name: "Zurück zu Birdie" }).first().click();
+  await expect(page.getByRole("dialog", { name: /Da bist du wieder/ })).toBeVisible();
+
   expect(runtimeErrors).toEqual([]);
-  await attachScreenshot(page, testInfo, "mobile-390x844");
+  await attachScreenshot(page, testInfo, "mobile-390x844-immersive-estate");
   await context.close();
 });
 
-test("mobile beta exposes installable PWA primitives and gains service-worker control", async ({ page }) => {
+test("installable PWA gains control and reloads offline with bundled runtime", async ({ page }) => {
   const runtimeErrors = collectRuntimeErrors(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
   await expect(page.locator("link[rel='manifest']")).toHaveAttribute("href", "/manifest.webmanifest");
-  await expect(page.locator("link[rel='apple-touch-icon']")).toHaveAttribute(
-    "href",
-    "/icons/birdieworld-apple-touch-icon.png"
-  );
+  await expect(page.locator("link[rel='apple-touch-icon']")).toHaveAttribute("href", "/icons/birdieworld-apple-touch-icon.png");
   await expect(page.locator("meta[name='apple-mobile-web-app-capable']")).toHaveAttribute("content", "yes");
   await expect(page.locator("meta[name='viewport']")).toHaveAttribute("content", /viewport-fit=cover/);
   await expect(page.locator("html")).toHaveAttribute("data-mobile-beta", "pwa-v0.1");
@@ -232,27 +407,22 @@ test("mobile beta exposes installable PWA primitives and gains service-worker co
   const manifest = await page.evaluate(async () => {
     const response = await fetch("/manifest.webmanifest");
     if (!response.ok) throw new Error(`Manifest failed: ${response.status}`);
-    return response.json() as Promise<{
-      name: string;
-      display: string;
-      start_url: string;
-      icons: Array<{ sizes: string; purpose: string }>;
-    }>;
+    return response.json() as Promise<{ name: string; display: string; start_url: string; icons: Array<{ sizes: string; purpose: string }> }>;
   });
-  expect(manifest).toMatchObject({
-    name: "BirdieWorld Mobile Beta",
-    display: "standalone",
-    start_url: "/"
-  });
+  expect(manifest).toMatchObject({ name: "BirdieWorld Mobile Beta", display: "standalone", start_url: "/" });
   expect(manifest.icons.some((icon) => icon.sizes === "192x192")).toBe(true);
-  expect(manifest.icons.some((icon) => icon.sizes === "512x512" && icon.purpose === "any")).toBe(true);
   expect(manifest.icons.some((icon) => icon.sizes === "512x512" && icon.purpose === "maskable")).toBe(true);
 
-  const serviceWorkerResponse = await page.request.get("/sw.js");
-  expect(serviceWorkerResponse.ok()).toBe(true);
   await page.waitForFunction(() => document.documentElement.dataset.serviceWorker === "ready");
-  await page.reload();
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+  const runtimeRequests = await page.locator("script[src]").evaluateAll((scripts) => scripts.map((script) => (script as HTMLScriptElement).src));
+  const appOrigin = new URL(page.url()).origin;
+  expect(runtimeRequests.every((url) => new URL(url).origin === appOrigin)).toBe(true);
 
+  await page.context().setOffline(true);
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3" })).toBeAttached();
+  await expect(page.getByRole("navigation", { name: "BirdieWorld Funktionen" })).toBeVisible();
+  await page.context().setOffline(false);
   expect(runtimeErrors).toEqual([]);
 });

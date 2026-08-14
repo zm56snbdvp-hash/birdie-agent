@@ -12,6 +12,7 @@ const index = await readClient("index.html");
 const main = await readClient("src/main.tsx");
 const registration = await readClient("src/mobileBeta.ts");
 const serviceWorker = await readClient("public/sw.js");
+const viteConfig = await readClient("vite.config.ts");
 const manifest = JSON.parse(await readClient("public/manifest.webmanifest"));
 
 test("Mobile Beta PWA V0.1 has one bounded install contract", () => {
@@ -40,6 +41,10 @@ test("service worker is versioned, same-origin and stores no API or user state",
   assert.match(serviceWorker, /birdieworld-mobile-beta-/);
   assert.match(serviceWorker, /url\.origin !== self\.location\.origin/);
   assert.match(serviceWorker, /url\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(serviceWorker, /__BIRDIEWORLD_BUILD_ASSETS__/);
+  assert.match(serviceWorker, /cache\.addAll\(\[\.\.\.APP_SHELL, \.\.\.BUILD_ASSETS\]\)/);
+  assert.match(viteConfig, /birdieWorldServiceWorkerManifest/);
+  assert.match(viteConfig, /\/assets\/\$\{name\}/);
   for (const token of ["localStorage", "sessionStorage", "indexedDB", "document.cookie", "userId"]) {
     assert.doesNotMatch([registration, serviceWorker].join("\n"), new RegExp(token));
   }

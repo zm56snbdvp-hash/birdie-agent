@@ -14,6 +14,7 @@ const cues = await read("birdieWorldCue.ts");
 const companion = await read("BirdieCompanion.tsx");
 const bridge = await read("useBirdieWorldBridge.ts");
 const scene = await read("ThreeHotelScene.tsx");
+const estateScene = await read("ImmersiveEstateScene.tsx");
 const app = await read("App.tsx");
 const companionStyles = await read("birdieCompanion.css");
 
@@ -83,19 +84,26 @@ test("bridge stays transient and recommendations require an explicit click", () 
   for (const token of forbiddenRuntimeTokens) assert.doesNotMatch(combinedSource, token);
 });
 
-test("Three.js emits only coarse zone labels and App performs the conversion", () => {
+test("legacy and estate renderers emit only coarse labels and App performs the conversion", () => {
   assert.match(scene, /onZoneChange\?: \(zone: WorldZone\) => void/);
   assert.match(scene, /onZoneChangeRef\.current\?\.\(zone\)/);
   assert.match(scene, /onZoneChangeRef\.current\?\.\(zoneRef\.current\)/);
+  assert.match(estateScene, /onDistrictChange\?: \(district: EstateDistrictId\) => void/);
+  assert.match(estateScene, /onDistrictChangeRef\.current\?\.\(nextDistrict\)/);
   assert.match(app, /useBirdieWorldBridge/);
-  assert.match(app, /onZoneChange=\{onSceneZoneChange\}/);
+  assert.match(app, /LEGACY_ZONE_BY_ESTATE/);
+  assert.match(app, /onSceneZoneChange\(LEGACY_ZONE_BY_ESTATE\[district\]\)/);
+  for (const zone of ["Arrival Path", "Hotel Entrance", "Putting Green", "Terrace", "Hotel Grounds"]) {
+    assert.match(app, new RegExp(`: "${zone}"`));
+  }
   assert.match(app, /worldContext=\{worldContext\}/);
 });
 
-test("there is one companion and the existing Pass-04 hotspots remain", () => {
+test("there is one companion and exactly three Pass-04 destinations remain available", () => {
   assert.equal((app.match(/<BirdieCompanion/g) ?? []).length, 1);
-  assert.match(app, /<WorldAtmosphere onOpenHotspot=\{openWorldHotspot\}/);
-  assert.match(app, /onChoose=\{openWorldHotspot\}/);
+  assert.match(app, /<EstateHud/);
+  assert.match(app, /onOpenDestination=\{openDestination\}/);
+  assert.match(app, /onChoose=\{openDestination\}/);
   assert.doesNotMatch(combinedSource, /visitedZones|placesVisited|progressCount/);
 });
 
