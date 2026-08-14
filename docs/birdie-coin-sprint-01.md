@@ -3,6 +3,7 @@
 ## Delivered
 
 - Birdie ID profile creation and retrieval
+- narrow existing-profile Instagram handle linking
 - append-only, idempotent Coin Ledger
 - claim submission and admin approval/rejection
 - fixed and bounded-variable earning rules
@@ -52,6 +53,7 @@ Every route requires the existing Birdie Agent API key.
 | GET | `/coin/config` | Pilot rules, levels and starting rewards |
 | POST | `/coin/profiles` | Create Birdie ID profile |
 | GET | `/coin/profiles/{birdieId}` | Profile, balances, level and badges |
+| POST | `/coin/profiles/{birdieId}/instagram` | Link an owner-submitted handle to an existing ACTIVE profile |
 | GET | `/coin/profiles/{birdieId}/ledger` | Full transaction history |
 | POST | `/coin/profiles/{birdieId}/badges` | Award a controlled profile badge |
 | POST | `/coin/claims` | Submit an action claim |
@@ -63,6 +65,11 @@ Every route requires the existing Birdie Agent API key.
 | POST | `/coin/opening-balances` | Founder-approved legacy score migration |
 
 All write requests require an `idempotencyKey`. Retrying the same request cannot create a second profile, claim, redemption or ledger entry.
+
+The Instagram link action is identity state only. It writes only
+`instagramHandle` and `updatedAt`, refuses an inactive target, an ACTIVE-profile
+handle conflict, or replacement of a different existing handle, and creates no
+Coin transaction or automatic `INSTAGRAM_VERIFIED` reward.
 
 ## Security boundary
 

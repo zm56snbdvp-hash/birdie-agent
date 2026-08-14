@@ -114,13 +114,25 @@ test("IDRES-005 no match stays pending", () => {
   assert.equal(result.write.identityConflict, false);
 });
 
-test("BIRDIE_PROFILES exact handle alone remains low-confidence review", () => {
+test("BIRDIE_PROFILES exact handle is treated as an explicit identity link", () => {
   const result = resolveInstagramIdentity(workItem("@Kevin.Test"), [
     { birdieId: "BIRDIE-001", instagramHandle: " kevin.test ", status: "ACTIVE" }
   ], NOW);
 
-  assert.equal(result.write.identityConfidence, 60);
-  assert.equal(result.write.identityDecisionMode, "FOUNDER_REVIEW_LOW_CONFIDENCE");
+  assert.equal(result.write.identityConfidence, 100);
+  assert.equal(result.write.identityDecisionMode, "AUTO_EXACT_LINK");
+  assert.equal(result.write.resolutionStatus, "IDENTITY_RESOLVED");
+  assert.equal(result.write.matchedBirdieId, "BIRDIE-001");
+});
+
+test("duplicate ACTIVE exact handles fail closed as a conflict", () => {
+  const result = resolveInstagramIdentity(workItem("duplicate.handle"), [
+    { birdieId: "BIRDIE-A", instagramHandle: "duplicate.handle", status: "ACTIVE" },
+    { birdieId: "BIRDIE-B", instagramHandle: "@Duplicate.Handle", status: "ACTIVE" }
+  ], NOW);
+
+  assert.equal(result.write.identityConfidence, 100);
+  assert.equal(result.write.identityDecisionMode, "FOUNDER_REVIEW_CONFLICT");
   assert.equal(result.write.resolutionStatus, "IDENTITY_PENDING");
   assert.equal(result.write.matchedBirdieId, "");
 });

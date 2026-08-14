@@ -185,6 +185,7 @@ Routes:
 - `GET /coin/config`
 - `POST /coin/profiles`
 - `GET /coin/profiles/{birdieId}`
+- `POST /coin/profiles/{birdieId}/instagram`
 - `GET /coin/profiles/{birdieId}/ledger`
 - `POST /coin/profiles/{birdieId}/badges`
 - `POST /coin/claims`
@@ -197,7 +198,13 @@ Routes:
 
 All Coin write requests require an idempotency key. Supporters cannot provide their own point amount. Opening balance migrations additionally require explicit founder approval.
 
+The Instagram route links a normalized, owner-submitted handle to an existing
+ACTIVE canonical profile. It never creates a claim, badge, reward, registration
+credit or Coin transaction, and it never replaces a different existing handle.
+
 See [`docs/birdie-coin-sprint-01.md`](docs/birdie-coin-sprint-01.md) for Apps Script integration and deployment steps.
+Use [`docs/task038-controlled-e2e.md`](docs/task038-controlled-e2e.md) for the
+fail-closed deployment and person-bound TASK-038 verification sequence.
 
 ## Local run
 

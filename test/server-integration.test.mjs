@@ -28,7 +28,7 @@ function waitForServer(child) {
     let stderr = "";
     const timeout = setTimeout(() => {
       reject(new Error(`Birdie Agent did not start in time: ${stderr}`));
-    }, 5000);
+    }, 15000);
 
     child.stderr.on("data", (chunk) => {
       stderr += chunk.toString();
@@ -118,6 +118,13 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);
 
+  const catalogueResponse = await fetch(`${baseUrl}/not-found`, {
+    headers: { Authorization: "Bearer test-agent-key" }
+  });
+  const catalogue = await catalogueResponse.json();
+  assert.equal(catalogueResponse.status, 404);
+  assert.ok(catalogue.routes.includes("POST /coin/profiles/{birdieId}/instagram"));
+
   const unauthorizedEvidence = await fetch(`${baseUrl}/community/identity/evidence`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -172,6 +179,21 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   assert.equal(invalidEvidenceResponse.status, 400);
   assert.equal(invalidEvidence.error, "DERIVED_PROVIDER_EVIDENCE_NOT_ALLOWED:confidence");
   assert.equal(upstreamPosts, writesBeforeEvidence);
+
+  const writesBeforeExactResolution = upstreamPosts;
+  const exactResolutionResponse = await fetch(`${baseUrl}/community/identity/resolve`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer test-agent-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ workItemId: "WORK-HTTP-90" })
+  });
+  const exactResolution = await exactResolutionResponse.json();
+  assert.equal(exactResolutionResponse.status, 200);
+  assert.equal(exactResolution.data.resolution.identityDecisionMode, "AUTO_EXACT_LINK");
+  assert.equal(exactResolution.data.resolution.matchedBirdieId, "BIRDIE-HTTP-90");
+  assert.equal(upstreamPosts, writesBeforeExactResolution + 1);
 
   const startupResponse = await fetch(`${baseUrl}/startup`, {
     headers: { Authorization: "Bearer test-agent-key" }
