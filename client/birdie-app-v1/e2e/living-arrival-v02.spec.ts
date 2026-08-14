@@ -44,6 +44,25 @@ async function holdKey(page: Page, key: string, durationMs: number) {
   await page.waitForTimeout(360);
 }
 
+async function holdKeyUntilNearby(
+  page: Page,
+  key: string,
+  interactionId: string,
+  timeout = 15_000
+) {
+  await page.keyboard.down(key);
+  try {
+    await expect.poll(
+      () => page.locator("button.estate-interaction-prompt")
+        .getAttribute("data-nearby-interaction"),
+      { timeout, intervals: [100] }
+    ).toBe(interactionId);
+  } finally {
+    await page.keyboard.up(key);
+  }
+  await page.waitForTimeout(360);
+}
+
 async function waitForSceneOutcome(page: Page) {
   const scene = page.locator("section.immersive-estate-scene");
   await expect.poll(
@@ -253,10 +272,9 @@ test("WebGL travel reaches Hotel, Golfplatz and Reiterhof with session-only NPC 
   await expect(page.getByRole("dialog", { name: "Am Putting Green" })).toBeVisible();
   await page.getByRole("button", { name: "Weiter erkunden" }).click();
 
-  await holdKey(page, "d", 10_250);
   await holdKey(page, "w", 1_150);
+  await holdKeyUntilNearby(page, "d", "stable-guide");
   await expect(scene).toHaveAttribute("data-estate-zone", "stables");
-  await expect.poll(() => page.locator("button.estate-interaction-prompt").getAttribute("data-nearby-interaction")).toBe("stable-guide");
   await page.locator("button.estate-interaction-prompt").click();
   await expect(page.getByRole("dialog", { name: "Am Reiterhof" })).toBeVisible();
   expect(runtimeErrors).toEqual([]);

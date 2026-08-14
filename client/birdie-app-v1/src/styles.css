@@ -965,7 +965,7 @@ textarea:focus-visible,
   .estate-brand strong { font-size: 13px; }
   .estate-function-nav button { grid-template-columns: 30px minmax(0, 1fr); }
   .estate-function-nav button > span:first-child { width: 30px; height: 30px; }
-  .estate-interaction-prompt { right: 178px; }
+  .estate-interaction-prompt { right: 184px; }
   .estate-fallback__content { top: 49%; }
 }
 
