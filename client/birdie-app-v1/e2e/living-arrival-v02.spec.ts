@@ -365,7 +365,11 @@ test("390 x 844 touch shell stays fullscreen and movement never hijacks typing",
     await expect(scene).toHaveAttribute("data-estate-drag-active", "false");
     await expect.poll(() => page.locator("main").getAttribute("data-estate-district")).not.toBe("arrival-court");
     await attachScreenshot(page, testInfo, "mobile-third-person-after-thumb-drag");
-    const alternativeToggle = scene.getByRole("button", { name: "Alternative Richtungstasten umschalten" });
+    const alternativeToggle = scene.locator(
+      ".immersive-estate-scene__touch-alternative > summary"
+    );
+    await expect(alternativeToggle)
+      .toHaveAttribute("aria-label", "Alternative Richtungstasten umschalten");
     const toggleBox = await alternativeToggle.boundingBox();
     expect(toggleBox).not.toBeNull();
     expect(toggleBox!.width).toBeGreaterThanOrEqual(44);
