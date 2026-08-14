@@ -215,6 +215,14 @@ function birdieCoinLinkInstagramHandle_(request) {
     var targetExistingHandle = String(target.object.instagramHandle || "").trim();
     if (targetExistingHandle) {
       if (birdieCoinNormalizeInstagramHandle_(targetExistingHandle) === instagramHandle) {
+        birdieCoinAudit_(
+          "INSTAGRAM_HANDLE_LINKED",
+          "PROFILE",
+          birdieId,
+          request.source,
+          { instagramHandle: instagramHandle },
+          idempotencyKey
+        );
         return birdieCoinSuccess_({
           profile: birdieCoinProfileView_(target.object),
           idempotent: true
@@ -223,16 +231,26 @@ function birdieCoinLinkInstagramHandle_(request) {
       throw new Error("INSTAGRAM_HANDLE_CHANGE_REQUIRES_REVIEW");
     }
 
-    target.object.instagramHandle = instagramHandle;
-    target.object.updatedAt = birdieCoinNow_();
-    birdieCoinWriteObject_(sheet, target.row, target.object);
+    var updatedAt = birdieCoinNow_();
+    birdieCoinWriteInstagramHandle_(
+      sheet,
+      target.row,
+      instagramHandle,
+      updatedAt
+    );
     SpreadsheetApp.flush();
 
     var readback = birdieCoinFind_(sheet, "birdieId", birdieId);
     var readbackMatches = false;
+    var preservedFieldsMatch = readback && Object.keys(target.object).every(function (field) {
+      if (field === "instagramHandle" || field === "updatedAt") return true;
+      return String(readback.object[field]) === String(target.object[field]);
+    });
     if (readback &&
         String(readback.object.birdieId) === birdieId &&
-        String(readback.object.status) === "ACTIVE") {
+        String(readback.object.status) === "ACTIVE" &&
+        String(readback.object.updatedAt) === updatedAt &&
+        preservedFieldsMatch) {
       try {
         readbackMatches = birdieCoinNormalizeInstagramHandle_(
           readback.object.instagramHandle
@@ -738,6 +756,18 @@ function birdieCoinAppendObject_(sheet, object) {
   sheet.appendRow(headers.map(function (header) {
     return object[header] === undefined ? "" : object[header];
   }));
+}
+
+function birdieCoinWriteInstagramHandle_(sheet, rowNumber, instagramHandle, updatedAt) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var instagramColumn = headers.indexOf("instagramHandle");
+  var updatedAtColumn = headers.indexOf("updatedAt");
+  if (instagramColumn === -1 || updatedAtColumn === -1) {
+    throw new Error("INVALID_COIN_SHEET_HEADERS:" + BIRDIE_COIN_SHEETS_.PROFILES);
+  }
+  // Write the authoritative link last so an earlier cell-write failure cannot expose it.
+  sheet.getRange(rowNumber, updatedAtColumn + 1, 1, 1).setValue(updatedAt);
+  sheet.getRange(rowNumber, instagramColumn + 1, 1, 1).setValue(instagramHandle);
 }
 
 function birdieCoinWriteObject_(sheet, rowNumber, object) {
