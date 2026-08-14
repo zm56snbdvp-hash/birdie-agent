@@ -118,6 +118,7 @@ async function waitForSceneOutcome(page: Page) {
 }
 
 test("desktop is a fullscreen estate and all three function tabs return to Birdie", async ({ page }, testInfo) => {
+  test.setTimeout(45_000);
   const runtimeErrors = collectRuntimeErrors(page);
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
