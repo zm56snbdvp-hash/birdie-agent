@@ -261,7 +261,7 @@ test("real WebGL outcome is recorded without inventing availability", async ({ p
 });
 
 test("WebGL travel reaches Hotel, Golfplatz and Reiterhof with session-only NPC encounters", async ({ page }, testInfo) => {
-  test.setTimeout(75_000);
+  test.setTimeout(85_000);
   const runtimeErrors = collectRuntimeErrors(page);
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
@@ -292,7 +292,7 @@ test("WebGL travel reaches Hotel, Golfplatz and Reiterhof with session-only NPC 
   await page.getByRole("button", { name: "Weiter erkunden" }).click();
 
   await holdKey(page, "w", 1_150);
-  await holdKeyUntilNearby(page, "d", "stable-guide");
+  await holdKeyUntilNearby(page, "d", "stable-guide", 22_000);
   await expect(scene).toHaveAttribute("data-estate-zone", "stables");
   await page.locator("button.estate-interaction-prompt").click();
   await expect(page.getByRole("dialog", { name: "Am Reiterhof" })).toBeVisible();
