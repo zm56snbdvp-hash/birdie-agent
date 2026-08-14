@@ -10,6 +10,18 @@ import { routeFamilyApiRequest } from "./src/family/family-api.mjs";
 import { createCommunityIdentityService } from "./src/community/identity-service.mjs";
 import { routeCommunityIdentityRequest } from "./src/community/identity-router.mjs";
 import {
+  authenticateBirdieAppRequest,
+  createBirdieAppAuthConfig
+} from "./src/app/birdie-app-auth.mjs";
+import { routeBirdieAppRequest } from "./src/app/birdie-app-router.mjs";
+import { createBirdieAppService } from "./src/app/birdie-app-service.mjs";
+import { createBirdieOsWorldStorage } from "./src/app/birdie-os-world-storage.mjs";
+import {
+  routeMetaGovernedRequest,
+  routeMetaPublicRequest
+} from "./src/meta/router.mjs";
+import { createMetaCommunityService } from "./src/meta/service.mjs";
+import {
   authenticateMcpRequest,
   createMcpAuthConfig,
   oauthChallenge,
@@ -17,8 +29,9 @@ import {
 } from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.8.0";
+const BIRDIE_AGENT_VERSION = "2.9.0";
 const ACTION_RESPONSE_MAX_CHARS = 60_000;
+const REQUEST_BODY_MAX_BYTES = 1_048_576;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
@@ -26,6 +39,7 @@ const BIRDIE_AGENT_API_KEY = process.env.BIRDIE_AGENT_API_KEY;
 const BIRDIE_FAMILY_API_KEY = process.env.BIRDIE_FAMILY_API_KEY;
 const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE;
 const MCP_AUTH_CONFIG = createMcpAuthConfig();
+const BIRDIE_APP_AUTH_CONFIG = createBirdieAppAuthConfig();
 
 for (const [name, value] of Object.entries({
   OPENAI_API_KEY,
@@ -131,12 +145,28 @@ function boundActionData(value, maxChars = ACTION_RESPONSE_MAX_CHARS) {
   };
 }
 
+async function readRawBody(req, maxBytes = REQUEST_BODY_MAX_BYTES) {
+  const chunks = [];
+  let totalBytes = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    totalBytes += buffer.length;
+    if (totalBytes > maxBytes) {
+      const error = new Error("Request body exceeds the maximum size");
+      error.code = "PAYLOAD_TOO_LARGE";
+      error.status = 413;
+      throw error;
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks, totalBytes);
+}
+
 async function readBody(req) {
-  let body = "";
-  for await (const chunk of req) body += chunk;
-  if (!body) return {};
+  const rawBody = await readRawBody(req);
+  if (rawBody.length === 0) return {};
   try {
-    return JSON.parse(body);
+    return JSON.parse(rawBody.toString("utf8"));
   } catch {
     const error = new Error("Request body must contain valid JSON");
     error.code = "INVALID_JSON";
@@ -198,6 +228,16 @@ const communityIdentityService = createCommunityIdentityService({
   birdieOSGet,
   birdieOSPost,
   evidenceSigningKey: BIRDIE_AGENT_API_KEY
+});
+const metaCommunityService = createMetaCommunityService({ birdieOSPost });
+const birdieWorldStorage = createBirdieOsWorldStorage({
+  birdieOSGet,
+  birdieOSPost,
+  reconcilerSubject: "birdie-agent"
+});
+const birdieAppService = createBirdieAppService({ storage: birdieWorldStorage });
+const authenticateBirdie = (req) => authenticateBirdieAppRequest(req, {
+  config: BIRDIE_APP_AUTH_CONFIG
 });
 
 async function getLiveBriefing() {
@@ -325,6 +365,14 @@ const routes = [
   "POST /chat",
   "POST /community/identity/evidence",
   "POST /community/identity/resolve",
+  "GET /meta/webhook",
+  "POST /meta/webhook",
+  "POST /meta/messages/private-reply",
+  "POST /meta/messages/send",
+  "GET /birdie-app/v1/world",
+  "POST /birdie-app/v1/responses/lease",
+  "POST /birdie-app/v1/responses/{responseId}/ack",
+  "POST /admin/birdie-app/v1/reconcile",
   "POST /mcp",
   "POST /family/mcp",
   "GET /family/api/policy",
@@ -377,6 +425,24 @@ const server = http.createServer(async (req, res) => {
 
     const url = new URL(req.url, `http://${req.headers.host}`);
 
+    if (await routeMetaPublicRequest({
+      req,
+      res,
+      url,
+      service: metaCommunityService,
+      readRawBody
+    })) return;
+
+    if (await routeBirdieAppRequest({
+      req,
+      res,
+      url,
+      json,
+      readBody,
+      service: birdieAppService,
+      authenticateBirdie
+    })) return;
+
     if (await routeFamilyApiRequest({
       req,
       res,
@@ -403,7 +469,11 @@ const server = http.createServer(async (req, res) => {
         writeAccess: "CONTROLLED",
         mail: "FULL_CONTROL_GOVERNED",
         framer: "GOVERNED_ADAPTER",
-        mcp: "AUTH0_GOVERNED_FULL_MAIL_TOOLS"
+        mcp: "AUTH0_GOVERNED_FULL_MAIL_TOOLS",
+        meta: "SIGNED_WEBHOOK_CONTROLLED",
+        birdieWorld: BIRDIE_APP_AUTH_CONFIG.enabled
+          ? "AUTHENTICATED_LEDGER_PROJECTION"
+          : "AUTH_GATE_NOT_CONFIGURED"
       });
     }
 
@@ -443,6 +513,14 @@ const server = http.createServer(async (req, res) => {
       return json(res, 401, { success: false, error: "UNAUTHORIZED" });
     }
 
+    if (await routeMetaGovernedRequest({
+      req,
+      res,
+      url,
+      json,
+      readBody,
+      service: metaCommunityService
+    })) return;
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
     if (await routeFramerRequest({ req, res, url, json, readBody })) return;
@@ -454,6 +532,24 @@ const server = http.createServer(async (req, res) => {
       readBody,
       service: communityIdentityService
     })) return;
+
+    if (req.method === "POST" && url.pathname === "/admin/birdie-app/v1/reconcile") {
+      const body = await readBody(req);
+      if (body.confirmation !== "RECONCILE_BIRDIE_WORLD_V1") {
+        const error = new Error(
+          "Explicit confirmation required: RECONCILE_BIRDIE_WORLD_V1"
+        );
+        error.code = "FOUNDER_CONFIRMATION_REQUIRED";
+        error.status = 403;
+        throw error;
+      }
+      const data = await birdieWorldStorage.reconcile();
+      return json(res, 200, {
+        success: true,
+        source: "BIRDIE_OS_WORLD_RECONCILER",
+        data
+      });
+    }
 
     if (req.method === "GET" && url.pathname === "/health") {
       const birdie = await birdieOSGet("health");

@@ -2,12 +2,12 @@
 
 ## Current source state
 
-The source candidate starts from PR #29 head
-`ab891ae5a1a0f2ea215374c9fac850c573f4c326`, which is based on current `main`.
-The final release SHA must include the independent exact-only, audit,
-global-uniqueness and crash-recovery hardening described below and must be
-recorded before deployment. The release reports Birdie Agent `2.8.0`. None of
-these successor changes is live until both provider deployments are attested.
+PR #29 passed 134/134 tests and was squash-merged into `main` at
+`6275e0e0a9dab88b1c034cbc76e110c661538981`. That immutable merge SHA is the
+reviewed TASK-038 source receipt and contains the independent exact-only,
+audit, global-uniqueness and crash-recovery hardening described below. The
+release reports Birdie Agent `2.8.0`. None of these source changes is live
+until both provider deployments are attested.
 
 No live profile, claim, ledger, work-item or social-event row may be mutated
 until the authoritative Apps Script and Birdie Agent deployments are current
