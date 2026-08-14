@@ -26,7 +26,6 @@ const DERIVED_FIELDS = new Set([
 
 const SIGNAL_SCORE = {
   STABLE_PROVIDER_ID: 100,
-  VERIFIED_EMAIL: 90,
   INSTAGRAM_HANDLE: 60
 };
 
@@ -49,10 +48,6 @@ function optionalText(value, field) {
     throw new ProviderEvidenceError(`INVALID_PROVIDER_EVIDENCE_INPUT:${field}`);
   }
   return value.trim();
-}
-
-function normalizeEmail(value) {
-  return String(value ?? "").trim().toLowerCase();
 }
 
 function normalizeProviderIdentity(value) {
@@ -139,7 +134,6 @@ export function deriveProviderEvidence({ workItemId, providerIdentity, profiles 
   const identity = normalizeProviderIdentity(providerIdentity);
   const providerUserId = String(identity.providerUserId ?? "");
   const username = normalizeInstagramHandle(identity.username);
-  const verifiedEmail = identity.emailVerified ? normalizeEmail(identity.verifiedEmail) : "";
   const candidatesById = new Map();
 
   for (const profile of profiles) {
@@ -150,9 +144,6 @@ export function deriveProviderEvidence({ workItemId, providerIdentity, profiles 
     const matchedSignals = [];
     if (providerUserId && String(profile?.instagramUserId ?? "").trim() === providerUserId) {
       matchedSignals.push("STABLE_PROVIDER_ID");
-    }
-    if (verifiedEmail && normalizeEmail(profile?.email) === verifiedEmail) {
-      matchedSignals.push("VERIFIED_EMAIL");
     }
     if (username && normalizeInstagramHandle(profile?.instagramHandle) === username) {
       matchedSignals.push("INSTAGRAM_HANDLE");
@@ -193,11 +184,14 @@ export function deriveProviderEvidence({ workItemId, providerIdentity, profiles 
     (stableCandidates.length === 1 && candidates.some((candidate) => candidate.birdieId !== stableCandidates[0].birdieId)) ||
     stableContradiction;
 
-  const explicitLink = stableCandidates.length === 1 && !conflictingEvidence;
+  // Provider payload fields are advisory evidence only. In particular,
+  // `emailVerified` is supplied by the caller of this boundary and cannot be
+  // promoted into canonical ownership proof. The resolver's only explicit
+  // link is a unique normalized work-item handle on an ACTIVE profile.
+  const explicitLink = false;
   let reason = "No attributable provider evidence matched an ACTIVE Birdie Profile.";
   if (conflictingEvidence) reason = "Provider identity evidence is ambiguous or conflicting.";
-  else if (explicitLink) reason = "Unique ACTIVE candidate matched the stable Instagram provider ID.";
-  else if (confidence === 90) reason = "Unique ACTIVE candidate matched provider-verified email.";
+  else if (stableCandidates.length === 1) reason = "Stable provider ID matched one ACTIVE candidate, but provider evidence is review-only.";
   else if (confidence === 60) reason = "Unique ACTIVE candidate matched normalized Instagram handle only.";
 
   const rawFieldsPresent = [

@@ -21,7 +21,7 @@ The endpoint reads the exact work item and `BIRDIE_PROFILES`. It never calls
     "provider": "INSTAGRAM",
     "providerUserId": "optional raw stable provider ID",
     "username": "optional raw provider username",
-    "verifiedEmail": "optional provider-verified email",
+    "verifiedEmail": "optional caller-reported provider email",
     "emailVerified": true,
     "sourceEventId": "optional raw event ID",
     "observedAt": "optional ISO-8601 timestamp"
@@ -33,18 +33,20 @@ Zapier may map only fields proven to exist in the raw Instagram trigger/API
 payload. Missing fields must be omitted. It must not provide `confidence`,
 `explicitLink`, `conflictingEvidence`, candidates, or a candidate Birdie ID.
 
-## Deterministic scoring
+## Advisory evidence derivation
 
 Only ACTIVE profiles participate.
 
-- Stable Instagram provider ID exact match: 100
-- Provider-verified email exact match: 90
-- Normalized Instagram handle exact match: 60
+- Stable Instagram provider ID exact match: 100, review-only
+- Normalized provider username/profile-handle exact match: 60, review-only
+- Caller-supplied `verifiedEmail` / `emailVerified`: provenance only, never matched
 - No attributable signal: 0
 
 Candidate ordering is score-descending and then Birdie-ID ascending. Equal
 winning scores, cross-signal candidates, or a stable-ID contradiction produce a
-conflict. A handle-only match cannot auto-resolve.
+conflict. These advisory scores never authorize identity resolution, including
+at 100. `emailVerified` is a raw caller field at this boundary, not independent
+provider attestation, so it cannot create a candidate or influence confidence.
 
 ## Canonical exact-link path
 
@@ -54,9 +56,10 @@ and `BIRDIE_PROFILES` from BirdieOS. If exactly one `ACTIVE` profile has an
 `externalUserId`, the existing `AUTO_EXACT_LINK` path may resolve it. BirdieOS
 re-checks the same unique exact match before accepting the resolver write.
 
-This exception trusts only the canonical work item plus the governed profile
-link. A caller-supplied provider username by itself remains 60-point evidence
-and cannot auto-resolve. If valid signed provider evidence identifies a
+This path trusts only the canonical work item plus the governed profile link.
+Object-shaped or signed provider evidence cannot set `explicitLink` for the
+resolver. A caller-supplied provider username by itself remains 60-point review
+evidence and cannot auto-resolve. If valid signed provider evidence identifies a
 different profile or is itself conflicting, the resolver stays pending for
 Founder review instead of allowing either signal to override the other.
 
@@ -64,9 +67,9 @@ Founder review instead of allowing either signal to override the other.
 
 The evidence response contains an `integrityToken`. Outside the canonical
 exact-link path above, `POST /community/identity/resolve` accepts only the
-complete signed evidence object returned by the evidence endpoint. Any changed,
-unsigned, or caller-authored derived evidence is rejected before a BirdieOS
-write can occur.
+complete signed evidence object returned by the evidence endpoint, and any
+write remains `IDENTITY_PENDING`. Any changed, unsigned, or caller-authored
+derived evidence is rejected before a BirdieOS write can occur.
 
 ## Activation gate
 

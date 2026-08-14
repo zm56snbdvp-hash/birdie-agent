@@ -167,8 +167,8 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   const evidence = await evidenceResponse.json();
   assert.equal(evidenceResponse.status, 200);
   assert.equal(evidence.source, "PROVIDER_EVIDENCE_V1");
-  assert.equal(evidence.data.confidence, 90);
-  assert.equal(evidence.data.candidateCount, 1);
+  assert.equal(evidence.data.confidence, 0);
+  assert.equal(evidence.data.candidateCount, 0);
   assert.ok(evidence.data.integrityToken);
   assert.equal(upstreamPosts, writesBeforeEvidence);
 

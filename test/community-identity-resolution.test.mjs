@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 
 import {
   normalizeInstagramHandle,
@@ -7,6 +9,10 @@ import {
 } from "../src/community/identity-resolution.mjs";
 
 const NOW = "2026-08-12T05:40:00+02:00";
+const appsScriptSource = await readFile(
+  new URL("../birdie-os/community-identity.gs", import.meta.url),
+  "utf8"
+);
 
 function workItem(externalUserId) {
   return {
@@ -23,7 +29,7 @@ test("normalizes handles exactly", () => {
   assert.equal(normalizeInstagramHandle("@@double"), "@double");
 });
 
-test("IDRES-001 exact explicit identity link", () => {
+test("IDRES-001 object-shaped evidence cannot impersonate a canonical exact link", () => {
   const result = resolveInstagramIdentity(workItem("known.handle"), {
     candidates: [{ birdieId: "BIRDIE-EXACT" }],
     candidateCount: 1,
@@ -35,14 +41,14 @@ test("IDRES-001 exact explicit identity link", () => {
 
   assert.equal(result.processed, true);
   assert.equal(result.write.identityConfidence, 100);
-  assert.equal(result.write.identityDecisionMode, "AUTO_EXACT_LINK");
-  assert.equal(result.write.resolutionStatus, "IDENTITY_RESOLVED");
-  assert.equal(result.write.matchedBirdieId, "BIRDIE-EXACT");
-  assert.equal(result.write.decision, "EXACT_IDENTITY_LINK");
+  assert.equal(result.write.identityDecisionMode, "FOUNDER_REVIEW_LOW_CONFIDENCE");
+  assert.equal(result.write.resolutionStatus, "IDENTITY_PENDING");
+  assert.equal(result.write.matchedBirdieId, "");
+  assert.equal(result.write.decision, "FOUNDER_REVIEW_REQUIRED");
   assert.equal(result.write.identityConflict, false);
 });
 
-test("IDRES-002 unique high-confidence candidate", () => {
+test("IDRES-002 unique high-confidence provider candidate stays pending", () => {
   const result = resolveInstagramIdentity(workItem("high.confidence"), {
     candidates: [{ birdieId: "BIRDIE-HIGH" }],
     candidateCount: 1,
@@ -53,10 +59,10 @@ test("IDRES-002 unique high-confidence candidate", () => {
   }, NOW);
 
   assert.equal(result.write.identityConfidence, 92);
-  assert.equal(result.write.identityDecisionMode, "AUTO_HIGH_CONFIDENCE");
-  assert.equal(result.write.resolutionStatus, "IDENTITY_RESOLVED");
-  assert.equal(result.write.matchedBirdieId, "BIRDIE-HIGH");
-  assert.equal(result.write.decision, "HIGH_CONFIDENCE_MATCH");
+  assert.equal(result.write.identityDecisionMode, "FOUNDER_REVIEW_LOW_CONFIDENCE");
+  assert.equal(result.write.resolutionStatus, "IDENTITY_PENDING");
+  assert.equal(result.write.matchedBirdieId, "");
+  assert.equal(result.write.decision, "FOUNDER_REVIEW_REQUIRED");
   assert.equal(result.write.identityConflict, false);
 });
 
@@ -125,6 +131,20 @@ test("BIRDIE_PROFILES exact handle is treated as an explicit identity link", () 
   assert.equal(result.write.matchedBirdieId, "BIRDIE-001");
 });
 
+test("only one normalized ACTIVE profile handle can auto-resolve", () => {
+  const profiles = [
+    { birdieId: "BIRDIE-INACTIVE", instagramHandle: "exact.owner", status: "INACTIVE" },
+    { birdieId: "BIRDIE-NAME", displayName: "Exact Owner", status: "ACTIVE" },
+    { birdieId: "BIRDIE-EMAIL", email: "exact.owner", status: "ACTIVE" },
+    { birdieId: "BIRDIE-EXACT", instagramHandle: " @Exact.Owner ", status: "ACTIVE" }
+  ];
+
+  const result = resolveInstagramIdentity(workItem("exact.owner"), profiles, NOW);
+
+  assert.equal(result.write.identityDecisionMode, "AUTO_EXACT_LINK");
+  assert.equal(result.write.matchedBirdieId, "BIRDIE-EXACT");
+});
+
 test("duplicate ACTIVE exact handles fail closed as a conflict", () => {
   const result = resolveInstagramIdentity(workItem("duplicate.handle"), [
     { birdieId: "BIRDIE-A", instagramHandle: "duplicate.handle", status: "ACTIVE" },
@@ -147,4 +167,46 @@ test("processing guard blocks resolved work items", () => {
     processed: false,
     reason: "WORK_ITEM_NOT_ELIGIBLE"
   });
+});
+
+test("Apps Script rejects AUTO_HIGH_CONFIDENCE and still verifies AUTO_EXACT_LINK", () => {
+  const context = {};
+  runInNewContext(appsScriptSource, context);
+  context.birdieCommunityActiveExactMatches_ = () => [{ birdieId: "BIRDIE-EXACT" }];
+
+  const common = {
+    processedBy: "ZAPIER_IDENTITY_RESOLVER",
+    resolutionStatus: "IDENTITY_RESOLVED",
+    matchedBirdieId: "BIRDIE-EXACT",
+    agentNotes: "test",
+    identityConfidence: 100,
+    identityReason: "test",
+    identityConflict: false
+  };
+
+  assert.throws(
+    () => context.birdieCommunityValidateIdentityWrite_({}, {
+      ...common,
+      decision: "HIGH_CONFIDENCE_MATCH",
+      identityDecisionMode: "AUTO_HIGH_CONFIDENCE"
+    }),
+    /UNKNOWN_IDENTITY_DECISION_MODE/
+  );
+
+  const exact = context.birdieCommunityValidateIdentityWrite_({ externalUserId: "exact.owner" }, {
+    ...common,
+    decision: "EXACT_IDENTITY_LINK",
+    identityDecisionMode: "AUTO_EXACT_LINK"
+  });
+  assert.equal(exact.matchedBirdieId, "BIRDIE-EXACT");
+
+  const reviewOnly = context.birdieCommunityValidateIdentityWrite_({}, {
+    ...common,
+    resolutionStatus: "IDENTITY_PENDING",
+    matchedBirdieId: "",
+    decision: "FOUNDER_REVIEW_REQUIRED",
+    identityDecisionMode: "FOUNDER_REVIEW_LOW_CONFIDENCE"
+  });
+  assert.equal(reviewOnly.resolutionStatus, "IDENTITY_PENDING");
+  assert.equal(reviewOnly.identityConfidence, 100);
 });

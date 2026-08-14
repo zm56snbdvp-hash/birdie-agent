@@ -22,18 +22,18 @@ function derive(providerIdentity, profiles) {
   return deriveProviderEvidence({ workItemId, providerIdentity, profiles });
 }
 
-test("IDPE-001 stable Instagram provider ID is an explicit 100 match", () => {
+test("IDPE-001 stable Instagram provider ID is advisory and never an explicit link", () => {
   const result = derive(identity({ providerUserId: "IG-100" }), [
     { birdieId: "BIRDIE-100", status: "ACTIVE", instagramUserId: "IG-100" }
   ]);
 
   assert.equal(result.confidence, 100);
-  assert.equal(result.explicitLink, true);
+  assert.equal(result.explicitLink, false);
   assert.equal(result.conflictingEvidence, false);
   assert.deepEqual(result.candidates[0].matchedSignals, ["STABLE_PROVIDER_ID"]);
 });
 
-test("IDPE-002 provider-verified email is a deterministic 90 match", () => {
+test("IDPE-002 caller-supplied emailVerified cannot create a profile candidate", () => {
   const result = derive(identity({
     verifiedEmail: " Kevin@Example.com ",
     emailVerified: true
@@ -41,13 +41,19 @@ test("IDPE-002 provider-verified email is a deterministic 90 match", () => {
     { birdieId: "BIRDIE-90", status: "ACTIVE", email: "kevin@example.com" }
   ]);
 
-  assert.equal(result.confidence, 90);
+  assert.equal(result.confidence, 0);
   assert.equal(result.explicitLink, false);
-  assert.equal(result.candidateCount, 1);
-  assert.deepEqual(result.candidates[0].matchedSignals, ["VERIFIED_EMAIL"]);
+  assert.equal(result.candidateCount, 0);
+  assert.deepEqual(result.candidates, []);
+  assert.deepEqual(result.provenance.rawFieldsPresent, [
+    "verifiedEmail",
+    "emailVerified",
+    "sourceEventId",
+    "observedAt"
+  ]);
 });
 
-test("IDPE-003 username-only match remains below automatic threshold", () => {
+test("IDPE-003 username-only match remains advisory", () => {
   const result = derive(identity({ username: " @Known.Handle " }), [
     { birdieId: "BIRDIE-60", status: "ACTIVE", instagramHandle: "known.handle" }
   ]);
@@ -57,18 +63,18 @@ test("IDPE-003 username-only match remains below automatic threshold", () => {
   assert.equal(result.conflictingEvidence, false);
 });
 
-test("IDPE-004 equal winning candidates produce a deterministic conflict", () => {
+test("IDPE-004 shared email does not create candidates or a conflict", () => {
   const result = derive(identity({ verifiedEmail: "shared@example.com", emailVerified: true }), [
     { birdieId: "BIRDIE-B", status: "ACTIVE", email: "shared@example.com" },
     { birdieId: "BIRDIE-A", status: "ACTIVE", email: "shared@example.com" }
   ]);
 
-  assert.equal(result.confidence, 90);
-  assert.equal(result.conflictingEvidence, true);
-  assert.deepEqual(result.candidates.map((candidate) => candidate.birdieId), ["BIRDIE-A", "BIRDIE-B"]);
+  assert.equal(result.confidence, 0);
+  assert.equal(result.conflictingEvidence, false);
+  assert.deepEqual(result.candidates, []);
 });
 
-test("IDPE-005 cross-signal candidates produce a conflict", () => {
+test("IDPE-005 untrusted email cannot conflict with stable provider-ID evidence", () => {
   const result = derive(identity({
     providerUserId: "IG-STABLE",
     verifiedEmail: "other@example.com",
@@ -79,8 +85,9 @@ test("IDPE-005 cross-signal candidates produce a conflict", () => {
   ]);
 
   assert.equal(result.confidence, 100);
-  assert.equal(result.conflictingEvidence, true);
+  assert.equal(result.conflictingEvidence, false);
   assert.equal(result.explicitLink, false);
+  assert.deepEqual(result.candidates.map((candidate) => candidate.birdieId), ["BIRDIE-ID"]);
 });
 
 test("IDPE-006 missing attributable signals remains a zero no-match", () => {

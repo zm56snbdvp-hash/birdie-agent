@@ -137,6 +137,12 @@ function birdieSocialBindInstagramCommentIdentity_(request) {
 
     var auditKey =
       "social-identity:" + eventId + ":" + workItemId + ":" + birdieId;
+    var auditDetails = {
+      eventId: eventId,
+      workItemId: workItemId,
+      birdieId: birdieId,
+      sourceReference: event.sourceReference
+    };
     if (
       currentStatus === "IDENTITY_RESOLVED" &&
       currentBirdieId === birdieId
@@ -146,12 +152,7 @@ function birdieSocialBindInstagramCommentIdentity_(request) {
         "SOCIAL_COIN_EVENT",
         eventId,
         request.source,
-        {
-          eventId: eventId,
-          workItemId: workItemId,
-          birdieId: birdieId,
-          sourceReference: event.sourceReference
-        },
+        auditDetails,
         auditKey
       );
       return birdieCoinSuccess_({
@@ -159,6 +160,18 @@ function birdieSocialBindInstagramCommentIdentity_(request) {
         workItemId: workItemId,
         idempotent: true
       });
+    }
+
+    var existingIdentityAudit = birdieCoinPreflightAudit_(
+      "SOCIAL_COIN_EVENT_IDENTITY_RESOLVED",
+      "SOCIAL_COIN_EVENT",
+      eventId,
+      request.source,
+      auditDetails,
+      auditKey
+    );
+    if (existingIdentityAudit) {
+      throw new Error("SOCIAL_EVENT_IDENTITY_AUDIT_STATE_CONFLICT");
     }
 
     var verifiedAt = birdieCoinNow_();
@@ -204,12 +217,7 @@ function birdieSocialBindInstagramCommentIdentity_(request) {
       "SOCIAL_COIN_EVENT",
       eventId,
       request.source,
-      {
-        eventId: eventId,
-        workItemId: workItemId,
-        birdieId: birdieId,
-        sourceReference: readback.object.sourceReference
-      },
+      auditDetails,
       auditKey
     );
     return birdieCoinSuccess_({
@@ -380,6 +388,7 @@ function birdieSocialRequireInstagramCommentLedgerProof_(claim, event) {
   if (
     String(transaction.transactionId || "").trim() === "" ||
     String(transaction.approvedAt || "").trim() === "" ||
+    String(transaction.approvedBy || "").trim() === "" ||
     String(transaction.birdieId) !== String(claim.birdieId) ||
     Number(transaction.amount) !== 1 ||
     String(transaction.transactionType) !== "EARN" ||
@@ -394,11 +403,9 @@ function birdieSocialRequireInstagramCommentLedgerProof_(claim, event) {
   var matchingTransactions = birdieCoinObjects_(transactionSheet).filter(
     function (row) {
       return (
-        String(row.birdieId) === String(claim.birdieId) &&
         String(row.actionCode) === "IG_COMMENT" &&
         String(row.sourceType) === "INSTAGRAM" &&
-        String(row.sourceReference) === String(event.sourceReference) &&
-        String(row.status) === "APPROVED"
+        String(row.sourceReference) === String(event.sourceReference)
       );
     }
   );
@@ -415,7 +422,6 @@ function birdieSocialRequireInstagramCommentLedgerAppendable_(claim, event) {
   var expectedKey = "claim:" + String(claim.claimId);
   var sameSource = birdieCoinObjects_(transactionSheet).filter(function (row) {
     return (
-      String(row.birdieId) === String(claim.birdieId) &&
       String(row.actionCode) === "IG_COMMENT" &&
       String(row.sourceType) === "INSTAGRAM" &&
       String(row.sourceReference) === String(event.sourceReference)
@@ -431,6 +437,7 @@ function birdieSocialRequireInstagramCommentLedgerAppendable_(claim, event) {
     String(transaction.idempotencyKey) !== expectedKey ||
     String(transaction.transactionId || "").trim() === "" ||
     String(transaction.approvedAt || "").trim() === "" ||
+    String(transaction.approvedBy || "").trim() === "" ||
     Number(transaction.amount) !== 1 ||
     String(transaction.transactionType) !== "EARN" ||
     String(transaction.status) !== "APPROVED"
@@ -451,7 +458,6 @@ function birdieSocialAssertInstagramCommentRejectable_(claim) {
   );
   var sameSource = birdieCoinObjects_(transactionSheet).some(function (row) {
     return (
-      String(row.birdieId) === String(claim.birdieId) &&
       String(row.actionCode) === "IG_COMMENT" &&
       String(row.sourceType) === "INSTAGRAM" &&
       String(row.sourceReference) === String(claim.sourceReference)
@@ -482,10 +488,11 @@ function birdieSocialMarkInstagramCommentWritten_(request) {
     birdieSocialRequireApprovedInstagramCommentRule_();
     birdieSocialValidateInstagramCommentEvent_(event, {
       allowWritten: true,
+      allowPrepared: true,
       requireResolvedIdentity: true
     });
     birdieSocialRequireUniqueInstagramComment_(event);
-    birdieSocialRequireResolvedWorkItemForEvent_(
+    var workItem = birdieSocialRequireResolvedWorkItemForEvent_(
       event,
       birdieId,
       workItemId
@@ -510,7 +517,9 @@ function birdieSocialMarkInstagramCommentWritten_(request) {
       String(claim.idempotencyKey) !==
         "claim:" + String(event.idempotencyKey) ||
       String(claim.status) !== "APPROVED" ||
-      Number(claim.approvedAmount) !== 1
+      Number(claim.approvedAmount) !== 1 ||
+      String(claim.decidedAt || "").trim() === "" ||
+      String(claim.decidedBy || "").trim() === ""
     ) {
       throw new Error("IG_COMMENT_CLAIM_NOT_APPROVED");
     }
@@ -520,57 +529,80 @@ function birdieSocialMarkInstagramCommentWritten_(request) {
       event
     );
 
-    var auditKey = "social-written:" + eventId + ":" + claimId;
-    if (String(event.coinWriteStatus) === "WRITTEN") {
+    var initialWriteStatus = String(event.coinWriteStatus);
+    var auditKey = birdieSocialWrittenAuditKey_(eventId);
+    var auditSheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUDIT);
+    var existingAudit = birdieCoinFindUniqueAuditByKey_(auditSheet, auditKey);
+    var processedAt = String(event.processedAt || "").trim();
+    if (existingAudit) {
+      processedAt = birdieSocialWrittenAuditProcessedAt_(existingAudit);
+    }
+    if (!processedAt) processedAt = birdieCoinNow_();
+    var auditDetails = birdieSocialWrittenAuditDetails_(
+      event,
+      workItem,
+      claim,
+      transaction,
+      processedAt
+    );
+    if (existingAudit) {
       birdieCoinAudit_(
         "SOCIAL_COIN_EVENT_WRITTEN",
         "SOCIAL_COIN_EVENT",
         eventId,
         request.source,
-        {
-          eventId: eventId,
-          claimId: claimId,
-          transactionId: transaction.transactionId,
-          sourceReference: event.sourceReference
-        },
+        auditDetails,
         auditKey
       );
-      return birdieCoinSuccess_({
-        event: event,
-        claim: claim,
-        transaction: transaction,
-        idempotent: true
-      });
     }
-    if (String(event.coinWriteStatus) !== "NOT_WRITTEN") {
+
+    if (initialWriteStatus === "NOT_WRITTEN") {
+      birdieSocialWriteField_(
+        eventFound.sheet,
+        eventFound.row,
+        BIRDIE_SOCIAL_EVENT_HEADERS_,
+        "processedAt",
+        processedAt
+      );
+      birdieSocialWriteField_(
+        eventFound.sheet,
+        eventFound.row,
+        BIRDIE_SOCIAL_EVENT_HEADERS_,
+        "coinWriteStatus",
+        "WRITE_PREPARED"
+      );
+      SpreadsheetApp.flush();
+
+      var preparedReadback = birdieSocialFindEvent_(eventId);
+      if (
+        !preparedReadback ||
+        String(preparedReadback.object.coinWriteStatus) !== "WRITE_PREPARED" ||
+        String(preparedReadback.object.processedAt) !== processedAt ||
+        String(preparedReadback.object.birdieId) !== birdieId ||
+        JSON.stringify(
+          birdieSocialWrittenAuditDetails_(
+            preparedReadback.object,
+            workItem,
+            claim,
+            transaction,
+            processedAt
+          )
+        ) !== JSON.stringify(auditDetails)
+      ) {
+        throw new Error("SOCIAL_COIN_EVENT_PREPARE_READBACK_MISMATCH");
+      }
+      eventFound = preparedReadback;
+      event = preparedReadback.object;
+    } else if (initialWriteStatus === "WRITE_PREPARED") {
+      if (String(event.processedAt || "").trim() !== processedAt) {
+        throw new Error("SOCIAL_COIN_EVENT_PREPARED_STATE_MISMATCH");
+      }
+    } else if (initialWriteStatus === "WRITTEN") {
+      if (String(event.processedAt || "").trim() !== processedAt) {
+        throw new Error("SOCIAL_COIN_EVENT_WRITTEN_STATE_MISMATCH");
+      }
+    } else {
       throw new Error("INVALID_SOCIAL_COIN_WRITE_TRANSITION");
-    }
-
-    var processedAt = birdieCoinNow_();
-    birdieSocialWriteField_(
-      eventFound.sheet,
-      eventFound.row,
-      BIRDIE_SOCIAL_EVENT_HEADERS_,
-      "processedAt",
-      processedAt
-    );
-    birdieSocialWriteField_(
-      eventFound.sheet,
-      eventFound.row,
-      BIRDIE_SOCIAL_EVENT_HEADERS_,
-      "coinWriteStatus",
-      "WRITTEN"
-    );
-    SpreadsheetApp.flush();
-
-    var readback = birdieSocialFindEvent_(eventId);
-    if (
-      !readback ||
-      String(readback.object.coinWriteStatus) !== "WRITTEN" ||
-      String(readback.object.processedAt) !== processedAt ||
-      String(readback.object.birdieId) !== birdieId
-    ) {
-      throw new Error("SOCIAL_COIN_EVENT_WRITE_READBACK_MISMATCH");
     }
 
     birdieCoinAudit_(
@@ -578,23 +610,115 @@ function birdieSocialMarkInstagramCommentWritten_(request) {
       "SOCIAL_COIN_EVENT",
       eventId,
       request.source,
-      {
-        eventId: eventId,
-        claimId: claimId,
-        transactionId: transaction.transactionId,
-        sourceReference: event.sourceReference
-      },
+      auditDetails,
       auditKey
     );
+    if (!existingAudit) SpreadsheetApp.flush();
+    birdieCoinAudit_(
+      "SOCIAL_COIN_EVENT_WRITTEN",
+      "SOCIAL_COIN_EVENT",
+      eventId,
+      request.source,
+      auditDetails,
+      auditKey
+    );
+
+    if (initialWriteStatus !== "WRITTEN") {
+      birdieSocialWriteField_(
+        eventFound.sheet,
+        eventFound.row,
+        BIRDIE_SOCIAL_EVENT_HEADERS_,
+        "coinWriteStatus",
+        "WRITTEN"
+      );
+      SpreadsheetApp.flush();
+    }
+
+    var readback = birdieSocialFindEvent_(eventId);
+    if (
+      !readback ||
+      String(readback.object.coinWriteStatus) !== "WRITTEN" ||
+      String(readback.object.processedAt) !== processedAt ||
+      String(readback.object.birdieId) !== birdieId ||
+      JSON.stringify(
+        birdieSocialWrittenAuditDetails_(
+          readback.object,
+          workItem,
+          claim,
+          transaction,
+          processedAt
+        )
+      ) !== JSON.stringify(auditDetails)
+    ) {
+      throw new Error("SOCIAL_COIN_EVENT_WRITE_READBACK_MISMATCH");
+    }
+    birdieSocialValidateInstagramCommentEvent_(readback.object, {
+      allowWritten: true,
+      requireResolvedIdentity: true
+    });
+
     return birdieCoinSuccess_({
       event: readback.object,
       claim: claim,
       transaction: transaction,
-      idempotent: false
+      idempotent: initialWriteStatus === "WRITTEN" && !!existingAudit,
+      recovered: initialWriteStatus === "WRITE_PREPARED"
     });
   } finally {
     lock.releaseLock();
   }
+}
+
+function birdieSocialWrittenAuditKey_(eventId) {
+  var value = String(eventId);
+  return "social-written:v2|" + value.length + ":" + value;
+}
+
+function birdieSocialWrittenAuditProcessedAt_(audit) {
+  var details;
+  try {
+    details = JSON.parse(String(audit.detailsJson || ""));
+  } catch (error) {
+    throw new Error("SOCIAL_COIN_EVENT_WRITTEN_AUDIT_MISMATCH");
+  }
+  var processedAt = String(details.processedAt || "").trim();
+  if (!processedAt) {
+    throw new Error("SOCIAL_COIN_EVENT_WRITTEN_AUDIT_MISMATCH");
+  }
+  return processedAt;
+}
+
+function birdieSocialWrittenAuditDetails_(
+  event,
+  workItem,
+  claim,
+  transaction,
+  processedAt
+) {
+  return {
+    eventId: String(event.eventId),
+    workItemId: String(workItem.workItemId),
+    birdieId: String(event.birdieId),
+    claimId: String(claim.claimId),
+    claimIdempotencyKey: String(claim.idempotencyKey),
+    claimSubmittedAt: String(claim.submittedAt),
+    claimDecidedAt: String(claim.decidedAt),
+    claimDecidedBy: String(claim.decidedBy),
+    transactionId: String(transaction.transactionId),
+    transactionIdempotencyKey: String(transaction.idempotencyKey),
+    transactionApprovedAt: String(transaction.approvedAt),
+    transactionApprovedBy: String(transaction.approvedBy),
+    sourceReference: String(event.sourceReference),
+    instagramHandle: birdieCoinNormalizeInstagramHandle_(event.instagramHandle),
+    eventIdempotencyKey: String(event.idempotencyKey),
+    eventCreatedAt: String(event.createdAt),
+    eventVerifiedAt: String(event.verifiedAt),
+    sourceSnapshotKey: String(workItem.sourceSnapshotKey),
+    resolverProcessedBy: String(workItem.processedBy),
+    resolverProcessedAt: String(workItem.processedAt),
+    processedAt: String(processedAt),
+    transition: "NOT_WRITTEN_TO_WRITTEN"
+  };
 }
 
 function birdieSocialValidateInstagramCommentEvent_(event, options) {
@@ -624,6 +748,7 @@ function birdieSocialValidateInstagramCommentEvent_(event, options) {
   var writeStatus = String(event.coinWriteStatus);
   if (
     writeStatus !== "NOT_WRITTEN" &&
+    !(options.allowPrepared === true && writeStatus === "WRITE_PREPARED") &&
     !(options.allowWritten === true && writeStatus === "WRITTEN")
   ) {
     throw new Error("IG_COMMENT_EVENT_ALREADY_WRITTEN");
@@ -640,7 +765,7 @@ function birdieSocialValidateInstagramCommentEvent_(event, options) {
     throw new Error("IG_COMMENT_RESOLVED_IDENTITY_INCOMPLETE");
   }
   if (
-    writeStatus === "WRITTEN" &&
+    (writeStatus === "WRITE_PREPARED" || writeStatus === "WRITTEN") &&
     String(event.processedAt || "").trim() === ""
   ) {
     throw new Error("IG_COMMENT_WRITTEN_STATE_INCOMPLETE");
@@ -679,6 +804,8 @@ function birdieSocialValidateResolvedWorkItem_(workItem, event, birdieId) {
     String(workItem.resolutionStatus) !== "IDENTITY_RESOLVED" ||
     String(workItem.matchedBirdieId) !== birdieId ||
     String(workItem.decision) !== "EXACT_IDENTITY_LINK" ||
+    String(workItem.processedBy) !== "ZAPIER_IDENTITY_RESOLVER" ||
+    String(workItem.processedAt || "").trim() === "" ||
     Number(workItem.identityConfidence) !== 100 ||
     birdieSocialBoolean_(workItem.identityConflict) !== false ||
     String(workItem.identityDecisionMode) !== "AUTO_EXACT_LINK"
@@ -738,10 +865,11 @@ function birdieSocialRequireResolvedWorkItemForEvent_(
   expectedWorkItemId
 ) {
   var sheet = birdieSocialSheet_(BIRDIE_SOCIAL_WORK_QUEUE_SHEET_);
-  var matches = birdieSocialObjects_(
+  var workItems = birdieSocialObjects_(
     sheet,
     BIRDIE_SOCIAL_WORK_HEADERS_
-  ).filter(function (row) {
+  );
+  var matches = workItems.filter(function (row) {
     return String(row.syncEventId) === String(event.eventId);
   });
   if (matches.length !== 1) {
@@ -752,6 +880,14 @@ function birdieSocialRequireResolvedWorkItemForEvent_(
     String(matches[0].workItemId) !== String(expectedWorkItemId)
   ) {
     throw new Error("IG_COMMENT_WORK_ITEM_MISMATCH");
+  }
+  if (
+    expectedWorkItemId &&
+    workItems.filter(function (row) {
+      return String(row.workItemId) === String(expectedWorkItemId);
+    }).length !== 1
+  ) {
+    throw new Error("IG_COMMENT_WORK_ITEM_ID_NOT_UNIQUE");
   }
   return birdieSocialValidateResolvedWorkItem_(
     matches[0],
@@ -791,14 +927,17 @@ function birdieSocialRequireUniqueInstagramComment_(event) {
 
 function birdieSocialFindEvent_(eventId) {
   var sheet = birdieSocialSheet_(BIRDIE_SOCIAL_COIN_EVENTS_SHEET_);
-  var found = birdieSocialFindObject_(
-    sheet,
-    BIRDIE_SOCIAL_EVENT_HEADERS_,
-    "eventId",
-    eventId
-  );
-  if (found) found.sheet = sheet;
-  return found;
+  var events = birdieSocialObjects_(sheet, BIRDIE_SOCIAL_EVENT_HEADERS_);
+  var matches = [];
+  events.forEach(function (event, index) {
+    if (String(event.eventId) === String(eventId)) {
+      matches.push({ row: index + 2, object: event, sheet: sheet });
+    }
+  });
+  if (matches.length > 1) {
+    throw new Error("SOCIAL_COIN_EVENT_ID_NOT_UNIQUE");
+  }
+  return matches.length === 1 ? matches[0] : null;
 }
 
 function birdieSocialRequireEventBySourceReference_(sourceReference) {
@@ -821,14 +960,17 @@ function birdieSocialRequireEventBySourceReference_(sourceReference) {
 
 function birdieSocialRequireWorkItem_(workItemId) {
   var sheet = birdieSocialSheet_(BIRDIE_SOCIAL_WORK_QUEUE_SHEET_);
-  var found = birdieSocialFindObject_(
+  var matches = birdieSocialObjects_(
     sheet,
-    BIRDIE_SOCIAL_WORK_HEADERS_,
-    "workItemId",
-    workItemId
-  );
-  if (!found) throw new Error("WORK_ITEM_NOT_FOUND");
-  return found.object;
+    BIRDIE_SOCIAL_WORK_HEADERS_
+  ).filter(function (row) {
+    return String(row.workItemId) === String(workItemId);
+  });
+  if (matches.length === 0) throw new Error("WORK_ITEM_NOT_FOUND");
+  if (matches.length !== 1) {
+    throw new Error("IG_COMMENT_WORK_ITEM_ID_NOT_UNIQUE");
+  }
+  return matches[0];
 }
 
 function birdieSocialSheet_(name) {

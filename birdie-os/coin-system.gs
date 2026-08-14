@@ -226,6 +226,7 @@ function birdieCoinLinkInstagramHandle_(request) {
     });
     if (conflict) throw new Error("INSTAGRAM_HANDLE_ALREADY_LINKED");
 
+    var auditDetails = { instagramHandle: instagramHandle };
     var targetExistingHandle = String(target.object.instagramHandle || "").trim();
     if (targetExistingHandle) {
       if (birdieCoinNormalizeInstagramHandle_(targetExistingHandle) === instagramHandle) {
@@ -234,7 +235,7 @@ function birdieCoinLinkInstagramHandle_(request) {
           "PROFILE",
           birdieId,
           request.source,
-          { instagramHandle: instagramHandle },
+          auditDetails,
           idempotencyKey
         );
         return birdieCoinSuccess_({
@@ -243,6 +244,17 @@ function birdieCoinLinkInstagramHandle_(request) {
         });
       }
       throw new Error("INSTAGRAM_HANDLE_CHANGE_REQUIRES_REVIEW");
+    }
+    var existingAudit = birdieCoinPreflightAudit_(
+      "INSTAGRAM_HANDLE_LINKED",
+      "PROFILE",
+      birdieId,
+      request.source,
+      auditDetails,
+      idempotencyKey
+    );
+    if (existingAudit) {
+      throw new Error("INSTAGRAM_HANDLE_AUDIT_STATE_CONFLICT");
     }
 
     var updatedAt = birdieCoinNow_();
@@ -282,7 +294,7 @@ function birdieCoinLinkInstagramHandle_(request) {
       "PROFILE",
       birdieId,
       request.source,
-      { instagramHandle: instagramHandle },
+      auditDetails,
       idempotencyKey
     );
     return birdieCoinSuccess_({
@@ -406,6 +418,11 @@ function birdieCoinCreateClaim_(request, dedicatedActionCode) {
         throw new Error("CLAIM_IDEMPOTENCY_CONFLICT");
       }
       if (actionCode === "IG_COMMENT") {
+        birdieCoinRequireUniqueInstagramCommentClaimSource_(
+          sheet,
+          sourceReference,
+          duplicate.object.claimId
+        );
         var duplicateStatus = String(duplicate.object.status);
         if (
           ["PENDING", "APPROVED", "REJECTED"].indexOf(
@@ -435,7 +452,7 @@ function birdieCoinCreateClaim_(request, dedicatedActionCode) {
         "CLAIM",
         duplicate.object.claimId,
         request.source,
-        duplicate.object,
+        birdieCoinClaimCreatedAuditDetails_(duplicate.object),
         key
       );
       return birdieCoinSuccess_(duplicate.object);
@@ -445,6 +462,14 @@ function birdieCoinCreateClaim_(request, dedicatedActionCode) {
       String(socialEvent.coinWriteStatus) === "WRITTEN"
     ) {
       throw new Error("IG_COMMENT_EVENT_ALREADY_WRITTEN");
+    }
+
+    if (actionCode === "IG_COMMENT") {
+      birdieCoinRequireUniqueInstagramCommentClaimSource_(
+        sheet,
+        sourceReference,
+        ""
+      );
     }
 
     var sameSource = birdieCoinObjects_(sheet).some(function (row) {
@@ -471,8 +496,34 @@ function birdieCoinCreateClaim_(request, dedicatedActionCode) {
       decisionReason: "",
       idempotencyKey: key
     };
+    var existingCreateAudit = birdieCoinPreflightAudit_(
+      "CLAIM_CREATED",
+      "CLAIM",
+      claim.claimId,
+      request.source,
+      birdieCoinClaimCreatedAuditDetails_(claim),
+      key
+    );
+    if (existingCreateAudit) {
+      throw new Error("CLAIM_CREATED_AUDIT_STATE_CONFLICT");
+    }
     birdieCoinAppendObject_(sheet, claim);
-    birdieCoinAudit_("CLAIM_CREATED", "CLAIM", claim.claimId, request.source, claim, key);
+    if (actionCode === "IG_COMMENT") {
+      SpreadsheetApp.flush();
+      birdieCoinRequireUniqueInstagramCommentClaimSource_(
+        sheet,
+        sourceReference,
+        claim.claimId
+      );
+    }
+    birdieCoinAudit_(
+      "CLAIM_CREATED",
+      "CLAIM",
+      claim.claimId,
+      request.source,
+      birdieCoinClaimCreatedAuditDetails_(claim),
+      key
+    );
     return birdieCoinSuccess_(claim);
   } finally {
     lock.releaseLock();
@@ -507,6 +558,11 @@ function birdieCoinDecideClaim_(request) {
         claim,
         request
       );
+      birdieCoinRequireUniqueInstagramCommentClaimSource_(
+        sheet,
+        claim.sourceReference,
+        claim.claimId
+      );
     }
     if (
       decision === "REJECT" &&
@@ -536,6 +592,26 @@ function birdieCoinDecideClaim_(request) {
           instagramCommentEvent
         );
       }
+    }
+
+    claim.status = targetStatus;
+    claim.approvedAmount = approvedAmount;
+    claim.decidedAt = birdieCoinNow_();
+    claim.decidedBy = String(request.actor || "Birdie Agent");
+    claim.decisionReason = String(request.reason || "");
+    var existingDecisionAudit = birdieCoinPreflightAudit_(
+      "CLAIM_" + targetStatus,
+      "CLAIM",
+      claim.claimId,
+      claim.decidedBy,
+      claim,
+      decisionKey
+    );
+    if (existingDecisionAudit) {
+      throw new Error("CLAIM_DECISION_AUDIT_STATE_CONFLICT");
+    }
+
+    if (decision === "APPROVE") {
       var transaction = birdieCoinAppendTransaction_({
         birdieId: claim.birdieId,
         amount: approvedAmount,
@@ -556,11 +632,6 @@ function birdieCoinDecideClaim_(request) {
       }
     }
 
-    claim.status = targetStatus;
-    claim.approvedAmount = approvedAmount;
-    claim.decidedAt = birdieCoinNow_();
-    claim.decidedBy = String(request.actor || "Birdie Agent");
-    claim.decisionReason = String(request.reason || "");
     birdieCoinWriteObject_(sheet, found.row, claim);
     birdieCoinAudit_("CLAIM_" + targetStatus, "CLAIM", claim.claimId, claim.decidedBy, claim, decisionKey);
     return birdieCoinSuccess_({ claim: claim, profile: birdieCoinProfileView_(birdieCoinRequireProfile_(claim.birdieId)) });
@@ -842,14 +913,151 @@ function birdieCoinRequireProfile_(birdieId) {
   return found.object;
 }
 
-function birdieCoinAudit_(eventType, entityType, entityId, actor, details, key) {
-  var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUDIT);
-  if (key && birdieCoinFind_(sheet, "idempotencyKey", key)) return;
-  birdieCoinAppendObject_(sheet, {
-    auditId: birdieCoinId_("AUDIT"), eventType: eventType, entityType: entityType,
-    entityId: entityId, actor: String(actor || "Birdie Agent"), createdAt: birdieCoinNow_(),
-    detailsJson: JSON.stringify(details || {}), idempotencyKey: String(key || "")
+function birdieCoinRequireUniqueInstagramCommentClaimSource_(
+  sheet,
+  sourceReference,
+  expectedClaimId
+) {
+  var expectedId = String(expectedClaimId || "");
+  var matches = birdieCoinObjects_(sheet).filter(function (row) {
+    return String(row.actionCode) === "IG_COMMENT" &&
+      String(row.sourceType) === "INSTAGRAM" &&
+      String(row.sourceReference) === String(sourceReference);
   });
+  if (expectedId) {
+    if (
+      matches.length !== 1 ||
+      String(matches[0].claimId) !== expectedId
+    ) {
+      throw new Error("IG_COMMENT_CLAIM_SOURCE_CONFLICT");
+    }
+    return matches[0];
+  }
+  if (matches.length !== 0) {
+    throw new Error("IG_COMMENT_CLAIM_SOURCE_CONFLICT");
+  }
+  return null;
+}
+
+function birdieCoinClaimCreatedAuditDetails_(claim) {
+  return {
+    claimId: String(claim.claimId),
+    birdieId: String(claim.birdieId),
+    actionCode: String(claim.actionCode),
+    sourceType: String(claim.sourceType),
+    sourceReference: String(claim.sourceReference),
+    evidenceUrl: String(claim.evidenceUrl || ""),
+    note: String(claim.note || ""),
+    creationStatus: "PENDING",
+    submittedAt: String(claim.submittedAt || ""),
+    idempotencyKey: String(claim.idempotencyKey)
+  };
+}
+
+function birdieCoinFindUniqueAuditByKey_(sheet, key) {
+  var normalizedKey = birdieCoinRequired_(key, "idempotencyKey");
+  var matches = birdieCoinObjects_(sheet).filter(function (row) {
+    return String(row.idempotencyKey) === normalizedKey;
+  });
+  if (matches.length > 1) {
+    throw new Error("AUDIT_IDEMPOTENCY_CONFLICT");
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
+function birdieCoinAuditExpectedPayload_(
+  eventType,
+  entityType,
+  entityId,
+  actor,
+  details,
+  key
+) {
+  return {
+    eventType: String(eventType),
+    entityType: String(entityType),
+    entityId: String(entityId),
+    actor: String(actor || "Birdie Agent"),
+    detailsJson: JSON.stringify(details || {}),
+    idempotencyKey: birdieCoinRequired_(key, "idempotencyKey")
+  };
+}
+
+function birdieCoinAuditPayloadMatches_(audit, expected) {
+  return String(audit.eventType) === expected.eventType &&
+    String(audit.entityType) === expected.entityType &&
+    String(audit.entityId) === expected.entityId &&
+    String(audit.actor) === expected.actor &&
+    String(audit.detailsJson) === expected.detailsJson;
+}
+
+function birdieCoinPreflightAudit_(
+  eventType,
+  entityType,
+  entityId,
+  actor,
+  details,
+  key
+) {
+  var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUDIT);
+  var expected = birdieCoinAuditExpectedPayload_(
+    eventType,
+    entityType,
+    entityId,
+    actor,
+    details,
+    key
+  );
+  var existing = birdieCoinFindUniqueAuditByKey_(
+    sheet,
+    expected.idempotencyKey
+  );
+  if (existing && !birdieCoinAuditPayloadMatches_(existing, expected)) {
+    throw new Error("AUDIT_IDEMPOTENCY_CONFLICT");
+  }
+  return existing;
+}
+
+function birdieCoinAudit_(eventType, entityType, entityId, actor, details, key) {
+  var existing = birdieCoinPreflightAudit_(
+    eventType,
+    entityType,
+    entityId,
+    actor,
+    details,
+    key
+  );
+  if (existing) return existing;
+
+  var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.AUDIT);
+  var expected = birdieCoinAuditExpectedPayload_(
+    eventType,
+    entityType,
+    entityId,
+    actor,
+    details,
+    key
+  );
+  birdieCoinAppendObject_(sheet, {
+    auditId: birdieCoinId_("AUDIT"),
+    eventType: expected.eventType,
+    entityType: expected.entityType,
+    entityId: expected.entityId,
+    actor: expected.actor,
+    createdAt: birdieCoinNow_(),
+    detailsJson: expected.detailsJson,
+    idempotencyKey: expected.idempotencyKey
+  });
+  SpreadsheetApp.flush();
+  var readback = birdieCoinFindUniqueAuditByKey_(
+    sheet,
+    expected.idempotencyKey
+  );
+  if (!readback) throw new Error("AUDIT_READBACK_MISMATCH");
+  if (!birdieCoinAuditPayloadMatches_(readback, expected)) {
+    throw new Error("AUDIT_IDEMPOTENCY_CONFLICT");
+  }
+  return readback;
 }
 
 function birdieCoinSpreadsheet_() {

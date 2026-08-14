@@ -29,7 +29,7 @@ function fixture(profiles, workItem = baseWorkItem) {
   return { service, gets, posts };
 }
 
-test("IDPE-008 evidence production performs zero writes", async () => {
+test("IDPE-008 caller-supplied email verification produces zero candidates and zero writes", async () => {
   const { service, gets, posts } = fixture([
     { birdieId: "BIRDIE-90", status: "ACTIVE", email: "kevin@example.com" }
   ]);
@@ -44,12 +44,12 @@ test("IDPE-008 evidence production performs zero writes", async () => {
 
   assert.equal(gets.length, 2);
   assert.equal(posts.length, 0);
-  assert.equal(evidence.confidence, 90);
-  assert.equal(evidence.candidates[0].birdieId, "BIRDIE-90");
+  assert.equal(evidence.confidence, 0);
+  assert.deepEqual(evidence.candidates, []);
   assert.ok(evidence.integrityToken);
 });
 
-test("dry run forwards signed producer evidence into governed Q:T metadata", async () => {
+test("signed caller-supplied email evidence cannot auto-resolve", async () => {
   const { service, posts } = fixture([
     { birdieId: "BIRDIE-90", status: "ACTIVE", email: "kevin@example.com" }
   ]);
@@ -62,12 +62,38 @@ test("dry run forwards signed producer evidence into governed Q:T metadata", asy
   const result = await service.resolveByWorkItemId("WORK-1", evidence);
 
   assert.equal(posts.length, 1);
-  assert.equal(posts[0].write.identityConfidence, 90);
-  assert.equal(posts[0].write.identityDecisionMode, "AUTO_HIGH_CONFIDENCE");
-  assert.equal(posts[0].write.matchedBirdieId, "BIRDIE-90");
+  assert.equal(posts[0].write.identityConfidence, 0);
+  assert.equal(posts[0].write.identityDecisionMode, "FOUNDER_REVIEW_LOW_CONFIDENCE");
+  assert.equal(posts[0].write.resolutionStatus, "IDENTITY_PENDING");
+  assert.equal(posts[0].write.matchedBirdieId, "");
   assert.equal(posts[0].evidenceSource, "PROVIDER_EVIDENCE_V1");
   assert.match(posts[0].idempotencyKey, /^IDENTITY\|WORK-1\|v1$/);
   assert.equal(result.birdieOS.accepted, true);
+});
+
+test("signed stable provider-ID evidence is review-only without an exact profile handle", async () => {
+  const { service, posts } = fixture([
+    {
+      birdieId: "BIRDIE-PROVIDER",
+      status: "ACTIVE",
+      instagramUserId: "IG-STABLE-1"
+    }
+  ]);
+
+  const evidence = await service.produceEvidenceByWorkItemId("WORK-1", {
+    provider: "INSTAGRAM",
+    providerUserId: "IG-STABLE-1"
+  });
+  assert.equal(evidence.confidence, 100);
+  assert.equal(evidence.explicitLink, false);
+
+  await service.resolveByWorkItemId("WORK-1", evidence);
+
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].write.identityConfidence, 100);
+  assert.equal(posts[0].write.identityDecisionMode, "FOUNDER_REVIEW_LOW_CONFIDENCE");
+  assert.equal(posts[0].write.resolutionStatus, "IDENTITY_PENDING");
+  assert.equal(posts[0].write.matchedBirdieId, "");
 });
 
 test("canonical exact profile link resolves without caller-supplied evidence", async () => {
@@ -138,7 +164,7 @@ test("canonical duplicate-handle conflict overrides unique high provider evidenc
     verifiedEmail: "a@example.com",
     emailVerified: true
   });
-  assert.equal(evidence.confidence, 90);
+  assert.equal(evidence.confidence, 0);
   assert.equal(evidence.conflictingEvidence, false);
 
   await service.resolveByWorkItemId("WORK-1", evidence);

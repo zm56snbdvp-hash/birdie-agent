@@ -1,11 +1,11 @@
 # TASK-038 Provider Deployment Runbook
 
-This is the operator handoff for Birdie Agent `2.8.0`. It intentionally
-integrates the reviewed TASK-038 feature head
-`338bd58beeb220e9da52018c94146c8382f84bb4` into current `main`
-`5bc3941ea6ab46eb1b58756b39b5b99b757df796`. Never deploy the feature head
-by itself: it predates the current Birdie Family and Framer read-stability
-work.
+This is the operator handoff for Birdie Agent `2.8.0`. The source candidate
+starts from PR #29 head `ab891ae5a1a0f2ea215374c9fac850c573f4c326`, which
+integrates TASK-038 into current `main`
+`5bc3941ea6ab46eb1b58756b39b5b99b757df796`. Deploy only the final reviewed
+release SHA containing the independent exact-only, audit, global-uniqueness
+and crash-recovery hardening; never deploy the older feature head by itself.
 
 The provider order is mandatory:
 
@@ -41,7 +41,7 @@ node --check < birdie-os/community-identity.gs
 node --check < birdie-os/social-coin-events.gs
 ```
 
-Expected result: `117` tests pass and no syntax check fails. Verify the Apps
+Expected result: `134` tests pass and no syntax check fails. Verify the Apps
 Script release files before copying them:
 
 ```bash
@@ -53,9 +53,9 @@ sha256sum birdie-os/coin-system.gs \
 Expected SHA-256 values:
 
 ```text
-1c0814c60387336701200844967c03454af90980688e85153520f6540f0d5841  birdie-os/coin-system.gs
-57f3034b7f2d00fa90bca8ba0cb5e9dcc0d0bbc32367f27d739ba51224dfddfb  birdie-os/community-identity.gs
-ec2b5f3771aa4152df620584cb3d69f6154e31e3b3a81f5efeee63b94880522a  birdie-os/social-coin-events.gs
+2e202abba73d3fb90b65ee8a42527653a0834fdd97a49fb82d8d651e7bfb4c34  birdie-os/coin-system.gs
+3a5520f6b4aca47846158b781d192a4c7096b927c5a568c1fafb38d1a8e75f13  birdie-os/community-identity.gs
+68ba8bc11762a06f42aca081043d6e1be957eccaa61b11c6afe8de0d21256c80  birdie-os/social-coin-events.gs
 ```
 
 ## 1. Apps Script first

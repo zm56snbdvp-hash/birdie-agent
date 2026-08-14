@@ -268,21 +268,6 @@ function birdieCommunityValidateIdentityWrite_(current, write) {
     ) {
       throw new Error("EXACT_IDENTITY_LINK_NOT_VERIFIED");
     }
-  } else if (mode === "AUTO_HIGH_CONFIDENCE") {
-    if (
-      resolutionStatus !== "IDENTITY_RESOLVED" ||
-      decision !== "HIGH_CONFIDENCE_MATCH" ||
-      confidence < 90 ||
-      write.identityConflict !== false ||
-      !matchedBirdieId
-    ) {
-      throw new Error("INVALID_HIGH_CONFIDENCE_IDENTITY_WRITE");
-    }
-
-    var profile = birdieCommunityFindActiveProfileByBirdieId_(matchedBirdieId);
-    if (!profile) {
-      throw new Error("HIGH_CONFIDENCE_PROFILE_NOT_ACTIVE");
-    }
   } else if (mode === "FOUNDER_REVIEW_CONFLICT") {
     if (
       resolutionStatus !== "IDENTITY_PENDING" ||
@@ -297,7 +282,6 @@ function birdieCommunityValidateIdentityWrite_(current, write) {
       resolutionStatus !== "IDENTITY_PENDING" ||
       write.identityConflict !== false ||
       matchedBirdieId ||
-      confidence >= 90 ||
       ["FOUNDER_REVIEW_REQUIRED", "NO_PROFILE_MATCH"].indexOf(decision) === -1
     ) {
       throw new Error("INVALID_LOW_CONFIDENCE_IDENTITY_WRITE");
@@ -364,19 +348,6 @@ function birdieCommunityActiveExactMatches_(externalUserId) {
       normalizedExternal !== ""
     );
   });
-}
-
-function birdieCommunityFindActiveProfileByBirdieId_(birdieId) {
-  var profiles = birdieCommunityProfiles_().data.profiles;
-  for (var index = 0; index < profiles.length; index += 1) {
-    if (
-      String(profiles[index].birdieId) === String(birdieId) &&
-      String(profiles[index].status) === "ACTIVE"
-    ) {
-      return profiles[index];
-    }
-  }
-  return null;
 }
 
 function birdieCommunityNormalizeHandle_(value) {

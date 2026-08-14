@@ -2,13 +2,12 @@
 
 ## Current source state
 
-The reviewed base is `feature/community-identity-resolver` at
-`338bd58beeb220e9da52018c94146c8382f84bb4` (tree
-`e1cdbf42aa6cca6fbbf3cca85a6e0a4966772350`). The TASK-038 successor adds
-the dedicated `IG_COMMENT` action, event-derived claim creation, exact
-identity binding, and the Social-owning ledger-before-`WRITTEN` transition.
-The release reports Birdie Agent `2.8.0`. None of these successor changes is
-live until both provider deployments are attested.
+The source candidate starts from PR #29 head
+`ab891ae5a1a0f2ea215374c9fac850c573f4c326`, which is based on current `main`.
+The final release SHA must include the independent exact-only, audit,
+global-uniqueness and crash-recovery hardening described below and must be
+recorded before deployment. The release reports Birdie Agent `2.8.0`. None of
+these successor changes is live until both provider deployments are attested.
 
 No live profile, claim, ledger, work-item or social-event row may be mutated
 until the authoritative Apps Script and Birdie Agent deployments are current
@@ -30,11 +29,15 @@ runtime prerequisite; this release does not synthesize one.
   by otherwise high provider evidence.
 - A raw caller/provider username match remains 60-point evidence and cannot
   auto-resolve a different work-item handle.
+- Stable provider-ID evidence is review-only, even at confidence 100.
+- Caller-supplied `verifiedEmail` / `emailVerified` is provenance only and
+  creates no candidate. Email, display name, name fragments and fuzzy matches
+  can never resolve an Instagram identity.
 - If provider evidence is supplied, it must pass the existing signature and
   work-item binding checks. Contradictory signed evidence fails closed; the
   canonical exact path does not require evidence.
-- Display name, email similarity, name fragments and fuzzy matching are never
-  ownership proof.
+- BirdieOS rejects `AUTO_HIGH_CONFIDENCE`; `AUTO_EXACT_LINK` is the only
+  automatic resolved write mode.
 
 ## Owning-module and economy contract
 
@@ -45,9 +48,20 @@ only on `SOCIAL_COIN_EVENTS`.
 
 `birdie-os/social-coin-events.gs` owns two narrow transitions:
 `IDENTITY_PENDING -> IDENTITY_RESOLVED` only after an exact resolved work
-item, and `NOT_WRITTEN -> WRITTEN` only after one exact approved claim and one
-unique matching ledger transaction. Community Identity and the Coin/Profile
-linker never write those event fields.
+item, and `NOT_WRITTEN -> WRITE_PREPARED -> WRITTEN` only after one exact
+approved claim and one globally unique matching ledger transaction. The
+recoverable `WRITE_PREPARED` state prevents a crash or audit failure from
+leaving an unaudited terminal event; the same governed request resumes it.
+Community Identity and the Coin/Profile linker never write those event fields.
+
+The exact Instagram comment source reference is globally unique across all
+Birdies and all claim statuses, including rejected claims. The exact audit key
+must have one row and an identical event/entity/actor/details payload on every
+retry. Profile-link, claim-create, claim-decision, identity-bind and terminal
+event audit keys are preflighted before their first corresponding domain write;
+an exact orphan audit against an unadvanced domain row is a fail-closed state
+conflict. The work item must be unique, carry `processedBy =
+ZAPIER_IDENTITY_RESOLVER`, and have a nonempty canonical `processedAt`.
 
 Generic `POST /coin/claims` rejects `IG_COMMENT`. The dedicated route
 derives action code, source type, comment source reference, one-Coin amount and
@@ -119,7 +133,9 @@ amount, candidate, confidence score or matched Birdie ID.
 12. Re-read the ledger and require exactly one APPROVED EARN transaction with
     the expected Birdie ID, action, source reference, amount and claim key.
 13. Only after ledger proof, mark the exact social event `WRITTEN` through
-    `POST /coin/social-events/{eventId}/instagram-comment/written`.
+    `POST /coin/social-events/{eventId}/instagram-comment/written`. If a prior
+    attempt stopped at `WRITE_PREPARED`, invoke the same request; never edit the
+    row manually or create a second claim/audit.
 14. Run the same sequence again. Require an idempotent profile result, an
     ineligible/no-write resolver result, the same claim, zero new transactions,
     zero balance delta and no duplicate Coin.

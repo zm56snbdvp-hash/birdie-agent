@@ -49,6 +49,8 @@ function workItem(overrides = {}) {
     resolutionStatus: "IDENTITY_RESOLVED",
     matchedBirdieId: "BIRDIE-123",
     decision: "EXACT_IDENTITY_LINK",
+    processedBy: "ZAPIER_IDENTITY_RESOLVER",
+    processedAt: "2026-08-14T10:29:00.000Z",
     identityConfidence: 100,
     identityConflict: false,
     identityDecisionMode: "AUTO_EXACT_LINK",
@@ -63,10 +65,16 @@ function contextFor(initialEvent, options = {}) {
   const claimWrites = [];
   const transactionAppends = [];
   const audits = [];
+  const auditRows = structuredClone(options.auditRows || []);
   let flushes = 0;
   let lockWaits = 0;
   let lockReleases = 0;
   let claimCalls = [];
+  let failTerminalWrites = Number(options.failTerminalWrites || 0);
+  let preparedReadbackMismatches = Number(
+    options.preparedReadbackMismatches || 0
+  );
+  let finalReadbackMismatches = Number(options.finalReadbackMismatches || 0);
 
   const claim = {
     claimId: "CLAIM-1",
@@ -76,12 +84,16 @@ function contextFor(initialEvent, options = {}) {
     sourceReference: "17930197359365940",
     status: "APPROVED",
     approvedAmount: 1,
+    submittedAt: "2026-08-14T10:35:00.000Z",
+    decidedAt: "2026-08-14T10:40:00.000Z",
+    decidedBy: "Birdie Agent",
     idempotencyKey:
       "claim:ig:ig_comment:tanjastroop:17930197359365940"
   };
   const transaction = {
     transactionId: "TX-1",
     approvedAt: "2026-08-14T10:40:00.000Z",
+    approvedBy: "Birdie Agent",
     birdieId: "BIRDIE-123",
     amount: 1,
     transactionType: "EARN",
@@ -117,11 +129,28 @@ function contextFor(initialEvent, options = {}) {
   };
   runInNewContext(`${coinSource}\n${socialSource}`, context);
 
-  context.birdieSocialFindEvent_ = () => ({
-    row: 2,
-    object: structuredClone(currentEvent),
-    sheet: { kind: "events" }
-  });
+  context.birdieSocialFindEvent_ = () => {
+    const result = structuredClone(currentEvent);
+    if (
+      result.coinWriteStatus === "WRITE_PREPARED" &&
+      preparedReadbackMismatches > 0
+    ) {
+      preparedReadbackMismatches -= 1;
+      result.processedAt = "MISMATCH";
+    }
+    if (
+      result.coinWriteStatus === "WRITTEN" &&
+      finalReadbackMismatches > 0
+    ) {
+      finalReadbackMismatches -= 1;
+      result.processedAt = "MISMATCH";
+    }
+    return {
+      row: 2,
+      object: result,
+      sheet: { kind: "events" }
+    };
+  };
   context.birdieSocialRequireEventBySourceReference_ = () => ({
     row: 2,
     object: structuredClone(currentEvent),
@@ -159,12 +188,56 @@ function contextFor(initialEvent, options = {}) {
     status: "ACTIVE"
   });
   context.birdieSocialWriteField_ = (_sheet, _row, _headers, field, value) => {
+    if (
+      field === "coinWriteStatus" &&
+      value === "WRITTEN" &&
+      failTerminalWrites > 0
+    ) {
+      failTerminalWrites -= 1;
+      throw new Error("SIMULATED_TERMINAL_WRITE_FAILURE");
+    }
     currentEvent[field] = value;
     writes.push({ field, value });
   };
   context.birdieCoinNow_ = () => "2026-08-14T11:00:00.000Z";
   context.birdieCoinAudit_ = (...args) => {
-    if (!audits.some((audit) => audit[6] === args[6])) audits.push(args);
+    const [eventType, entityType, entityId, actor, details, key] = args;
+    const matches = auditRows.filter(
+      (audit) => String(audit.idempotencyKey) === String(key)
+    );
+    if (matches.length > 1) throw new Error("AUDIT_IDEMPOTENCY_CONFLICT");
+    const expected = {
+      eventType: String(eventType),
+      entityType: String(entityType),
+      entityId: String(entityId),
+      actor: String(actor || "Birdie Agent"),
+      detailsJson: JSON.stringify(details || {}),
+      idempotencyKey: String(key)
+    };
+    if (matches.length === 1) {
+      const existing = matches[0];
+      for (const field of [
+        "eventType",
+        "entityType",
+        "entityId",
+        "actor",
+        "detailsJson",
+        "idempotencyKey"
+      ]) {
+        if (String(existing[field]) !== String(expected[field])) {
+          throw new Error("AUDIT_IDEMPOTENCY_CONFLICT");
+        }
+      }
+      return structuredClone(existing);
+    }
+    const appended = {
+      auditId: `AUDIT-${auditRows.length + 1}`,
+      createdAt: "2026-08-14T11:00:00.000Z",
+      ...expected
+    };
+    auditRows.push(appended);
+    audits.push(args);
+    return structuredClone(appended);
   };
   context.birdieCoinSheet_ = (name) => ({ name });
   context.birdieCoinFind_ = (sheet, field, value) => {
@@ -181,8 +254,16 @@ function contextFor(initialEvent, options = {}) {
     }
     return null;
   };
-  context.birdieCoinObjects_ = (sheet) =>
-    sheet.name === "COIN_TRANSACTIONS" ? structuredClone(transactions) : [];
+  context.birdieCoinObjects_ = (sheet) => {
+    if (sheet.name === "COIN_TRANSACTIONS") {
+      return structuredClone(transactions);
+    }
+    if (sheet.name === "ACTION_CLAIMS") {
+      return [structuredClone(options.claim || claim)];
+    }
+    if (sheet.name === "AUDIT_EVENTS") return structuredClone(auditRows);
+    return [];
+  };
   context.birdieCoinWriteObject_ = (...args) => claimWrites.push(args);
   context.birdieCoinAppendObject_ = (sheet, object) => {
     if (sheet.name !== "COIN_TRANSACTIONS") {
@@ -212,10 +293,12 @@ function contextFor(initialEvent, options = {}) {
 function claimCreationHarness({
   duplicate,
   eventStatus = "WRITTEN",
-  ledgerValid = true
+  ledgerValid = true,
+  auditRows: initialAuditRows = []
 } = {}) {
   const appended = [];
   const audits = [];
+  const auditRows = structuredClone(initialAuditRows);
   const context = {
     LockService: {
       getScriptLock() {
@@ -251,15 +334,23 @@ function claimCreationHarness({
     }
     return null;
   };
-  context.birdieCoinObjects_ = () => [];
+  context.birdieCoinObjects_ = (sheet) => {
+    if (sheet.name === "ACTION_CLAIMS" && duplicate) {
+      return [structuredClone(duplicate)];
+    }
+    if (sheet.name === "AUDIT_EVENTS") return structuredClone(auditRows);
+    return [];
+  };
   context.birdieCoinAppendObject_ = (_sheet, object) => appended.push(object);
   context.birdieCoinAudit_ = (...args) => audits.push(args);
   context.birdieCoinId_ = () => "CLAIM-NEW";
   context.birdieCoinNow_ = () => "2026-08-14T11:00:00.000Z";
 
   return {
+    context,
     appended,
     audits,
+    auditRows,
     create(overrides = {}) {
       return context.birdieCoinCreateClaim_(
         {
@@ -433,6 +524,55 @@ test("identity binding is owner-controlled, exact, and idempotent", () => {
   });
 });
 
+test("identity binding preflights audit collisions before event writes", () => {
+  const eventId = "SCE-20260814-0138-TANJA";
+  const workItemId = "WORK-IG-COMMENT-17930197359365940";
+  const birdieId = "BIRDIE-123";
+  const auditKey = `social-identity:${eventId}:${workItemId}:${birdieId}`;
+  const exactAudit = {
+    auditId: "AUDIT-IDENTITY",
+    eventType: "SOCIAL_COIN_EVENT_IDENTITY_RESOLVED",
+    entityType: "SOCIAL_COIN_EVENT",
+    entityId: eventId,
+    actor: "Birdie Agent",
+    createdAt: "2026-08-14T10:59:00.000Z",
+    detailsJson: JSON.stringify({
+      eventId,
+      workItemId,
+      birdieId,
+      sourceReference: "17930197359365940"
+    }),
+    idempotencyKey: auditKey
+  };
+  const request = {
+    eventId,
+    workItemId,
+    birdieId,
+    confirmation: "BIND_IG_COMMENT_IDENTITY",
+    source: "Birdie Agent"
+  };
+
+  for (const [auditRow, error] of [
+    [{ ...exactAudit, eventType: "PROFILE_CREATED" }, /AUDIT_IDEMPOTENCY_CONFLICT/],
+    [exactAudit, /SOCIAL_EVENT_IDENTITY_AUDIT_STATE_CONFLICT/]
+  ]) {
+    const harness = contextFor(
+      event({
+        birdieId: "",
+        verificationStatus: "IDENTITY_PENDING",
+        verifiedAt: ""
+      }),
+      { auditRows: [auditRow] }
+    );
+    assert.throws(
+      () => harness.context.birdieSocialBindInstagramCommentIdentity_(request),
+      error
+    );
+    assert.equal(harness.writes.length, 0);
+    assert.equal(harness.audits.length, 0);
+  }
+});
+
 test("identity binding fails closed on a non-exact work item", () => {
   const harness = contextFor(
     event({
@@ -454,6 +594,66 @@ test("identity binding fails closed on a non-exact work item", () => {
   );
   assert.equal(harness.writes.length, 0);
   assert.equal(harness.audits.length, 0);
+});
+
+test("resolved work item requires canonical resolver provenance", () => {
+  for (const invalidWorkItem of [
+    workItem({ processedBy: "MANUAL_ADMIN" }),
+    workItem({ processedBy: "" }),
+    workItem({ processedAt: "" })
+  ]) {
+    const harness = contextFor(
+      event({
+        birdieId: "",
+        verificationStatus: "IDENTITY_PENDING",
+        verifiedAt: ""
+      }),
+      { workItem: invalidWorkItem }
+    );
+    assert.throws(
+      () =>
+        harness.context.birdieSocialBindInstagramCommentIdentity_({
+          eventId: "SCE-20260814-0138-TANJA",
+          workItemId: "WORK-IG-COMMENT-17930197359365940",
+          birdieId: "BIRDIE-123",
+          confirmation: "BIND_IG_COMMENT_IDENTITY"
+        }),
+      /WORK_ITEM_NOT_EXACT_IG_COMMENT_IDENTITY/
+    );
+    assert.equal(harness.writes.length, 0);
+    assert.equal(harness.audits.length, 0);
+  }
+});
+
+test("canonical event and work-item IDs must each be unique", () => {
+  const context = {};
+  runInNewContext(`${coinSource}\n${socialSource}`, context);
+  context.birdieSocialSheet_ = (name) => ({ name });
+  context.birdieSocialObjects_ = (sheet) => {
+    if (sheet.name === "SOCIAL_COIN_EVENTS") {
+      return [
+        event(),
+        event({
+          sourceReference: "17930197359365941",
+          idempotencyKey:
+            "ig:ig_comment:tanjastroop:17930197359365941"
+        })
+      ];
+    }
+    return [workItem(), workItem({ syncEventId: "OTHER-EVENT" })];
+  };
+
+  assert.throws(
+    () => context.birdieSocialFindEvent_("SCE-20260814-0138-TANJA"),
+    /SOCIAL_COIN_EVENT_ID_NOT_UNIQUE/
+  );
+  assert.throws(
+    () =>
+      context.birdieSocialRequireWorkItem_(
+        "WORK-IG-COMMENT-17930197359365940"
+      ),
+    /IG_COMMENT_WORK_ITEM_ID_NOT_UNIQUE/
+  );
 });
 
 test("WRITTEN event cannot receive a late identity transition", () => {
@@ -518,6 +718,52 @@ test("claim action derives the immutable economic fields from the event", () => 
   );
   assert.equal(request.points, undefined);
   assert.equal(request.amount, undefined);
+});
+
+test("claim creation preflights audit collisions before appending a claim", () => {
+  const key = "claim:ig:ig_comment:tanjastroop:17930197359365940";
+  const exact = claimCreationHarness({ eventStatus: "NOT_WRITTEN" });
+  const plannedClaim = {
+    claimId: "CLAIM-NEW",
+    birdieId: "BIRDIE-123",
+    actionCode: "IG_COMMENT",
+    sourceType: "INSTAGRAM",
+    sourceReference: "17930197359365940",
+    evidenceUrl: "",
+    note: "",
+    status: "PENDING",
+    approvedAmount: "",
+    submittedAt: "2026-08-14T11:00:00.000Z",
+    decidedAt: "",
+    decidedBy: "",
+    decisionReason: "",
+    idempotencyKey: key
+  };
+  const exactAudit = {
+    auditId: "AUDIT-CREATE",
+    eventType: "CLAIM_CREATED",
+    entityType: "CLAIM",
+    entityId: plannedClaim.claimId,
+    actor: "Birdie Agent",
+    createdAt: "2026-08-14T11:00:00.000Z",
+    detailsJson: JSON.stringify(
+      exact.context.birdieCoinClaimCreatedAuditDetails_(plannedClaim)
+    ),
+    idempotencyKey: key
+  };
+
+  for (const [auditRow, error] of [
+    [{ ...exactAudit, entityType: "PROFILE" }, /AUDIT_IDEMPOTENCY_CONFLICT/],
+    [exactAudit, /CLAIM_CREATED_AUDIT_STATE_CONFLICT/]
+  ]) {
+    const harness = claimCreationHarness({
+      eventStatus: "NOT_WRITTEN",
+      auditRows: [auditRow]
+    });
+    assert.throws(() => harness.create(), error);
+    assert.equal(harness.appended.length, 0);
+    assert.equal(harness.audits.length, 0);
+  }
 });
 
 test("completed claim rerun returns only the same exact claim", () => {
@@ -689,7 +935,7 @@ test("pending approval rejects ledger collisions and repairs a prior exact appen
       {
         transactionId: "TX-FOREIGN",
         approvedAt: "2026-08-14T10:39:00.000Z",
-        birdieId: "BIRDIE-123",
+        birdieId: "BIRDIE-999",
         amount: 1,
         transactionType: "EARN",
         actionCode: "IG_COMMENT",
@@ -725,6 +971,71 @@ test("pending approval rejects ledger collisions and repairs a prior exact appen
   assert.equal(rejectAfterAppend.claimWrites.length, 0);
 });
 
+test("claim approval preflights audit collisions before Coin or claim writes", () => {
+  const pendingClaim = {
+    claimId: "CLAIM-1",
+    birdieId: "BIRDIE-123",
+    actionCode: "IG_COMMENT",
+    sourceType: "INSTAGRAM",
+    sourceReference: "17930197359365940",
+    evidenceUrl: "",
+    note: "",
+    status: "PENDING",
+    approvedAmount: "",
+    submittedAt: "2026-08-14T10:35:00.000Z",
+    decidedAt: "",
+    decidedBy: "",
+    decisionReason: "",
+    idempotencyKey:
+      "claim:ig:ig_comment:tanjastroop:17930197359365940"
+  };
+  const approvedClaim = {
+    ...pendingClaim,
+    status: "APPROVED",
+    approvedAmount: 1,
+    decidedAt: "2026-08-14T11:00:00.000Z",
+    decidedBy: "Birdie Agent"
+  };
+  const decisionKey = "decision:CLAIM-1:approve";
+  const exactAudit = {
+    auditId: "AUDIT-APPROVE",
+    eventType: "CLAIM_APPROVED",
+    entityType: "CLAIM",
+    entityId: "CLAIM-1",
+    actor: "Birdie Agent",
+    createdAt: "2026-08-14T11:00:00.000Z",
+    detailsJson: JSON.stringify(approvedClaim),
+    idempotencyKey: decisionKey
+  };
+  const request = {
+    claimId: "CLAIM-1",
+    decision: "APPROVE",
+    eventId: "SCE-20260814-0138-TANJA",
+    workItemId: "WORK-IG-COMMENT-17930197359365940",
+    birdieId: "BIRDIE-123",
+    confirmation: "APPROVE_IG_COMMENT_CLAIM",
+    idempotencyKey: decisionKey
+  };
+
+  for (const [auditRow, error] of [
+    [{ ...exactAudit, actor: "Different Actor" }, /AUDIT_IDEMPOTENCY_CONFLICT/],
+    [exactAudit, /CLAIM_DECISION_AUDIT_STATE_CONFLICT/]
+  ]) {
+    const harness = contextFor(event(), {
+      claim: pendingClaim,
+      transactions: [],
+      auditRows: [auditRow]
+    });
+    assert.throws(
+      () => harness.context.birdieCoinDecideClaim_(request),
+      error
+    );
+    assert.equal(harness.transactionAppends.length, 0);
+    assert.equal(harness.claimWrites.length, 0);
+    assert.equal(harness.audits.length, 0);
+  }
+});
+
 test("WRITTEN happens only after one exact approved ledger proof and retries safely", () => {
   const harness = contextFor(event());
   const request = {
@@ -743,13 +1054,13 @@ test("WRITTEN happens only after one exact approved ledger proof and retries saf
   assert.equal(second.data.idempotent, true);
   assert.deepEqual(
     harness.writes.map(({ field }) => field),
-    ["processedAt", "coinWriteStatus"]
+    ["processedAt", "coinWriteStatus", "coinWriteStatus"]
   );
   assert.equal(harness.currentEvent.coinWriteStatus, "WRITTEN");
   assert.equal(first.data.transaction.transactionId, "TX-1");
   assert.equal(harness.audits.length, 1);
   assert.deepEqual(harness.stats(), {
-    flushes: 1,
+    flushes: 3,
     lockWaits: 2,
     lockReleases: 2
   });
@@ -759,6 +1070,7 @@ test("WRITTEN rejects a missing, mismatched, or duplicate ledger proof", () => {
   const valid = {
     transactionId: "TX-1",
     approvedAt: "2026-08-14T10:40:00.000Z",
+    approvedBy: "Birdie Agent",
     birdieId: "BIRDIE-123",
     amount: 1,
     transactionType: "EARN",
@@ -810,6 +1122,7 @@ test("WRITTEN rejects a missing, mismatched, or duplicate ledger proof", () => {
       {
         ...valid,
         transactionId: "TX-2",
+        birdieId: "BIRDIE-999",
         idempotencyKey: "claim:CLAIM-OTHER"
       }
     ]
@@ -817,6 +1130,144 @@ test("WRITTEN rejects a missing, mismatched, or duplicate ledger proof", () => {
   assert.throws(
     () => duplicate.context.birdieSocialMarkInstagramCommentWritten_(request),
     /IG_COMMENT_LEDGER_PROOF_NOT_UNIQUE/
+  );
+  assert.equal(duplicate.writes.length, 0);
+
+  for (const status of ["PENDING", "REJECTED"]) {
+    const conflictingStatus = contextFor(event(), {
+      transactions: [
+        valid,
+        {
+          ...valid,
+          transactionId: `TX-${status}`,
+          birdieId: "BIRDIE-999",
+          status,
+          approvedAt: "",
+          approvedBy: "",
+          idempotencyKey: `claim:CLAIM-${status}`
+        }
+      ]
+    });
+    assert.throws(
+      () =>
+        conflictingStatus.context.birdieSocialMarkInstagramCommentWritten_(
+          request
+        ),
+      /IG_COMMENT_LEDGER_PROOF_NOT_UNIQUE/
+    );
+    assert.equal(conflictingStatus.writes.length, 0);
+  }
+});
+
+test("WRITTEN transition resumes safely after a terminal write failure", () => {
+  const harness = contextFor(event(), { failTerminalWrites: 1 });
+  const request = {
+    eventId: "SCE-20260814-0138-TANJA",
+    workItemId: "WORK-IG-COMMENT-17930197359365940",
+    birdieId: "BIRDIE-123",
+    claimId: "CLAIM-1",
+    confirmation: "MARK_IG_COMMENT_WRITTEN",
+    source: "Birdie Agent"
+  };
+
+  assert.throws(
+    () => harness.context.birdieSocialMarkInstagramCommentWritten_(request),
+    /SIMULATED_TERMINAL_WRITE_FAILURE/
+  );
+  assert.equal(harness.currentEvent.coinWriteStatus, "WRITE_PREPARED");
+  assert.equal(harness.audits.length, 1);
+
+  const recovered =
+    harness.context.birdieSocialMarkInstagramCommentWritten_(request);
+  const retry = harness.context.birdieSocialMarkInstagramCommentWritten_(request);
+  assert.equal(recovered.data.recovered, true);
+  assert.equal(recovered.data.idempotent, false);
+  assert.equal(retry.data.idempotent, true);
+  assert.equal(harness.currentEvent.coinWriteStatus, "WRITTEN");
+  assert.equal(harness.audits.length, 1);
+});
+
+test("readback failures remain recoverable without a duplicate audit", () => {
+  const request = {
+    eventId: "SCE-20260814-0138-TANJA",
+    workItemId: "WORK-IG-COMMENT-17930197359365940",
+    birdieId: "BIRDIE-123",
+    claimId: "CLAIM-1",
+    confirmation: "MARK_IG_COMMENT_WRITTEN",
+    source: "Birdie Agent"
+  };
+  const prepareMismatch = contextFor(event(), {
+    preparedReadbackMismatches: 1
+  });
+  assert.throws(
+    () =>
+      prepareMismatch.context.birdieSocialMarkInstagramCommentWritten_(
+        request
+      ),
+    /SOCIAL_COIN_EVENT_PREPARE_READBACK_MISMATCH/
+  );
+  assert.equal(prepareMismatch.currentEvent.coinWriteStatus, "WRITE_PREPARED");
+  assert.equal(prepareMismatch.audits.length, 0);
+  assert.equal(
+    prepareMismatch.context.birdieSocialMarkInstagramCommentWritten_(request)
+      .data.recovered,
+    true
+  );
+  assert.equal(prepareMismatch.audits.length, 1);
+
+  const finalMismatch = contextFor(event(), { finalReadbackMismatches: 1 });
+  assert.throws(
+    () => finalMismatch.context.birdieSocialMarkInstagramCommentWritten_(request),
+    /SOCIAL_COIN_EVENT_WRITE_READBACK_MISMATCH/
+  );
+  assert.equal(finalMismatch.currentEvent.coinWriteStatus, "WRITTEN");
+  assert.equal(finalMismatch.audits.length, 1);
+  assert.equal(
+    finalMismatch.context.birdieSocialMarkInstagramCommentWritten_(request).data
+      .idempotent,
+    true
+  );
+  assert.equal(finalMismatch.audits.length, 1);
+});
+
+test("WRITTEN audit key collisions and duplicate rows fail before event writes", () => {
+  const eventId = "SCE-20260814-0138-TANJA";
+  const auditKey = `social-written:v2|${eventId.length}:${eventId}`;
+  const wrongAudit = {
+    auditId: "AUDIT-WRONG",
+    eventType: "SOCIAL_COIN_EVENT_WRITTEN",
+    entityType: "SOCIAL_COIN_EVENT",
+    entityId: eventId,
+    actor: "Birdie Agent",
+    createdAt: "2026-08-14T11:00:00.000Z",
+    detailsJson: JSON.stringify({
+      processedAt: "2026-08-14T11:00:00.000Z",
+      claimId: "CLAIM-WRONG"
+    }),
+    idempotencyKey: auditKey
+  };
+  const request = {
+    eventId,
+    workItemId: "WORK-IG-COMMENT-17930197359365940",
+    birdieId: "BIRDIE-123",
+    claimId: "CLAIM-1",
+    confirmation: "MARK_IG_COMMENT_WRITTEN",
+    source: "Birdie Agent"
+  };
+
+  const collision = contextFor(event(), { auditRows: [wrongAudit] });
+  assert.throws(
+    () => collision.context.birdieSocialMarkInstagramCommentWritten_(request),
+    /AUDIT_IDEMPOTENCY_CONFLICT/
+  );
+  assert.equal(collision.writes.length, 0);
+
+  const duplicate = contextFor(event(), {
+    auditRows: [wrongAudit, { ...wrongAudit, auditId: "AUDIT-WRONG-2" }]
+  });
+  assert.throws(
+    () => duplicate.context.birdieSocialMarkInstagramCommentWritten_(request),
+    /AUDIT_IDEMPOTENCY_CONFLICT/
   );
   assert.equal(duplicate.writes.length, 0);
 });

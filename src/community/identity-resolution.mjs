@@ -33,6 +33,7 @@ function activeExactProfileEvidence(workItem, profiles) {
     return {
       candidates: [],
       candidateCount: 0,
+      canonicalExactLink: true,
       explicitLink: false,
       conflictingEvidence: false,
       confidence: 0,
@@ -44,6 +45,7 @@ function activeExactProfileEvidence(workItem, profiles) {
     return {
       candidates: matches,
       candidateCount: 1,
+      canonicalExactLink: true,
       explicitLink: true,
       conflictingEvidence: false,
       confidence: 100,
@@ -54,6 +56,7 @@ function activeExactProfileEvidence(workItem, profiles) {
   return {
     candidates: matches,
     candidateCount: matches.length,
+    canonicalExactLink: true,
     explicitLink: true,
     conflictingEvidence: true,
     confidence: 100,
@@ -76,14 +79,16 @@ function normalizeEvidence(workItem, evidenceOrProfiles) {
     : candidates.length;
   const explicitLink = input.explicitLink === true;
   const conflictingEvidence = input.conflictingEvidence === true;
-  const confidence = explicitLink && candidateCount === 1 && !conflictingEvidence
-    ? 100
-    : boundedConfidence(input.confidence);
+  const confidence = boundedConfidence(input.confidence);
   const reason = String(input.reason ?? "").trim();
 
   return {
     candidates,
     candidateCount,
+    // Object-shaped evidence may be provider-derived or caller-supplied. It
+    // can inform a fail-closed review result, but it can never stand in for
+    // the canonical ACTIVE-profile exact-handle read above.
+    canonicalExactLink: false,
     explicitLink,
     conflictingEvidence,
     confidence,
@@ -97,8 +102,6 @@ function standardReason(evidence, kind) {
   switch (kind) {
     case "EXACT":
       return "Exactly one explicit external identity link matches this Birdie Profile.";
-    case "HIGH":
-      return `Exactly one candidate scored ${evidence.confidence} with no conflicting identity evidence.`;
     case "CONFLICT":
       return evidence.candidateCount > 1
         ? `Multiple plausible Birdie Profile candidates remain (${evidence.candidateCount}).`
@@ -106,7 +109,7 @@ function standardReason(evidence, kind) {
     case "NO_MATCH":
       return "No usable Birdie Profile candidate or identity evidence is available.";
     default:
-      return `Identity confidence ${evidence.confidence} is below the automatic resolution threshold of 90.`;
+      return "Only one exact normalized Instagram handle on an ACTIVE Birdie Profile can resolve automatically.";
   }
 }
 
@@ -163,6 +166,7 @@ export function resolveInstagramIdentity(
   const idempotencyKey = `IDENTITY|${workItemId || "UNKNOWN"}|${IDENTITY_RESOLVER_VERSION}`;
 
   if (
+    evidence.canonicalExactLink &&
     evidence.explicitLink &&
     evidence.candidateCount === 1 &&
     !evidence.conflictingEvidence &&
@@ -206,30 +210,6 @@ export function resolveInstagramIdentity(
     };
   }
 
-  if (
-    evidence.candidateCount === 1 &&
-    evidence.confidence >= 90 &&
-    firstCandidateBirdieId
-  ) {
-    const identityReason = standardReason(evidence, "HIGH");
-    return {
-      processed: true,
-      resolverVersion: IDENTITY_RESOLVER_VERSION,
-      idempotencyKey,
-      write: resolutionWrite({
-        resolutionStatus: "IDENTITY_RESOLVED",
-        matchedBirdieId: firstCandidateBirdieId,
-        decision: "HIGH_CONFIDENCE_MATCH",
-        agentNotes: "Instagram identity resolved automatically from one unique high-confidence candidate.",
-        processedAt,
-        identityConfidence: evidence.confidence,
-        identityReason,
-        identityConflict: false,
-        identityDecisionMode: "AUTO_HIGH_CONFIDENCE"
-      })
-    };
-  }
-
   if (evidence.candidateCount === 0) {
     const identityReason = standardReason(evidence, "NO_MATCH");
     return {
@@ -257,7 +237,7 @@ export function resolveInstagramIdentity(
     write: resolutionWrite({
       resolutionStatus: "IDENTITY_PENDING",
       decision: "FOUNDER_REVIEW_REQUIRED",
-      agentNotes: "Identity confidence is below the automatic resolution threshold. Founder review required.",
+      agentNotes: "Non-canonical identity evidence cannot resolve an Instagram identity. Founder review required.",
       processedAt,
       identityConfidence: evidence.confidence,
       identityReason,
