@@ -26,14 +26,32 @@ const index = await readFile(join(clientRoot, "index.html"), "utf8");
 const vite = await readFile(join(clientRoot, "vite.config.ts"), "utf8");
 const packageJson = JSON.parse(await readFile(join(clientRoot, "package.json"), "utf8"));
 
-test("Immersive Estate has one explicit V0.3.4 presentation contract", () => {
-  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.4"/);
+test("Immersive Estate has one explicit V0.3.5 presentation contract", () => {
+  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.5"/);
   const districtRegistry = contract.match(/ESTATE_DISTRICT_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const districts = [...districtRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(districts, ["arrival-court", "hotel", "golf-course", "terrace", "stables", "estate-grounds"]);
   const interactionRegistry = contract.match(/ESTATE_INTERACTION_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const interactions = [...interactionRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(interactions, ["hotel-reception", "greenkeeper", "stable-guide"]);
+});
+
+test("V0.3.5 carries one explicit golden-estate color grade across WebGL and arrival", () => {
+  assert.match(scene, /ESTATE_COLOR_GRADE_VERSION = "golden-estate-v0\.3\.5"/);
+  assert.match(scene, /dataset\.estateColorGrade = ESTATE_COLOR_GRADE_VERSION/);
+  assert.match(scene, /createGoldenSkyTexture\(\)/);
+  assert.match(scene, /ACESFilmicToneMapping/);
+  assert.match(scene, /const coolFill = new THREE\.DirectionalLight/);
+  for (const token of [
+    "--estate-forest-night",
+    "--estate-fairway",
+    "--estate-water",
+    "--estate-stone",
+    "--estate-gold",
+    "--estate-sun"
+  ]) {
+    assert.match(styles, new RegExp(token));
+  }
 });
 
 test("V0.3.4 gives the estate a ceremonial court and lived-in grounds", () => {

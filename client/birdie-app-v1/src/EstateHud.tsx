@@ -70,7 +70,7 @@ export function EstateHud({
         <div className="estate-brand" aria-label="Birdie & Breakfast BirdieWorld">
           <span className="estate-brand__mark" aria-hidden="true">B&amp;B</span>
           <span>
-            <small>BirdieWorld · Immersive Estate V0.3.4</small>
+            <small>BirdieWorld · Immersive Estate V0.3.5</small>
             <strong>Birdie &amp; Breakfast</strong>
           </span>
         </div>

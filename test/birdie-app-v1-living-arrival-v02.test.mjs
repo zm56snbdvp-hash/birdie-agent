@@ -86,10 +86,10 @@ test("the Host Spine stays transient and grants no new runtime authority", () =>
   assert.doesNotMatch(host, /identity|permission|authority|quest|coin|multiplayer|voice|gps/i);
 });
 
-test("the first-ten-second surface keeps the German hospitality narrative in V0.3.4", () => {
+test("the first-ten-second surface keeps the German hospitality narrative in V0.3.5", () => {
   assert.match(index, /<html lang="de">/);
-  assert.match(index, /<title>BirdieWorld – Immersive Estate V0\.3\.4<\/title>/);
-  assert.match(app, /BirdieWorld Immersive Estate V0\.3\.4/);
+  assert.match(index, /<title>BirdieWorld – Immersive Estate V0\.3\.5<\/title>/);
+  assert.match(app, /BirdieWorld Immersive Estate V0\.3\.5/);
   assert.match(arrival, /Das Taxi wartet am Tor\./);
   assert.match(arrival, /Birdie empfängt dich gleich persönlich am Ankunftshof\./);
   assert.match(companion, /Schön, dass du da bist\./);

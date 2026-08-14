@@ -20,6 +20,8 @@ const DRAG_DEAD_ZONE = 10;
 const DRAG_MAX_RADIUS = 72;
 const CAMERA_SAMPLE_STEP = 0.45;
 
+export const ESTATE_COLOR_GRADE_VERSION = "golden-estate-v0.3.5" as const;
+
 export interface ImmersiveEstateSceneProps {
   onDistrictChange?: (district: EstateDistrictId) => void;
   onInteraction?: (interaction: EstateInteractionEvent) => void;
@@ -54,27 +56,64 @@ interface CollisionCircle {
 }
 
 const COLORS = {
-  forestDeep: 0x132c20,
-  forest: 0x244b32,
-  forestLight: 0x567846,
-  grass: 0x506f3e,
-  fairway: 0x78a253,
-  green: 0x91b968,
+  forestNight: 0x10271c,
+  forestDeep: 0x173624,
+  forest: 0x28563a,
+  forestLight: 0x66834a,
+  grass: 0x526f3b,
+  meadowDark: 0x34563a,
+  meadowLight: 0x758c4b,
+  fairway: 0x88a94f,
+  green: 0x9cbb63,
   cream: 0xf7f1e5,
-  path: 0xd6c39f,
-  pathEdge: 0x9e8a68,
-  gold: 0xc7a54a,
-  hotel: 0xb8a187,
-  roof: 0x292d28,
-  stable: 0x874b39,
-  stableTrim: 0xe6d5ba,
-  wood: 0x6d4d37,
-  water: 0x376b70,
-  sand: 0xdcc590,
-  charcoal: 0x2f302d,
-  warmLight: 0xffc876,
-  sky: 0xd89d68
+  path: 0xd8c5a0,
+  pathEdge: 0x9b8664,
+  gold: 0xd0aa43,
+  hotel: 0xbca186,
+  roof: 0x252a27,
+  stable: 0x824735,
+  stableTrim: 0xe8d5b6,
+  wood: 0x674633,
+  water: 0x2d6b70,
+  waterEdge: 0x24483c,
+  sand: 0xe0c98f,
+  stone: 0x958b79,
+  rock: 0x56605a,
+  flowerWhite: 0xf5ead5,
+  flowerGold: 0xe0ad39,
+  flowerViolet: 0x8f668b,
+  trunk: 0x584033,
+  charcoal: 0x2b2e2b,
+  windowGlass: 0x4c321e,
+  warmLight: 0xffc36b,
+  skyZenith: "#78908a",
+  skyHaze: "#d4a068",
+  skySun: "#f3c77f",
+  skyHorizon: "#708566",
+  fog: 0xb58b67
 } as const;
+
+function createGoldenSkyTexture() {
+  const canvas = document.createElement("canvas");
+  canvas.width = 16;
+  canvas.height = 512;
+  const context = canvas.getContext("2d");
+  if (!context) return null;
+
+  const gradient = context.createLinearGradient(0, 0, 0, canvas.height);
+  gradient.addColorStop(0, COLORS.skyZenith);
+  gradient.addColorStop(0.42, COLORS.skyHaze);
+  gradient.addColorStop(0.67, COLORS.skySun);
+  gradient.addColorStop(1, COLORS.skyHorizon);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, canvas.width, canvas.height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearFilter;
+  return texture;
+}
 
 const PRIVATE_INTERACTION_POINTS: readonly PrivateInteractionPoint[] = [
   { id: "hotel-reception", x: 0, z: -8.2, radius: 8.5 },
@@ -274,8 +313,8 @@ interface SceneMaterials {
 function createMaterials(): SceneMaterials {
   return {
     grass: new THREE.MeshStandardMaterial({ color: COLORS.grass, roughness: 1 }),
-    meadowDark: new THREE.MeshStandardMaterial({ color: 0x36583a, roughness: 1 }),
-    meadowLight: new THREE.MeshStandardMaterial({ color: 0x688b4a, roughness: 1 }),
+    meadowDark: new THREE.MeshStandardMaterial({ color: COLORS.meadowDark, roughness: 1 }),
+    meadowLight: new THREE.MeshStandardMaterial({ color: COLORS.meadowLight, roughness: 1 }),
     fairway: new THREE.MeshStandardMaterial({ color: COLORS.fairway, roughness: 1 }),
     green: new THREE.MeshStandardMaterial({ color: COLORS.green, roughness: 1 }),
     path: new THREE.MeshStandardMaterial({ color: COLORS.path, roughness: 1 }),
@@ -286,9 +325,9 @@ function createMaterials(): SceneMaterials {
     gold: new THREE.MeshStandardMaterial({ color: COLORS.gold, roughness: 0.72 }),
     charcoal: new THREE.MeshStandardMaterial({ color: COLORS.charcoal, roughness: 0.86 }),
     glass: new THREE.MeshStandardMaterial({
-      color: 0x483823,
+      color: COLORS.windowGlass,
       emissive: COLORS.warmLight,
-      emissiveIntensity: 0.35,
+      emissiveIntensity: 0.48,
       roughness: 0.32
     }),
     stable: new THREE.MeshStandardMaterial({ color: COLORS.stable, roughness: 0.95 }),
@@ -299,21 +338,21 @@ function createMaterials(): SceneMaterials {
       roughness: 0.2,
       metalness: 0.08
     }),
-    waterEdge: new THREE.MeshStandardMaterial({ color: 0x263e34, roughness: 1 }),
+    waterEdge: new THREE.MeshStandardMaterial({ color: COLORS.waterEdge, roughness: 1 }),
     sand: new THREE.MeshStandardMaterial({ color: COLORS.sand, roughness: 1 }),
-    stone: new THREE.MeshStandardMaterial({ color: 0x8f8778, roughness: 0.98 }),
-    rock: new THREE.MeshStandardMaterial({ color: 0x59605a, roughness: 1 }),
-    flowerWhite: new THREE.MeshStandardMaterial({ color: 0xf4ead7, roughness: 0.9 }),
-    flowerGold: new THREE.MeshStandardMaterial({ color: 0xd7aa42, roughness: 0.9 }),
-    flowerViolet: new THREE.MeshStandardMaterial({ color: 0x80658f, roughness: 0.9 }),
-    trunk: new THREE.MeshStandardMaterial({ color: 0x5d4334, roughness: 1 }),
+    stone: new THREE.MeshStandardMaterial({ color: COLORS.stone, roughness: 0.98 }),
+    rock: new THREE.MeshStandardMaterial({ color: COLORS.rock, roughness: 1 }),
+    flowerWhite: new THREE.MeshStandardMaterial({ color: COLORS.flowerWhite, roughness: 0.9 }),
+    flowerGold: new THREE.MeshStandardMaterial({ color: COLORS.flowerGold, roughness: 0.9 }),
+    flowerViolet: new THREE.MeshStandardMaterial({ color: COLORS.flowerViolet, roughness: 0.9 }),
+    trunk: new THREE.MeshStandardMaterial({ color: COLORS.trunk, roughness: 1 }),
     foliage: new THREE.MeshStandardMaterial({ color: COLORS.forestDeep, roughness: 1 }),
     foliageLight: new THREE.MeshStandardMaterial({ color: COLORS.forestLight, roughness: 1 }),
     skin: new THREE.MeshStandardMaterial({ color: 0xc99973, roughness: 0.88 }),
     warmLight: new THREE.MeshStandardMaterial({
       color: COLORS.warmLight,
       emissive: COLORS.warmLight,
-      emissiveIntensity: 1.15,
+      emissiveIntensity: 1.28,
       roughness: 0.42
     })
   };
@@ -1160,10 +1199,11 @@ export function ImmersiveEstateScene({
       window.matchMedia("(min-width: 760px)").matches && !reducedMotion;
 
     renderer.domElement.dataset.estateRenderer = "webgl2";
+    renderer.domElement.dataset.estateColorGrade = ESTATE_COLOR_GRADE_VERSION;
     renderer.domElement.setAttribute("aria-hidden", "true");
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.98;
+    renderer.toneMappingExposure = 1.06;
     renderer.shadowMap.enabled = qualityShadows;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setPixelRatio(
@@ -1172,16 +1212,17 @@ export function ImmersiveEstateScene({
     mount.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(COLORS.sky);
-    scene.fog = new THREE.FogExp2(0xb98b67, 0.0074);
+    const skyTexture = createGoldenSkyTexture();
+    scene.background = skyTexture ?? new THREE.Color(COLORS.fog);
+    scene.fog = new THREE.FogExp2(COLORS.fog, 0.0068);
 
     const camera = new THREE.PerspectiveCamera(54, 1, 0.1, 260);
     camera.position.set(0, 8.5, 60);
     camera.lookAt(0, 1.8, 40);
 
     const materials = createMaterials();
-    scene.add(new THREE.HemisphereLight(0xffe2b4, COLORS.forestDeep, 1.7));
-    const sun = new THREE.DirectionalLight(0xffc878, 3.1);
+    scene.add(new THREE.HemisphereLight(0xffe0ad, COLORS.forestNight, 1.82));
+    const sun = new THREE.DirectionalLight(COLORS.warmLight, 3.35);
     sun.position.set(-42, 48, 28);
     sun.castShadow = qualityShadows;
     sun.shadow.mapSize.set(1024, 1024);
@@ -1192,6 +1233,10 @@ export function ImmersiveEstateScene({
     sun.shadow.camera.near = 1;
     sun.shadow.camera.far = 155;
     scene.add(sun);
+
+    const coolFill = new THREE.DirectionalLight(0x8fae9d, 0.42);
+    coolFill.position.set(38, 20, -42);
+    scene.add(coolFill);
 
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(150, 118),
@@ -1206,7 +1251,7 @@ export function ImmersiveEstateScene({
     addLandscapeEllipse(scene, materials.meadowDark, 3, -45, 42, 14, 0.022, 0);
 
     const hillMaterial = new THREE.MeshStandardMaterial({
-      color: 0x41664a,
+      color: COLORS.forest,
       roughness: 1
     });
     const hills = [
@@ -2010,6 +2055,7 @@ export function ImmersiveEstateScene({
         mount.removeChild(renderer.domElement);
       }
       disposeScene(scene);
+      skyTexture?.dispose();
       renderer.dispose();
       renderer.forceContextLoss();
     };
