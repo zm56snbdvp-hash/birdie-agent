@@ -19,8 +19,8 @@ export default defineConfig({
   use: {
     baseURL: "http://127.0.0.1:4173",
     locale: "de-DE",
-    screenshot: "only-on-failure",
-    trace: "retain-on-failure",
+    screenshot: "off",
+    trace: "off",
     launchOptions: {
       ...(browserExecutablePath ? { executablePath: browserExecutablePath } : {}),
       args: [

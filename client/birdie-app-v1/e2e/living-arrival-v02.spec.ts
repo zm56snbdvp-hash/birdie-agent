@@ -21,6 +21,30 @@ function collectRuntimeErrors(page: Page) {
 }
 
 async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
+  const scene = page.locator("section.immersive-estate-scene");
+  const renderMode = await scene.getAttribute("data-render-mode");
+  if (renderMode === "webgl") {
+    const evidence = await page.evaluate(() => {
+      const sceneElement = document.querySelector("section.immersive-estate-scene");
+      const canvas = document.querySelector("canvas[data-estate-renderer='webgl2']");
+      return {
+        contract: sceneElement?.getAttribute("data-immersive-estate"),
+        renderMode: sceneElement?.getAttribute("data-render-mode"),
+        webgl: sceneElement?.getAttribute("data-estate-webgl"),
+        district: sceneElement?.getAttribute("data-estate-district"),
+        colorGrade: canvas?.getAttribute("data-estate-color-grade"),
+        canvas: canvas
+          ? { width: (canvas as HTMLCanvasElement).width, height: (canvas as HTMLCanvasElement).height }
+          : null,
+        viewport: { width: innerWidth, height: innerHeight }
+      };
+    });
+    await testInfo.attach(`${name}-render-state`, {
+      body: new TextEncoder().encode(JSON.stringify(evidence, null, 2)),
+      contentType: "application/json"
+    });
+    return;
+  }
   await testInfo.attach(name, {
     body: await page.screenshot({ animations: "disabled" }),
     contentType: "image/png"
