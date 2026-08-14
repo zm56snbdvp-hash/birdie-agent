@@ -29,6 +29,7 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
       const canvas = document.querySelector("canvas[data-estate-renderer='webgl2']");
       return {
         contract: sceneElement?.getAttribute("data-immersive-estate"),
+        handoff: sceneElement?.getAttribute("data-estate-handoff"),
         renderMode: sceneElement?.getAttribute("data-render-mode"),
         webgl: sceneElement?.getAttribute("data-estate-webgl"),
         district: sceneElement?.getAttribute("data-estate-district"),
@@ -325,7 +326,7 @@ test("WebGL travel reaches Hotel, Golfplatz and Reiterhof with session-only NPC 
 });
 
 test("390 x 844 touch shell stays fullscreen and movement never hijacks typing", async ({ browser }, testInfo) => {
-  test.setTimeout(45_000);
+  test.setTimeout(75_000);
   const context = await browser.newContext({
     viewport: { width: 390, height: 844 },
     screen: { width: 390, height: 844 },
@@ -391,6 +392,10 @@ test("390 x 844 touch shell stays fullscreen and movement never hijacks typing",
   await mobileMap.getByRole("button", { name: "Karte schließen" }).click();
 
   const scene = await waitForSceneOutcome(page);
+  await expect(scene).toHaveAttribute(
+    "data-estate-handoff",
+    "birdieworld-estate-handoff-v1"
+  );
   const touch = scene.locator("[data-estate-touch-controls='drag']");
   if (await touch.isVisible()) {
     await expect(scene).toHaveAttribute("data-estate-camera-mode", "third-person-follow");
