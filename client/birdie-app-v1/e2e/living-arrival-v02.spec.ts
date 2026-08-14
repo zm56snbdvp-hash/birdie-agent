@@ -34,7 +34,11 @@ async function completeTaxiArrival(page: Page, style = "fairway") {
   await expect(arrival).toBeVisible();
   await expect(main).toHaveAttribute("data-estate-arrival-state", "approaching");
   await expect(main).toHaveAttribute("data-host-stage", "noticed");
-  await arrival.getByRole("radio", { name: new RegExp(style.replaceAll("-", " "), "i") }).check();
+  const avatarStyle = arrival.getByRole("radio", {
+    name: new RegExp(style.replaceAll("-", " "), "i")
+  });
+  await arrival.locator(`[data-avatar-style="${style}"]`).click();
+  await expect(avatarStyle).toBeChecked();
   await arrival.getByRole("button", { name: "Am Ankunftshof aussteigen" }).click();
   await expect(arrival).toHaveCount(0);
   await expect(main).toHaveAttribute("data-estate-arrival-state", "arrived");
