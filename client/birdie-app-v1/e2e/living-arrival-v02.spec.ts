@@ -371,7 +371,7 @@ test("390 x 844 touch shell stays fullscreen and movement never hijacks typing",
   const districtBeforeTyping = await page.locator("main").getAttribute("data-estate-district");
   await page.getByRole("button", { name: /Personal Birdie/ }).click();
   const personalBirdiePanel = page.getByRole("dialog", { name: "Personal Birdie" });
-  const personalBirdiePanelBox = await personalBirdiePanel.boundingBox();
+  const personalBirdiePanelBox = await personalBirdiePanel.locator(".estate-feature-panel").boundingBox();
   const featureLauncherBox = await overlayLauncher.boundingBox();
   expect(personalBirdiePanelBox).not.toBeNull();
   expect(featureLauncherBox).not.toBeNull();

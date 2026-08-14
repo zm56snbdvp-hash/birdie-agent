@@ -71,9 +71,9 @@ const COLORS = {
 } as const;
 
 const PRIVATE_INTERACTION_POINTS: readonly PrivateInteractionPoint[] = [
-  { id: "hotel-reception", x: 0, z: -8.2, radius: 4.8 },
-  { id: "greenkeeper", x: -42, z: 5, radius: 5.2 },
-  { id: "stable-guide", x: 41, z: -4.5, radius: 5.2 }
+  { id: "hotel-reception", x: 0, z: -8.2, radius: 8.5 },
+  { id: "greenkeeper", x: -42, z: 5, radius: 8.5 },
+  { id: "stable-guide", x: 41, z: -4.5, radius: 8.5 }
 ] as const;
 
 const BUILDING_COLLISIONS: readonly CollisionRectangle[] = [

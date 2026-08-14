@@ -148,7 +148,7 @@ test("destination and return navigation restore an accessible focus story", () =
 
 test("basic mobile accessibility remains visible and touch-sized", () => {
   assert.match(app, /role="region"/);
-  assert.match(companionStyles, /\.birdie-companion__close \{[\s\S]*?width: 44px;[\s\S]*?height: 44px;/);
+  assert.match(companionStyles, /\.birdie-companion__close \{[\s\S]*?width: 46px;[\s\S]*?height: 46px;/);
   assert.match(companionStyles, /\.birdie-companion__primary \{[\s\S]*?min-height: 44px;/);
   assert.match(companionStyles, /@media \(max-width: 430px\)[\s\S]*?\.birdie-companion__bird \{[\s\S]*?display: block;/);
   assert.match(styles, /\.immersive-estate-scene__touch button \{[^}]*width: 48px;[^}]*height: 48px;/);
