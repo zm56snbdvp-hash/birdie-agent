@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.6.2**
+Current service version: **2.8.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -28,8 +28,9 @@ Birdie OS is the source of truth for live company state. The Birdie Agent may ph
 - `OPENAI_API_KEY` — OpenAI API key used by the Birdie Agent.
 - `OPENAI_MODEL` — optional; defaults to `gpt-5`.
 - `BIRDIE_AGENT_API_KEY` — shared secret used by ChatGPT/clients to authenticate to the Birdie Agent.
+- `BIRDIE_FAMILY_API_KEY` — separate key for the governed read-only Birdie Family surface.
 - `BIRDIE_OS_API_KEY` — secret used by the Birdie Agent to authenticate to Birdie OS.
-- `BIRDIE_OS_BASE` — Birdie OS Google Apps Script Web App URL. A default is currently present in `server.mjs`; production should still set this explicitly in Cloud Run.
+- `BIRDIE_OS_BASE` — required Birdie OS Google Apps Script Web App URL. The service fails closed at startup when it is missing or invalid.
 - `PORT` — supplied by Cloud Run; defaults to `8080` locally.
 - `MAIL_USER` — IONOS mailbox login and enforced sender address.
 - `MAIL_PASSWORD` — IONOS mailbox password, supplied only through Secret Manager.
@@ -105,7 +106,7 @@ For general messages the agent loads the current Birdie OS live briefing before 
 
 ## Chatty MCP Mail Bridge
 
-Version 2.6 exposes a streamable HTTP MCP endpoint at:
+Version 2.8 exposes a streamable HTTP MCP endpoint at:
 
 ```text
 https://birdie-agent-893591677320.europe-west3.run.app/mcp
@@ -185,7 +186,12 @@ Routes:
 - `GET /coin/config`
 - `POST /coin/profiles`
 - `GET /coin/profiles/{birdieId}`
+- `POST /coin/profiles/{birdieId}/instagram`
 - `GET /coin/profiles/{birdieId}/ledger`
+- `GET /coin/social-events/{eventId}`
+- `POST /coin/social-events/{eventId}/instagram-comment/identity`
+- `POST /coin/social-events/{eventId}/instagram-comment/claim`
+- `POST /coin/social-events/{eventId}/instagram-comment/written`
 - `POST /coin/profiles/{birdieId}/badges`
 - `POST /coin/claims`
 - `POST /coin/claims/{claimId}/decision`
@@ -197,12 +203,25 @@ Routes:
 
 All Coin write requests require an idempotency key. Supporters cannot provide their own point amount. Opening balance migrations additionally require explicit founder approval.
 
+`IG_COMMENT` is available only through the dedicated social-event flow. The
+generic claim route rejects it. Birdie OS derives the action, Instagram source,
+exact text comment ID, fixed +1 amount and idempotency from canonical data.
+Identity, claim approval and `WRITTEN` each require their exact confirmation
+and event/work-item/Birdie context. `WRITTEN` is set only after one unique,
+matching approved ledger transaction.
+
+The Instagram route links a normalized, owner-submitted handle to an existing
+ACTIVE canonical profile. It never creates a claim, badge, reward, registration
+credit or Coin transaction, and it never replaces a different existing handle.
+
 See [`docs/birdie-coin-sprint-01.md`](docs/birdie-coin-sprint-01.md) for Apps Script integration and deployment steps.
+Use [`docs/task038-controlled-e2e.md`](docs/task038-controlled-e2e.md) for the
+fail-closed deployment and person-bound TASK-038 verification sequence.
 
 ## Local run
 
 ```bash
-npm install
+npm ci
 npm start
 ```
 

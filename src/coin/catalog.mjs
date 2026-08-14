@@ -11,6 +11,16 @@ export const REDEMPTION_DECISIONS = Object.freeze([
 export const ACTION_DEFINITIONS = Object.freeze({
   PROFILE_REGISTERED: { accountTypes: ACCOUNT_TYPES, points: 1 },
   INSTAGRAM_VERIFIED: { accountTypes: ["PRIVATE", "B2B"], points: 1 },
+  IG_COMMENT: {
+    accountTypes: ["PRIVATE"],
+    points: 1,
+    sourceTypes: ["INSTAGRAM"],
+    approvalMode: "MANUAL_APPROVAL",
+    frequencyRule: "PER_DISTINCT_COMMENT",
+    version: "V1",
+    status: "ACTIVE",
+    rolloutMode: "CONTROLLED_E2E"
+  },
   COMMUNITY_CONTRIBUTION: { accountTypes: ["PRIVATE"], points: 1 },
   STORY_SHARE_TAGGED: { accountTypes: ["PRIVATE", "B2B"], points: 2 },
   UGC_APPROVED: { accountTypes: ["PRIVATE"], points: 3 },

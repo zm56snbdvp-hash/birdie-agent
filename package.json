@@ -1,6 +1,6 @@
 {
   "name": "birdie-agent",
-  "version": "2.7.0-framer-beta.1",
+  "version": "2.8.0",
   "type": "module",
   "private": true,
   "scripts": {

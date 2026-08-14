@@ -12,8 +12,6 @@ const MAIL_DELETE_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["mai
 const OS_READ_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["os.read"] }] };
 const FRAMER_READ_SECURITY = { securitySchemes: [{ type: "oauth2", scopes: ["framer.read"] }] };
 
-const DEFAULT_BIRDIE_OS_BASE = "https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec";
-
 function toolResult(data, summary) {
   return {
     structuredContent: { result: data },
@@ -56,11 +54,13 @@ function guarded(handler, { authContext, authConfig, requiredScope, label = "Bir
 
 function createBirdieOsReader(env = process.env) {
   const apiKey = env.BIRDIE_OS_API_KEY;
-  const baseUrl = env.BIRDIE_OS_BASE || DEFAULT_BIRDIE_OS_BASE;
+  const baseUrl = env.BIRDIE_OS_BASE;
 
   async function get(action) {
-    if (!apiKey) {
-      const error = new Error("BIRDIE_OS_API_KEY is not configured");
+    if (!apiKey || !baseUrl) {
+      const error = new Error(
+        "BIRDIE_OS_API_KEY and BIRDIE_OS_BASE must be configured"
+      );
       error.code = "BIRDIE_OS_NOT_CONFIGURED";
       throw error;
     }

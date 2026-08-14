@@ -52,6 +52,16 @@ BIRDIE_COIN_HEADERS_[BIRDIE_COIN_SHEETS_.AUDIT] = [
 var BIRDIE_COIN_ACTIONS_ = {
   PROFILE_REGISTERED: { accountTypes: ["PRIVATE", "B2B", "TEAM"], points: 1 },
   INSTAGRAM_VERIFIED: { accountTypes: ["PRIVATE", "B2B"], points: 1 },
+  IG_COMMENT: {
+    accountTypes: ["PRIVATE"],
+    points: 1,
+    sourceTypes: ["INSTAGRAM"],
+    approvalMode: "MANUAL_APPROVAL",
+    frequencyRule: "PER_DISTINCT_COMMENT",
+    version: "V1",
+    status: "ACTIVE",
+    rolloutMode: "CONTROLLED_E2E"
+  },
   COMMUNITY_CONTRIBUTION: { accountTypes: ["PRIVATE"], points: 1 },
   STORY_SHARE_TAGGED: { accountTypes: ["PRIVATE", "B2B"], points: 2 },
   UGC_APPROVED: { accountTypes: ["PRIVATE"], points: 3 },
@@ -109,9 +119,14 @@ function handleBirdieCoinAction_(request) {
   switch (String(request.action || "")) {
     case "coinCreateProfile": return birdieCoinCreateProfile_(request);
     case "coinGetProfile": return birdieCoinGetProfile_(request);
+    case "coinLinkInstagramHandle": return birdieCoinLinkInstagramHandle_(request);
     case "coinGetLedger": return birdieCoinGetLedger_(request);
+    case "coinGetSocialEvent": return birdieSocialGetEvent_(request);
+    case "coinBindInstagramCommentIdentity": return birdieSocialBindInstagramCommentIdentity_(request);
+    case "coinCreateInstagramCommentClaim": return birdieSocialCreateInstagramCommentClaim_(request);
+    case "coinMarkInstagramCommentWritten": return birdieSocialMarkInstagramCommentWritten_(request);
     case "coinAwardBadge": return birdieCoinAwardBadge_(request);
-    case "coinCreateClaim": return birdieCoinCreateClaim_(request);
+    case "coinCreateClaim": return birdieCoinCreateClaim_(request, "");
     case "coinDecideClaim": return birdieCoinDecideClaim_(request);
     case "coinListRewards": return birdieCoinListRewards_(request);
     case "coinAdminQueue": return birdieCoinAdminQueue_(request);
@@ -187,6 +202,98 @@ function birdieCoinGetProfile_(request) {
   return birdieCoinSuccess_(birdieCoinProfileView_(profile));
 }
 
+function birdieCoinLinkInstagramHandle_(request) {
+  var lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    var birdieId = birdieCoinRequired_(request.birdieId, "birdieId");
+    var instagramHandle = birdieCoinNormalizeInstagramHandle_(request.instagramHandle);
+    var idempotencyKey = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
+    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.PROFILES);
+    var target = birdieCoinFind_(sheet, "birdieId", birdieId);
+
+    if (!target) throw new Error("BIRDIE_PROFILE_NOT_FOUND");
+    if (String(target.object.status) !== "ACTIVE") {
+      throw new Error("BIRDIE_PROFILE_NOT_ACTIVE");
+    }
+
+    var conflict = birdieCoinObjects_(sheet).some(function (profile) {
+      if (String(profile.status) !== "ACTIVE") return false;
+      if (String(profile.birdieId) === birdieId) return false;
+      var existingHandle = String(profile.instagramHandle || "").trim();
+      return existingHandle &&
+        birdieCoinNormalizeInstagramHandle_(existingHandle) === instagramHandle;
+    });
+    if (conflict) throw new Error("INSTAGRAM_HANDLE_ALREADY_LINKED");
+
+    var targetExistingHandle = String(target.object.instagramHandle || "").trim();
+    if (targetExistingHandle) {
+      if (birdieCoinNormalizeInstagramHandle_(targetExistingHandle) === instagramHandle) {
+        birdieCoinAudit_(
+          "INSTAGRAM_HANDLE_LINKED",
+          "PROFILE",
+          birdieId,
+          request.source,
+          { instagramHandle: instagramHandle },
+          idempotencyKey
+        );
+        return birdieCoinSuccess_({
+          profile: birdieCoinProfileView_(target.object),
+          idempotent: true
+        });
+      }
+      throw new Error("INSTAGRAM_HANDLE_CHANGE_REQUIRES_REVIEW");
+    }
+
+    var updatedAt = birdieCoinNow_();
+    birdieCoinWriteInstagramHandle_(
+      sheet,
+      target.row,
+      instagramHandle,
+      updatedAt
+    );
+    SpreadsheetApp.flush();
+
+    var readback = birdieCoinFind_(sheet, "birdieId", birdieId);
+    var readbackMatches = false;
+    var preservedFieldsMatch = readback && Object.keys(target.object).every(function (field) {
+      if (field === "instagramHandle" || field === "updatedAt") return true;
+      return String(readback.object[field]) === String(target.object[field]);
+    });
+    if (readback &&
+        String(readback.object.birdieId) === birdieId &&
+        String(readback.object.status) === "ACTIVE" &&
+        String(readback.object.updatedAt) === updatedAt &&
+        preservedFieldsMatch) {
+      try {
+        readbackMatches = birdieCoinNormalizeInstagramHandle_(
+          readback.object.instagramHandle
+        ) === instagramHandle;
+      } catch (readbackError) {
+        readbackMatches = false;
+      }
+    }
+    if (!readbackMatches) {
+      throw new Error("INSTAGRAM_HANDLE_READBACK_MISMATCH");
+    }
+
+    birdieCoinAudit_(
+      "INSTAGRAM_HANDLE_LINKED",
+      "PROFILE",
+      birdieId,
+      request.source,
+      { instagramHandle: instagramHandle },
+      idempotencyKey
+    );
+    return birdieCoinSuccess_({
+      profile: birdieCoinProfileView_(readback.object),
+      idempotent: false
+    });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function birdieCoinGetLedger_(request) {
   var birdieId = birdieCoinRequired_(request.birdieId, "birdieId");
   birdieCoinRequireProfile_(birdieId);
@@ -244,24 +351,102 @@ function birdieCoinAwardBadge_(request) {
   }
 }
 
-function birdieCoinCreateClaim_(request) {
+function birdieCoinCreateClaim_(request, dedicatedActionCode) {
   var lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
-    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.CLAIMS);
-    var key = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
-    var duplicate = birdieCoinFind_(sheet, "idempotencyKey", key);
-    if (duplicate) return birdieCoinSuccess_(duplicate.object);
-
+    if (
+      request.amount !== undefined ||
+      request.points !== undefined ||
+      request.approvedAmount !== undefined
+    ) {
+      throw new Error("CLIENT_AMOUNT_FORBIDDEN");
+    }
+    var requestedActionCode = birdieCoinRequired_(
+      request.actionCode,
+      "actionCode"
+    ).toUpperCase();
+    if (
+      requestedActionCode === "IG_COMMENT" &&
+      dedicatedActionCode !== "IG_COMMENT"
+    ) {
+      throw new Error("DEDICATED_IG_COMMENT_ACTION_REQUIRED");
+    }
     var profile = birdieCoinRequireProfile_(request.birdieId);
-    var actionCode = birdieCoinRequired_(request.actionCode, "actionCode").toUpperCase();
+    var actionCode = requestedActionCode;
     var definition = BIRDIE_COIN_ACTIONS_[actionCode];
     if (!definition) throw new Error("UNKNOWN_ACTION_CODE");
+    if (dedicatedActionCode && actionCode !== dedicatedActionCode) {
+      throw new Error("DEDICATED_ACTION_MISMATCH");
+    }
     if (definition.accountTypes.indexOf(String(profile.accountType)) === -1) {
       throw new Error("ACTION_NOT_ALLOWED_FOR_ACCOUNT_TYPE");
     }
 
+    var sourceType = birdieCoinRequired_(
+      request.sourceType,
+      "sourceType"
+    ).toUpperCase();
     var sourceReference = birdieCoinRequired_(request.sourceReference, "sourceReference");
+    var socialEvent = null;
+    if (actionCode === "IG_COMMENT") {
+      socialEvent = birdieSocialValidateInstagramCommentClaim_(profile, request);
+    }
+
+    var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.CLAIMS);
+    var key = birdieCoinRequired_(request.idempotencyKey, "idempotencyKey");
+    var duplicate = birdieCoinFind_(sheet, "idempotencyKey", key);
+    if (duplicate) {
+      if (
+        String(duplicate.object.birdieId) !== String(profile.birdieId) ||
+        String(duplicate.object.actionCode) !== actionCode ||
+        String(duplicate.object.sourceType) !== sourceType ||
+        String(duplicate.object.sourceReference) !== sourceReference
+      ) {
+        throw new Error("CLAIM_IDEMPOTENCY_CONFLICT");
+      }
+      if (actionCode === "IG_COMMENT") {
+        var duplicateStatus = String(duplicate.object.status);
+        if (
+          ["PENDING", "APPROVED", "REJECTED"].indexOf(
+            duplicateStatus
+          ) === -1
+        ) {
+          throw new Error("INVALID_IG_COMMENT_CLAIM_STATUS");
+        }
+        if (duplicateStatus === "APPROVED") {
+          if (Number(duplicate.object.approvedAmount) !== 1) {
+            throw new Error("INVALID_IG_COMMENT_APPROVED_AMOUNT");
+          }
+          birdieSocialRequireInstagramCommentLedgerProof_(
+            duplicate.object,
+            socialEvent
+          );
+        }
+        if (
+          String(socialEvent.coinWriteStatus) === "WRITTEN" &&
+          duplicateStatus !== "APPROVED"
+        ) {
+          throw new Error("WRITTEN_EVENT_REQUIRES_APPROVED_CLAIM");
+        }
+      }
+      birdieCoinAudit_(
+        "CLAIM_CREATED",
+        "CLAIM",
+        duplicate.object.claimId,
+        request.source,
+        duplicate.object,
+        key
+      );
+      return birdieCoinSuccess_(duplicate.object);
+    }
+    if (
+      socialEvent &&
+      String(socialEvent.coinWriteStatus) === "WRITTEN"
+    ) {
+      throw new Error("IG_COMMENT_EVENT_ALREADY_WRITTEN");
+    }
+
     var sameSource = birdieCoinObjects_(sheet).some(function (row) {
       return String(row.birdieId) === String(profile.birdieId) &&
         String(row.actionCode) === actionCode &&
@@ -274,7 +459,7 @@ function birdieCoinCreateClaim_(request) {
       claimId: birdieCoinId_("CLAIM"),
       birdieId: profile.birdieId,
       actionCode: actionCode,
-      sourceType: birdieCoinRequired_(request.sourceType, "sourceType").toUpperCase(),
+      sourceType: sourceType,
       sourceReference: sourceReference,
       evidenceUrl: String(request.evidenceUrl || ""),
       note: String(request.note || ""),
@@ -306,13 +491,46 @@ function birdieCoinDecideClaim_(request) {
     var decision = birdieCoinRequired_(request.decision, "decision").toUpperCase();
     var targetStatus = decision === "APPROVE" ? "APPROVED" : decision === "REJECT" ? "REJECTED" : "";
     if (!targetStatus) throw new Error("INVALID_CLAIM_DECISION");
-    if (String(claim.status) === targetStatus) return birdieCoinSuccess_(claim);
+    var instagramCommentEvent = null;
+    if (
+      decision === "APPROVE" &&
+      String(claim.actionCode) === "IG_COMMENT"
+    ) {
+      birdieSocialRequireConfirmation_(
+        request.confirmation,
+        BIRDIE_SOCIAL_CONFIRMATIONS_.APPROVE_CLAIM
+      );
+      if (request.approvedAmount !== undefined && request.approvedAmount !== "") {
+        throw new Error("CLIENT_AMOUNT_FORBIDDEN");
+      }
+      instagramCommentEvent = birdieSocialValidateInstagramCommentApproval_(
+        claim,
+        request
+      );
+    }
+    if (
+      decision === "REJECT" &&
+      String(claim.actionCode) === "IG_COMMENT"
+    ) {
+      birdieSocialAssertInstagramCommentRejectable_(claim);
+    }
+    if (String(claim.status) === targetStatus) {
+      birdieCoinAudit_(
+        "CLAIM_" + targetStatus,
+        "CLAIM",
+        claim.claimId,
+        String(request.actor || "Birdie Agent"),
+        claim,
+        decisionKey
+      );
+      return birdieCoinSuccess_(claim);
+    }
     if (String(claim.status) !== "PENDING") throw new Error("CLAIM_ALREADY_DECIDED");
 
     var approvedAmount = "";
     if (decision === "APPROVE") {
       approvedAmount = birdieCoinActionAmount_(claim.actionCode, request.approvedAmount);
-      birdieCoinAppendTransaction_({
+      var transaction = birdieCoinAppendTransaction_({
         birdieId: claim.birdieId,
         amount: approvedAmount,
         transactionType: "EARN",
@@ -324,6 +542,12 @@ function birdieCoinDecideClaim_(request) {
         idempotencyKey: "claim:" + claim.claimId,
         note: claim.note
       });
+      if (String(claim.actionCode) === "IG_COMMENT") {
+        birdieSocialRequireInstagramCommentLedgerProof_(
+          claim,
+          instagramCommentEvent
+        );
+      }
     }
 
     claim.status = targetStatus;
@@ -502,7 +726,20 @@ function birdieCoinImportOpeningBalance_(request) {
 function birdieCoinAppendTransaction_(input) {
   var sheet = birdieCoinSheet_(BIRDIE_COIN_SHEETS_.TRANSACTIONS);
   var duplicate = birdieCoinFind_(sheet, "idempotencyKey", input.idempotencyKey);
-  if (duplicate) return duplicate.object;
+  if (duplicate) {
+    if (
+      String(duplicate.object.birdieId) !== String(input.birdieId) ||
+      Number(duplicate.object.amount) !== Number(input.amount) ||
+      String(duplicate.object.transactionType) !== String(input.transactionType) ||
+      String(duplicate.object.actionCode) !== String(input.actionCode) ||
+      String(duplicate.object.sourceType) !== String(input.sourceType) ||
+      String(duplicate.object.sourceReference) !== String(input.sourceReference) ||
+      String(duplicate.object.status) !== String(input.status)
+    ) {
+      throw new Error("TRANSACTION_IDEMPOTENCY_CONFLICT");
+    }
+    return duplicate.object;
+  }
   var now = birdieCoinNow_();
   var transaction = {
     transactionId: birdieCoinId_("TX"),
@@ -665,6 +902,18 @@ function birdieCoinAppendObject_(sheet, object) {
   }));
 }
 
+function birdieCoinWriteInstagramHandle_(sheet, rowNumber, instagramHandle, updatedAt) {
+  var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  var instagramColumn = headers.indexOf("instagramHandle");
+  var updatedAtColumn = headers.indexOf("updatedAt");
+  if (instagramColumn === -1 || updatedAtColumn === -1) {
+    throw new Error("INVALID_COIN_SHEET_HEADERS:" + BIRDIE_COIN_SHEETS_.PROFILES);
+  }
+  // Write the authoritative link last so an earlier cell-write failure cannot expose it.
+  sheet.getRange(rowNumber, updatedAtColumn + 1, 1, 1).setValue(updatedAt);
+  sheet.getRange(rowNumber, instagramColumn + 1, 1, 1).setValue(instagramHandle);
+}
+
 function birdieCoinWriteObject_(sheet, rowNumber, object) {
   var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
   sheet.getRange(rowNumber, 1, 1, headers.length).setValues([headers.map(function (header) {
@@ -676,6 +925,16 @@ function birdieCoinRequired_(value, field) {
   var result = String(value === undefined || value === null ? "" : value).trim();
   if (!result) throw new Error("MISSING_FIELD:" + field);
   return result;
+}
+
+function birdieCoinNormalizeInstagramHandle_(value) {
+  var handle = birdieCoinRequired_(value, "instagramHandle")
+    .toLowerCase()
+    .replace(/^@/, "");
+  if (!/^[a-z0-9._]{1,30}$/.test(handle)) {
+    throw new Error("INVALID_INSTAGRAM_HANDLE");
+  }
+  return handle;
 }
 
 function birdieCoinPositiveInteger_(value, field) {

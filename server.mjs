@@ -7,6 +7,8 @@ import { routeFramerRequest } from "./src/framer-router.mjs";
 import { routeMcpRequest } from "./src/mcp-server.mjs";
 import { routeFamilyMcpRequest } from "./src/family/family-mcp.mjs";
 import { routeFamilyApiRequest } from "./src/family/family-api.mjs";
+import { createCommunityIdentityService } from "./src/community/identity-service.mjs";
+import { routeCommunityIdentityRequest } from "./src/community/identity-router.mjs";
 import {
   authenticateMcpRequest,
   createMcpAuthConfig,
@@ -15,18 +17,29 @@ import {
 } from "./src/mcp-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
-const BIRDIE_AGENT_VERSION = "2.7.0";
+const BIRDIE_AGENT_VERSION = "2.8.0";
 const ACTION_RESPONSE_MAX_CHARS = 60_000;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-5";
 const BIRDIE_OS_API_KEY = process.env.BIRDIE_OS_API_KEY;
 const BIRDIE_AGENT_API_KEY = process.env.BIRDIE_AGENT_API_KEY;
 const BIRDIE_FAMILY_API_KEY = process.env.BIRDIE_FAMILY_API_KEY;
-const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE || "https://script.google.com/macros/s/AKfycbyW0feMDEMYj2KRAt_kaq6SgOMQN4rZFdlFszxvJLyyExhN7_sJyEPLKRi9vobS4U2E6Q/exec";
+const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE;
 const MCP_AUTH_CONFIG = createMcpAuthConfig();
 
-for (const [name, value] of Object.entries({ OPENAI_API_KEY, BIRDIE_OS_API_KEY, BIRDIE_AGENT_API_KEY })) {
+for (const [name, value] of Object.entries({
+  OPENAI_API_KEY,
+  BIRDIE_OS_API_KEY,
+  BIRDIE_AGENT_API_KEY,
+  BIRDIE_OS_BASE
+})) {
   if (!value) throw new Error(`${name} is missing.`);
+}
+
+try {
+  new URL(BIRDIE_OS_BASE);
+} catch {
+  throw new Error("BIRDIE_OS_BASE must be a valid URL.");
 }
 
 const client = new OpenAI({ apiKey: OPENAI_API_KEY });
@@ -151,10 +164,15 @@ async function parseBirdieResponse(response, label) {
   return data;
 }
 
-async function birdieOSGet(action) {
+async function birdieOSGet(action, params = {}) {
   const url = new URL(BIRDIE_OS_BASE);
   url.searchParams.set("action", action);
   url.searchParams.set("api_key", BIRDIE_OS_API_KEY);
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
   const response = await fetch(url.toString(), {
     method: "GET",
     redirect: "follow",
@@ -176,6 +194,11 @@ async function birdieOSPost(payload) {
 }
 
 const coinService = createCoinService({ birdieOSPost });
+const communityIdentityService = createCommunityIdentityService({
+  birdieOSGet,
+  birdieOSPost,
+  evidenceSigningKey: BIRDIE_AGENT_API_KEY
+});
 
 async function getLiveBriefing() {
   return (await birdieOSGet("briefing")).data;
@@ -300,6 +323,8 @@ const routes = [
   "POST /ideas",
   "POST /tasks/{taskId}",
   "POST /chat",
+  "POST /community/identity/evidence",
+  "POST /community/identity/resolve",
   "POST /mcp",
   "POST /family/mcp",
   "GET /family/api/policy",
@@ -319,7 +344,12 @@ const routes = [
   "GET /coin/config",
   "POST /coin/profiles",
   "GET /coin/profiles/{birdieId}",
+  "POST /coin/profiles/{birdieId}/instagram",
   "GET /coin/profiles/{birdieId}/ledger",
+  "GET /coin/social-events/{eventId}",
+  "POST /coin/social-events/{eventId}/instagram-comment/identity",
+  "POST /coin/social-events/{eventId}/instagram-comment/claim",
+  "POST /coin/social-events/{eventId}/instagram-comment/written",
   "POST /coin/profiles/{birdieId}/badges",
   "POST /coin/claims",
   "POST /coin/claims/{claimId}/decision",
@@ -416,6 +446,14 @@ const server = http.createServer(async (req, res) => {
     if (await routeCoinRequest({ req, res, url, json, readBody, service: coinService })) return;
     if (await routeMailRequest({ req, res, url, json, readBody })) return;
     if (await routeFramerRequest({ req, res, url, json, readBody })) return;
+    if (await routeCommunityIdentityRequest({
+      req,
+      res,
+      url,
+      json,
+      readBody,
+      service: communityIdentityService
+    })) return;
 
     if (req.method === "GET" && url.pathname === "/health") {
       const birdie = await birdieOSGet("health");
