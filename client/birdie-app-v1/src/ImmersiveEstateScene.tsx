@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { EstateFallbackWorld } from "./EstateFallbackWorld";
+import type { EstateAvatarStyleId } from "./avatarStyle";
 import {
   ESTATE_CONTRACT_VERSION,
   createEstateInteractionEvent,
@@ -28,6 +29,7 @@ export interface ImmersiveEstateSceneProps {
   onWebglStatusChange?: (status: EstateWebglStatus) => void;
   forceFallback?: boolean;
   paused?: boolean;
+  avatarStyle?: EstateAvatarStyleId;
   className?: string;
 }
 
@@ -428,11 +430,23 @@ function addFence(
   }
 }
 
-function makeAvatar(materials: SceneMaterials, castShadow: boolean) {
+function makeAvatar(
+  materials: SceneMaterials,
+  avatarStyle: EstateAvatarStyleId,
+  castShadow: boolean
+) {
+  const shirtMaterial = avatarStyle === "clubhouse"
+    ? materials.cream
+    : avatarStyle === "after-hours"
+      ? materials.charcoal
+      : materials.foliage;
+  const accentMaterial = avatarStyle === "clubhouse"
+    ? materials.foliage
+    : materials.gold;
   const group = new THREE.Group();
   const torso = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.46, 1.05, 5, 10),
-    materials.foliage
+    shirtMaterial
   );
   torso.position.y = 1.45;
   torso.castShadow = castShadow;
@@ -448,13 +462,13 @@ function makeAvatar(materials: SceneMaterials, castShadow: boolean) {
 
   const cap = new THREE.Mesh(
     new THREE.SphereGeometry(0.4, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-    materials.gold
+    accentMaterial
   );
   cap.position.y = 2.72;
   group.add(cap);
   const capBrim = new THREE.Mesh(
     new THREE.BoxGeometry(0.54, 0.07, 0.3),
-    materials.gold
+    accentMaterial
   );
   capBrim.position.set(0, 2.67, -0.35);
   capBrim.castShadow = castShadow;
@@ -483,7 +497,7 @@ function makeAvatar(materials: SceneMaterials, castShadow: boolean) {
   [leftArm, rightArm].forEach((pivot) => {
     const arm = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.11, 0.58, 4, 8),
-      materials.foliage
+      shirtMaterial
     );
     arm.position.y = -0.31;
     arm.castShadow = castShadow;
@@ -599,6 +613,7 @@ export function ImmersiveEstateScene({
   onWebglStatusChange,
   forceFallback = false,
   paused = false,
+  avatarStyle = "fairway",
   className
 }: ImmersiveEstateSceneProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -1057,7 +1072,7 @@ export function ImmersiveEstateScene({
       lanterns.push(light);
     }
 
-    const avatar = makeAvatar(materials, qualityShadows);
+    const avatar = makeAvatar(materials, avatarStyle, qualityShadows);
     scene.add(avatar.group);
     const { birdie, leftWing, rightWing } = makeBirdie(materials);
     scene.add(birdie);
@@ -1481,7 +1496,7 @@ export function ImmersiveEstateScene({
       renderer.dispose();
       renderer.forceContextLoss();
     };
-  }, [forceFallback]);
+  }, [avatarStyle, forceFallback]);
 
   const press = (direction: MovementDirection) => {
     if (!paused) heldRef.current.add(direction);
@@ -1538,6 +1553,7 @@ export function ImmersiveEstateScene({
       data-estate-camera-mode="third-person-follow"
       data-estate-touch-input="drag-to-move"
       data-estate-drag-active={dragActive ? "true" : "false"}
+      data-estate-avatar-style={avatarStyle}
       aria-label="Begehbares Birdie & Breakfast Grundstück"
     >
       <div

@@ -27,7 +27,23 @@ async function attachScreenshot(page: Page, testInfo: TestInfo, name: string) {
   });
 }
 
-async function enterWorld(page: Page) {
+async function completeTaxiArrival(page: Page, style = "fairway") {
+  const arrival = page.getByRole("dialog", { name: "Das Taxi wartet am Tor." });
+  if (!(await arrival.count())) return;
+  const main = page.locator("main");
+  await expect(arrival).toBeVisible();
+  await expect(main).toHaveAttribute("data-estate-arrival-state", "approaching");
+  await expect(main).toHaveAttribute("data-host-stage", "noticed");
+  await arrival.getByRole("radio", { name: new RegExp(style.replaceAll("-", " "), "i") }).check();
+  await arrival.getByRole("button", { name: "Am Ankunftshof aussteigen" }).click();
+  await expect(arrival).toHaveCount(0);
+  await expect(main).toHaveAttribute("data-estate-arrival-state", "arrived");
+  await expect(main).toHaveAttribute("data-estate-avatar-style", style);
+  await expect(main).toHaveAttribute("data-host-stage", "welcomed");
+}
+
+async function enterWorld(page: Page, style = "fairway") {
+  await completeTaxiArrival(page, style);
   const dialog = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
   await expect(dialog).toBeVisible();
   const enter = dialog.getByRole("button", { name: "Welt betreten" });
@@ -77,13 +93,13 @@ test("desktop is a fullscreen estate and all three function tabs return to Birdi
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
 
-  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3.1");
+  await expect(page).toHaveTitle("BirdieWorld – Immersive Estate V0.3.2");
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
-  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.1" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.2" })).toBeAttached();
   const main = page.locator("main");
-  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3.1");
+  await expect(main).toHaveAttribute("data-immersive-estate", "birdieworld-immersive-estate-v0.3.2");
   await expect(main).toHaveAttribute("data-living-arrival", "birdie-as-host-v0.2");
-  await expect(main).toHaveAttribute("data-host-stage", "welcomed");
+  await expect(main).toHaveAttribute("data-host-stage", "noticed");
 
   const bounds = await main.boundingBox();
   expect(bounds).not.toBeNull();
@@ -175,12 +191,13 @@ test("forced WebGL fallback keeps the whole estate, NPCs and function menu opera
   });
   await page.setViewportSize({ width: 1365, height: 900 });
   await page.goto("/");
+  await completeTaxiArrival(page);
   const welcome = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
   await welcome.getByRole("button", { name: "Ich schaue mich erst um" }).click();
   await expect(welcome).toHaveCount(0);
   await expect(page.locator("main")).toHaveAttribute("data-host-stage", "oriented");
 
-  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3.1']");
+  const fallback = page.locator("[data-estate-fallback='birdieworld-immersive-estate-v0.3.2']");
   await waitForSceneOutcome(page);
   await expect(fallback).toBeVisible();
   await expect(page.locator("[data-estate-world-surface='true']")).toBeFocused();
@@ -295,6 +312,12 @@ test("390 x 844 touch shell stays fullscreen and movement never hijacks typing",
 
   expect(await page.evaluate(() => ({ width: innerWidth, height: innerHeight }))).toEqual({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight)).toBe(true);
+  const taxiArrival = page.getByRole("dialog", { name: "Das Taxi wartet am Tor." });
+  const taxiArrivalBox = await taxiArrival.boundingBox();
+  expect(taxiArrivalBox).not.toBeNull();
+  expect(taxiArrivalBox!.x).toBeGreaterThanOrEqual(0);
+  expect(taxiArrivalBox!.x + taxiArrivalBox!.width).toBeLessThanOrEqual(390);
+  await completeTaxiArrival(page, "clubhouse");
   const welcome = page.getByRole("dialog", { name: /Schön, dass du da bist/ });
   const welcomeBox = await welcome.boundingBox();
   expect(welcomeBox).not.toBeNull();
@@ -517,7 +540,9 @@ test("installable PWA gains control and reloads offline with bundled runtime", a
 
   await page.context().setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.1" })).toBeAttached();
+  await expect(page.getByRole("heading", { level: 1, name: "BirdieWorld Immersive Estate V0.3.2" })).toBeAttached();
+  await expect(page.getByRole("dialog", { name: "Das Taxi wartet am Tor." })).toBeVisible();
+  await enterWorld(page, "after-hours");
   await expect(page.getByRole("navigation", { name: "BirdieWorld Funktionen" })).toBeVisible();
   await page.context().setOffline(false);
   expect(runtimeErrors).toEqual([]);

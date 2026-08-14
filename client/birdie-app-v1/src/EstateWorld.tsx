@@ -29,6 +29,7 @@ export type EstateWorldProps = Omit<ImmersiveEstateSceneProps, "forceFallback">;
 export function EstateWorld({
   paused = false,
   className,
+  avatarStyle,
   onDistrictChange,
   onInteraction,
   onNearbyInteractionChange,
@@ -59,6 +60,7 @@ export function EstateWorld({
           <LazyImmersiveEstateScene
             className={className}
             paused={paused}
+            avatarStyle={avatarStyle}
             onDistrictChange={onDistrictChange}
             onInteraction={onInteraction}
             onNearbyInteractionChange={onNearbyInteractionChange}
@@ -91,6 +93,7 @@ export function EstateWorld({
         data-render-mode="fallback"
         data-scene-ready="false"
         data-estate-paused={paused ? "true" : "false"}
+        data-estate-avatar-style={avatarStyle ?? "fairway"}
         aria-label="Begehbares Birdie & Breakfast Grundstück"
       >
         <EstateFallbackWorld

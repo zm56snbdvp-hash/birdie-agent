@@ -1,7 +1,7 @@
 import type { BirdieWorldDestination } from "./birdieDestinations";
 
 export const ESTATE_CONTRACT_VERSION =
-  "birdieworld-immersive-estate-v0.3.1" as const;
+  "birdieworld-immersive-estate-v0.3.2" as const;
 
 export const ESTATE_DISTRICT_IDS = [
   "arrival-court",

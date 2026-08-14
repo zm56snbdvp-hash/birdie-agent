@@ -11,6 +11,8 @@ const readSource = (name) => readFile(join(sourceRoot, name), "utf8");
 
 const app = await readSource("App.tsx");
 const scene = await readSource("ImmersiveEstateScene.tsx");
+const arrival = await readSource("EstateArrival.tsx");
+const avatarStyle = await readSource("avatarStyle.ts");
 const worldLoader = await readSource("EstateWorld.tsx");
 const fallback = await readSource("EstateFallbackWorld.tsx");
 const contract = await readSource("estateContract.ts");
@@ -24,14 +26,30 @@ const index = await readFile(join(clientRoot, "index.html"), "utf8");
 const vite = await readFile(join(clientRoot, "vite.config.ts"), "utf8");
 const packageJson = JSON.parse(await readFile(join(clientRoot, "package.json"), "utf8"));
 
-test("Immersive Estate has one explicit V0.3.1 presentation contract", () => {
-  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.1"/);
+test("Immersive Estate has one explicit V0.3.2 presentation contract", () => {
+  assert.match(contract, /ESTATE_CONTRACT_VERSION =\s*\n?\s*"birdieworld-immersive-estate-v0\.3\.2"/);
   const districtRegistry = contract.match(/ESTATE_DISTRICT_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const districts = [...districtRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(districts, ["arrival-court", "hotel", "golf-course", "terrace", "stables", "estate-grounds"]);
   const interactionRegistry = contract.match(/ESTATE_INTERACTION_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
   const interactions = [...interactionRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
   assert.deepEqual(interactions, ["hotel-reception", "greenkeeper", "stable-guide"]);
+});
+
+test("V0.3.2 adds one bounded taxi arrival and three session-only looks", () => {
+  assert.match(arrival, /ESTATE_ARRIVAL_VERSION = "taxi-arrival-v0\.3\.2"/);
+  assert.match(arrival, /data-session-only="true"/);
+  assert.match(arrival, /Das Taxi wartet am Tor\./);
+  assert.match(arrival, /Am Ankunftshof aussteigen/);
+  const styleRegistry = avatarStyle.match(/ESTATE_AVATAR_STYLE_IDS = \[([\s\S]*?)\] as const/)?.[1] ?? "";
+  const styleIds = [...styleRegistry.matchAll(/"([a-z-]+)"/g)].map((match) => match[1]);
+  assert.deepEqual(styleIds, ["fairway", "clubhouse", "after-hours"]);
+  assert.match(app, /data-estate-arrival-state=\{arrivalComplete \? "arrived" : "approaching"\}/);
+  assert.match(app, /data-estate-avatar-style=\{avatarStyle\}/);
+  assert.match(scene, /makeAvatar\(materials, avatarStyle, qualityShadows\)/);
+  for (const token of [/localStorage/, /sessionStorage/, /indexedDB/, /document\.cookie/, /\bfetch\s*\(/]) {
+    assert.doesNotMatch([arrival, avatarStyle].join("\n"), token);
+  }
 });
 
 test("estate places never expand the three locked product destinations", () => {

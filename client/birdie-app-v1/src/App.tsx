@@ -11,10 +11,12 @@ import { BirdieCompanion } from "./BirdieCompanion";
 import type { BirdieWorldDestination } from "./birdieDestinations";
 import { EstateFeaturePanel } from "./EstateFeaturePanel";
 import { EstateHud } from "./EstateHud";
+import { EstateArrival, ESTATE_ARRIVAL_VERSION } from "./EstateArrival";
 import { EstateMap } from "./EstateMap";
 import { EstateNpcDialogue } from "./EstateNpcDialogue";
 import { EstateWorld } from "./EstateWorld";
 import { WorldHeartbeat } from "./WorldHeartbeat";
+import type { EstateAvatarStyleId } from "./avatarStyle";
 import {
   ESTATE_CONTRACT_VERSION,
   createEstateInteractionEvent,
@@ -77,6 +79,8 @@ export default function App() {
   const [activeInteraction, setActiveInteraction] = useState<EstateInteractionEvent | null>(null);
   const [webglStatus, setWebglStatus] = useState<EstateWebglStatus>("initializing");
   const [mapOpen, setMapOpen] = useState(false);
+  const [arrivalComplete, setArrivalComplete] = useState(false);
+  const [avatarStyle, setAvatarStyle] = useState<EstateAvatarStyleId>("fairway");
 
   useEffect(() => {
     let current = true;
@@ -97,7 +101,18 @@ export default function App() {
     () => (selectedRound ? formatRoundDetail(selectedRound) : null),
     [selectedRound]
   );
-  const overlayOpen = activeDestination !== null || activeInteraction !== null || mapOpen;
+  const overlayOpen =
+    !arrivalComplete ||
+    activeDestination !== null ||
+    activeInteraction !== null ||
+    mapOpen;
+
+  const completeArrival = useCallback(() => {
+    setArrivalComplete(true);
+    setArrivalAnnouncement(
+      "Das Taxi ist angekommen. Birdie begrüßt dich am Ankunftshof."
+    );
+  }, []);
 
   const handleDistrictChange = useCallback((district: EstateDistrictId) => {
     setActiveDistrict(district);
@@ -268,8 +283,11 @@ export default function App() {
       data-host-stage={hostJourney.stage}
       data-estate-district={activeDistrict}
       data-estate-overlay-open={overlayOpen ? "true" : "false"}
+      data-estate-arrival={ESTATE_ARRIVAL_VERSION}
+      data-estate-arrival-state={arrivalComplete ? "arrived" : "approaching"}
+      data-estate-avatar-style={avatarStyle}
     >
-      <h1 className="sr-only">BirdieWorld Immersive Estate V0.3.1</h1>
+      <h1 className="sr-only">BirdieWorld Immersive Estate V0.3.2</h1>
       <p className="sr-only" aria-live="polite" aria-atomic="true">{arrivalAnnouncement}</p>
 
       <section className="estate-world" role="region" aria-label="Begehbares Birdie & Breakfast Grundstück">
@@ -280,6 +298,7 @@ export default function App() {
         >
           <EstateWorld
             paused={overlayOpen}
+            avatarStyle={avatarStyle}
             onDistrictChange={handleDistrictChange}
             onNearbyInteractionChange={setNearbyInteraction}
             onInteraction={handleInteraction}
@@ -303,17 +322,25 @@ export default function App() {
         />
       </section>
 
-      <BirdieCompanion
-        worldContext={worldContext}
-        activeDestination={activeDestination}
-        onChoose={openDestination}
-        guideRequestId={guideRequestId}
-        dockAfterOrientation
-        onEnterWorld={focusWalkableWorld}
-        onHostStageChange={(stage) => {
-          setHostJourney((current) => advanceBirdieHostJourney(current, stage));
-        }}
-      />
+      {arrivalComplete ? (
+        <BirdieCompanion
+          worldContext={worldContext}
+          activeDestination={activeDestination}
+          onChoose={openDestination}
+          guideRequestId={guideRequestId}
+          dockAfterOrientation
+          onEnterWorld={focusWalkableWorld}
+          onHostStageChange={(stage) => {
+            setHostJourney((current) => advanceBirdieHostJourney(current, stage));
+          }}
+        />
+      ) : (
+        <EstateArrival
+          selectedStyle={avatarStyle}
+          onSelectStyle={setAvatarStyle}
+          onArrive={completeArrival}
+        />
+      )}
 
       {activeDestination ? (
         <EstateFeaturePanel destination={activeDestination} onReturnToBirdie={returnToBirdie}>
