@@ -1,9 +1,9 @@
 import { defineConfig } from "@playwright/test";
 
-const isCI = Boolean(
-  (globalThis as { process?: { env?: Record<string, string | undefined> } })
-    .process?.env?.CI
-);
+const environment = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process?.env;
+const isCI = Boolean(environment?.CI);
+const browserExecutablePath = environment?.BIRDIE_CHROME_PATH;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -22,6 +22,7 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
     launchOptions: {
+      ...(browserExecutablePath ? { executablePath: browserExecutablePath } : {}),
       args: [
         "--enable-webgl",
         "--ignore-gpu-blocklist",

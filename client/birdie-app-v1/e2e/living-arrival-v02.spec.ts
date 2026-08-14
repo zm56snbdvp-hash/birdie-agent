@@ -214,3 +214,45 @@ test("390 x 844 touch layout remains bounded and does not hijack typing", async 
   await attachScreenshot(page, testInfo, "mobile-390x844");
   await context.close();
 });
+
+test("mobile beta exposes installable PWA primitives and gains service-worker control", async ({ page }) => {
+  const runtimeErrors = collectRuntimeErrors(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await expect(page.locator("link[rel='manifest']")).toHaveAttribute("href", "/manifest.webmanifest");
+  await expect(page.locator("link[rel='apple-touch-icon']")).toHaveAttribute(
+    "href",
+    "/icons/birdieworld-apple-touch-icon.png"
+  );
+  await expect(page.locator("meta[name='apple-mobile-web-app-capable']")).toHaveAttribute("content", "yes");
+  await expect(page.locator("meta[name='viewport']")).toHaveAttribute("content", /viewport-fit=cover/);
+  await expect(page.locator("html")).toHaveAttribute("data-mobile-beta", "pwa-v0.1");
+
+  const manifest = await page.evaluate(async () => {
+    const response = await fetch("/manifest.webmanifest");
+    if (!response.ok) throw new Error(`Manifest failed: ${response.status}`);
+    return response.json() as Promise<{
+      name: string;
+      display: string;
+      start_url: string;
+      icons: Array<{ sizes: string; purpose: string }>;
+    }>;
+  });
+  expect(manifest).toMatchObject({
+    name: "BirdieWorld Mobile Beta",
+    display: "standalone",
+    start_url: "/"
+  });
+  expect(manifest.icons.some((icon) => icon.sizes === "192x192")).toBe(true);
+  expect(manifest.icons.some((icon) => icon.sizes === "512x512" && icon.purpose === "any")).toBe(true);
+  expect(manifest.icons.some((icon) => icon.sizes === "512x512" && icon.purpose === "maskable")).toBe(true);
+
+  const serviceWorkerResponse = await page.request.get("/sw.js");
+  expect(serviceWorkerResponse.ok()).toBe(true);
+  await page.waitForFunction(() => document.documentElement.dataset.serviceWorker === "ready");
+  await page.reload();
+  await page.waitForFunction(() => navigator.serviceWorker.controller !== null);
+
+  expect(runtimeErrors).toEqual([]);
+});

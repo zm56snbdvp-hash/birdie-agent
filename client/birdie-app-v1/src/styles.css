@@ -6,7 +6,15 @@
 }
 
 * { box-sizing: border-box; }
-body { margin: 0; min-width: 320px; line-height: 1.5; background: radial-gradient(circle at top, #fffdf8 0, #f7f3eb 52%, #efe6d7 100%); }
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  line-height: 1.5;
+  background: radial-gradient(circle at top, #fffdf8 0, #f7f3eb 52%, #efe6d7 100%);
+}
 button, textarea { font: inherit; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
