@@ -257,17 +257,15 @@ test("WebGL travel reaches Hotel, Golfplatz and Reiterhof with session-only NPC 
 
   const renderer = page.locator("[data-estate-scene-focus='true']");
   await renderer.focus();
-  await holdKey(page, "w", 6_700);
+  await holdKeyUntilNearby(page, "w", "hotel-reception");
   await expect(scene).toHaveAttribute("data-estate-zone", "hotel");
-  await expect.poll(() => page.locator("button.estate-interaction-prompt").getAttribute("data-nearby-interaction")).toBe("hotel-reception");
   await page.locator("button.estate-interaction-prompt").click();
   await expect(page.getByRole("dialog", { name: "Willkommen im Birdie Hotel" })).toBeVisible();
   await page.getByRole("button", { name: "Weiter erkunden" }).click();
 
   await holdKey(page, "s", 1_650);
-  await holdKey(page, "a", 5_150);
+  await holdKeyUntilNearby(page, "a", "greenkeeper");
   await expect(scene).toHaveAttribute("data-estate-zone", "golf-course");
-  await expect.poll(() => page.locator("button.estate-interaction-prompt").getAttribute("data-nearby-interaction")).toBe("greenkeeper");
   await page.locator("button.estate-interaction-prompt").click();
   await expect(page.getByRole("dialog", { name: "Am Putting Green" })).toBeVisible();
   await page.getByRole("button", { name: "Weiter erkunden" }).click();
