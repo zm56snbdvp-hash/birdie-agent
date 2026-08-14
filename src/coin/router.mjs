@@ -33,9 +33,87 @@ export async function routeCoinRequest({ req, res, url, json, readBody, service 
     return true;
   }
 
+  const instagramMatch = match(
+    url.pathname,
+    /^\/coin\/profiles\/([^/]+)\/instagram$/
+  );
+  if (req.method === "POST" && instagramMatch) {
+    json(
+      res,
+      200,
+      resultBody(
+        await service.linkInstagramHandle(instagramMatch[0], await readBody(req))
+      )
+    );
+    return true;
+  }
+
   const ledgerMatch = match(url.pathname, /^\/coin\/profiles\/([^/]+)\/ledger$/);
   if (req.method === "GET" && ledgerMatch) {
     json(res, 200, resultBody(await service.getLedger(ledgerMatch[0])));
+    return true;
+  }
+
+  const socialEventMatch = match(
+    url.pathname,
+    /^\/coin\/social-events\/([^/]+)$/
+  );
+  if (req.method === "GET" && socialEventMatch) {
+    json(res, 200, resultBody(await service.getSocialCoinEvent(socialEventMatch[0])));
+    return true;
+  }
+
+  const instagramCommentIdentityMatch = match(
+    url.pathname,
+    /^\/coin\/social-events\/([^/]+)\/instagram-comment\/identity$/
+  );
+  if (req.method === "POST" && instagramCommentIdentityMatch) {
+    json(
+      res,
+      200,
+      resultBody(
+        await service.bindInstagramCommentIdentity(
+          instagramCommentIdentityMatch[0],
+          await readBody(req)
+        )
+      )
+    );
+    return true;
+  }
+
+  const instagramCommentClaimMatch = match(
+    url.pathname,
+    /^\/coin\/social-events\/([^/]+)\/instagram-comment\/claim$/
+  );
+  if (req.method === "POST" && instagramCommentClaimMatch) {
+    json(
+      res,
+      201,
+      resultBody(
+        await service.createInstagramCommentClaim(
+          instagramCommentClaimMatch[0],
+          await readBody(req)
+        )
+      )
+    );
+    return true;
+  }
+
+  const instagramCommentWrittenMatch = match(
+    url.pathname,
+    /^\/coin\/social-events\/([^/]+)\/instagram-comment\/written$/
+  );
+  if (req.method === "POST" && instagramCommentWrittenMatch) {
+    json(
+      res,
+      200,
+      resultBody(
+        await service.markInstagramCommentWritten(
+          instagramCommentWrittenMatch[0],
+          await readBody(req)
+        )
+      )
+    );
     return true;
   }
 

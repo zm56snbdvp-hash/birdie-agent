@@ -4,6 +4,7 @@ import test from "node:test";
 
 const mcpSource = fs.readFileSync(new URL("../src/mcp-server.mjs", import.meta.url), "utf8");
 const authSource = fs.readFileSync(new URL("../src/mcp-auth.mjs", import.meta.url), "utf8");
+const serverSource = fs.readFileSync(new URL("../server.mjs", import.meta.url), "utf8");
 
 test("BirdieOS MCP V1 exposes canonical startup and read tools", () => {
   for (const tool of [
@@ -48,4 +49,12 @@ test("MCP source never exposes runtime secret values", () => {
   assert.doesNotMatch(mcpSource, /secretExposed:\s*true/);
   assert.doesNotMatch(mcpSource, /FRAMER_API_KEY/);
   assert.doesNotMatch(mcpSource, /BIRDIE_AGENT_API_KEY/);
+});
+
+test("BirdieOS base URL is required at runtime without a source fallback", () => {
+  assert.match(serverSource, /BIRDIE_OS_BASE = process\.env\.BIRDIE_OS_BASE/);
+  assert.match(serverSource, /BIRDIE_OS_BASE must be a valid URL/);
+  assert.match(mcpSource, /BIRDIE_OS_API_KEY and BIRDIE_OS_BASE must be configured/);
+  assert.doesNotMatch(serverSource, /script\.google\.com\/macros/);
+  assert.doesNotMatch(mcpSource, /script\.google\.com\/macros/);
 });
