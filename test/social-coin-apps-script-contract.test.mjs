@@ -61,6 +61,7 @@ function contextFor(initialEvent, options = {}) {
   const currentEvent = structuredClone(initialEvent);
   const writes = [];
   const claimWrites = [];
+  const transactionAppends = [];
   const audits = [];
   let flushes = 0;
   let lockWaits = 0;
@@ -183,8 +184,13 @@ function contextFor(initialEvent, options = {}) {
   context.birdieCoinObjects_ = (sheet) =>
     sheet.name === "COIN_TRANSACTIONS" ? structuredClone(transactions) : [];
   context.birdieCoinWriteObject_ = (...args) => claimWrites.push(args);
-  context.birdieCoinAppendObject_ = () => {
-    throw new Error("UNEXPECTED_APPEND");
+  context.birdieCoinAppendObject_ = (sheet, object) => {
+    if (sheet.name !== "COIN_TRANSACTIONS") {
+      throw new Error("UNEXPECTED_APPEND");
+    }
+    const appended = structuredClone(object);
+    transactions.push(appended);
+    transactionAppends.push(appended);
   };
   context.birdieCoinCreateClaim_ = (...args) => {
     claimCalls.push(args);
@@ -196,6 +202,7 @@ function contextFor(initialEvent, options = {}) {
     currentEvent,
     writes,
     claimWrites,
+    transactionAppends,
     audits,
     claimCalls: () => claimCalls,
     stats: () => ({ flushes, lockWaits, lockReleases })
@@ -671,9 +678,34 @@ test("pending approval rejects ledger collisions and repairs a prior exact appen
   });
   assert.throws(
     () => wrongLedger.context.birdieCoinDecideClaim_(request),
-    /TRANSACTION_IDEMPOTENCY_CONFLICT/
+    /IG_COMMENT_LEDGER_SOURCE_CONFLICT/
   );
+  assert.equal(wrongLedger.transactionAppends.length, 0);
   assert.equal(wrongLedger.claimWrites.length, 0);
+
+  const foreignKeySameSource = contextFor(event(), {
+    claim: pendingClaim,
+    transactions: [
+      {
+        transactionId: "TX-FOREIGN",
+        approvedAt: "2026-08-14T10:39:00.000Z",
+        birdieId: "BIRDIE-123",
+        amount: 1,
+        transactionType: "EARN",
+        actionCode: "IG_COMMENT",
+        sourceType: "INSTAGRAM",
+        sourceReference: "17930197359365940",
+        status: "APPROVED",
+        idempotencyKey: "claim:CLAIM-FOREIGN"
+      }
+    ]
+  });
+  assert.throws(
+    () => foreignKeySameSource.context.birdieCoinDecideClaim_(request),
+    /IG_COMMENT_LEDGER_SOURCE_CONFLICT/
+  );
+  assert.equal(foreignKeySameSource.transactionAppends.length, 0);
+  assert.equal(foreignKeySameSource.claimWrites.length, 0);
 
   const exactLedger = contextFor(event(), { claim: pendingClaim });
   const repaired = exactLedger.context.birdieCoinDecideClaim_(request);

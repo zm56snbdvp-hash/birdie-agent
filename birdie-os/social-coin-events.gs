@@ -408,6 +408,38 @@ function birdieSocialRequireInstagramCommentLedgerProof_(claim, event) {
   return transaction;
 }
 
+function birdieSocialRequireInstagramCommentLedgerAppendable_(claim, event) {
+  var transactionSheet = birdieCoinSheet_(
+    BIRDIE_COIN_SHEETS_.TRANSACTIONS
+  );
+  var expectedKey = "claim:" + String(claim.claimId);
+  var sameSource = birdieCoinObjects_(transactionSheet).filter(function (row) {
+    return (
+      String(row.birdieId) === String(claim.birdieId) &&
+      String(row.actionCode) === "IG_COMMENT" &&
+      String(row.sourceType) === "INSTAGRAM" &&
+      String(row.sourceReference) === String(event.sourceReference)
+    );
+  });
+  if (sameSource.length === 0) return null;
+  if (sameSource.length !== 1) {
+    throw new Error("IG_COMMENT_LEDGER_SOURCE_CONFLICT");
+  }
+
+  var transaction = sameSource[0];
+  if (
+    String(transaction.idempotencyKey) !== expectedKey ||
+    String(transaction.transactionId || "").trim() === "" ||
+    String(transaction.approvedAt || "").trim() === "" ||
+    Number(transaction.amount) !== 1 ||
+    String(transaction.transactionType) !== "EARN" ||
+    String(transaction.status) !== "APPROVED"
+  ) {
+    throw new Error("IG_COMMENT_LEDGER_SOURCE_CONFLICT");
+  }
+  return transaction;
+}
+
 function birdieSocialAssertInstagramCommentRejectable_(claim) {
   var transactionSheet = birdieCoinSheet_(
     BIRDIE_COIN_SHEETS_.TRANSACTIONS

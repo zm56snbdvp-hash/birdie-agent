@@ -530,6 +530,12 @@ function birdieCoinDecideClaim_(request) {
     var approvedAmount = "";
     if (decision === "APPROVE") {
       approvedAmount = birdieCoinActionAmount_(claim.actionCode, request.approvedAmount);
+      if (String(claim.actionCode) === "IG_COMMENT") {
+        birdieSocialRequireInstagramCommentLedgerAppendable_(
+          claim,
+          instagramCommentEvent
+        );
+      }
       var transaction = birdieCoinAppendTransaction_({
         birdieId: claim.birdieId,
         amount: approvedAmount,

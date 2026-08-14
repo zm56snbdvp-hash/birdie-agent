@@ -53,9 +53,9 @@ sha256sum birdie-os/coin-system.gs \
 Expected SHA-256 values:
 
 ```text
-88e9c93376ae184f6eaae0e86b89ab4bfaecb1d7c61e316b27a90855096488c7  birdie-os/coin-system.gs
+1c0814c60387336701200844967c03454af90980688e85153520f6540f0d5841  birdie-os/coin-system.gs
 57f3034b7f2d00fa90bca8ba0cb5e9dcc0d0bbc32367f27d739ba51224dfddfb  birdie-os/community-identity.gs
-2f7dbe193a2b6e45c4bd64c9a48a0dc4c102984aff5c8d72ddf39b06240f31f0  birdie-os/social-coin-events.gs
+ec2b5f3771aa4152df620584cb3d69f6154e31e3b3a81f5efeee63b94880522a  birdie-os/social-coin-events.gs
 ```
 
 ## 1. Apps Script first
