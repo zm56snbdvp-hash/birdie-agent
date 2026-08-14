@@ -1,0 +1,576 @@
+name: Deploy Cloud Run candidate (no traffic)
+run-name: No-traffic Birdie Agent 2.9.0 eeaf5d7 by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact 40-character release SHA"
+        required: true
+        type: string
+      apps_script_version:
+        description: "Deployed Apps Script version number"
+        required: true
+        type: string
+      apps_script_receipt_sha256:
+        description: "SHA-256 of the approved Apps Script provider receipt"
+        required: true
+        type: string
+      confirmation:
+        description: "Type DEPLOY_BIRDIE_AGENT_NO_TRAFFIC_EEAF5D7"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: birdie-agent-cloud-run-no-traffic
+  cancel-in-progress: false
+
+env:
+  RELEASE_SHA: eeaf5d7e33451ed6ea9338d6cf5022be95db9277
+  EXPECTED_VERSION: 2.9.0
+  EXPECTED_REPOSITORY: zm56snbdvp-hash/birdie-agent
+  EXPECTED_REPOSITORY_ID: "1329217661"
+  EXPECTED_OWNER_ID: "315131667"
+  GCP_PROJECT_ID: gen-lang-client-0251788487
+  GCP_REGION: europe-west3
+  CLOUD_RUN_SERVICE: birdie-agent
+
+jobs:
+  validate:
+    name: Validate immutable release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout the protected workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate invocation and immutable source
+        env:
+          RELEASE_SHA_INPUT: ${{ inputs.release_sha }}
+          APPS_SCRIPT_VERSION: ${{ inputs.apps_script_version }}
+          APPS_SCRIPT_RECEIPT_SHA256: ${{ inputs.apps_script_receipt_sha256 }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          ACTUAL_REPOSITORY_ID: ${{ github.repository_id }}
+          ACTUAL_OWNER_ID: ${{ github.repository_owner_id }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$ACTUAL_REPOSITORY_ID" = "$EXPECTED_REPOSITORY_ID"
+          test "$ACTUAL_OWNER_ID" = "$EXPECTED_OWNER_ID"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$REF_PROTECTED" = "true"
+          [[ "$RELEASE_SHA_INPUT" =~ ^[0-9a-f]{40}$ ]]
+          test "$RELEASE_SHA_INPUT" = "$RELEASE_SHA"
+          [[ "$APPS_SCRIPT_VERSION" =~ ^[1-9][0-9]{0,9}$ ]]
+          [[ "$APPS_SCRIPT_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$CONFIRMATION" = "DEPLOY_BIRDIE_AGENT_NO_TRAFFIC_EEAF5D7"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" HEAD
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Validate release version and tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/cloud-run-deploy-workflow-contract.test.mjs
+          mkdir -p "$RUNNER_TEMP/release-src"
+          git archive "$RELEASE_SHA" | tar -x -C "$RUNNER_TEMP/release-src"
+          cd "$RUNNER_TEMP/release-src"
+          test "$(git --git-dir="$GITHUB_WORKSPACE/.git" rev-parse "$RELEASE_SHA")" = "$RELEASE_SHA"
+          test "$(node -p "require('./package.json').version")" = "$EXPECTED_VERSION"
+          npm ci
+          npm test
+          while IFS= read -r file; do
+            node --check "$file"
+          done < <(find . -type f \( -name '*.mjs' -o -name '*.js' \) -not -path './node_modules/*' -print | sort)
+          while IFS= read -r file; do
+            node --check < "$file"
+          done < <(find birdie-os -type f -name '*.gs' -print | sort)
+          sha256sum --check <<'APPS_SCRIPT_HASHES'
+          2e202abba73d3fb90b65ee8a42527653a0834fdd97a49fb82d8d651e7bfb4c34  birdie-os/coin-system.gs
+          3a5520f6b4aca47846158b781d192a4c7096b927c5a568c1fafb38d1a8e75f13  birdie-os/community-identity.gs
+          68ba8bc11762a06f42aca081043d6e1be957eccaa61b11c6afe8de0d21256c80  birdie-os/social-coin-events.gs
+          9d0981f2bd88030eaf7569cde7e54d01b73fdc803d4689eca2cc9cd7f4150c61  birdie-os/community-meta.gs
+          b879505f119b9ae06ddb6b03357ff5f3110fff5a8f8ae6216ea5447e571728e1  birdie-os/app-world-projection.gs
+          APPS_SCRIPT_HASHES
+
+      - name: Prove credential files cannot enter source or image
+        shell: bash
+        run: |
+          set -euo pipefail
+          git check-ignore --quiet --no-index gha-creds-preflight.json
+          grep -Fxq 'gha-creds-*.json' .dockerignore
+          grep -Fxq 'gha-creds-*.json' .gcloudignore
+          grep -Fxq '.env.*' .dockerignore
+
+  build:
+    name: Build credential-free release artifact
+    needs: validate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      artifact_digest: ${{ steps.upload_image.outputs['artifact-digest'] }}
+    steps:
+      - name: Checkout the protected workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Extract exact source and pin the base image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" HEAD
+          mkdir -p "$RUNNER_TEMP/release-src"
+          git archive "$RELEASE_SHA" | tar -x -C "$RUNNER_TEMP/release-src"
+          cp .dockerignore "$RUNNER_TEMP/release-src/.dockerignore"
+          test "$(sed -n '1p' "$RUNNER_TEMP/release-src/Dockerfile")" = "FROM node:22-slim"
+          sed '1c FROM node:22.23.1-slim@sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3' \
+            "$RUNNER_TEMP/release-src/Dockerfile" > "$RUNNER_TEMP/Dockerfile.release"
+          grep -Eq '^FROM node:22\.23\.1-slim@sha256:[0-9a-f]{64}$' \
+            "$RUNNER_TEMP/Dockerfile.release"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build exact release without cloud credentials
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: ${{ runner.temp }}/release-src
+          file: ${{ runner.temp }}/Dockerfile.release
+          outputs: type=docker,dest=${{ runner.temp }}/birdie-agent-release.tar
+          tags: birdie-agent-release:${{ env.RELEASE_SHA }}
+          labels: |
+            org.opencontainers.image.revision=${{ env.RELEASE_SHA }}
+            org.opencontainers.image.source=https://github.com/zm56snbdvp-hash/birdie-agent
+            org.opencontainers.image.version=${{ env.EXPECTED_VERSION }}
+          provenance: false
+          sbom: false
+
+      - name: Upload immutable image artifact
+        id: upload_image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: birdie-agent-image-${{ env.RELEASE_SHA }}
+          path: ${{ runner.temp }}/birdie-agent-release.tar
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  deploy-no-traffic:
+    name: Deploy and verify zero traffic
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: birdie-cloud-run-no-traffic
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout the protected workflow commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate protected provider coordinates
+        env:
+          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          RUNTIME_SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+          ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+          ENVIRONMENT_GUARD: ${{ vars.BIRDIE_NO_TRAFFIC_ENVIRONMENT_GUARD }}
+          APPS_SCRIPT_VERSION: ${{ inputs.apps_script_version }}
+          APPS_SCRIPT_RECEIPT_SHA256: ${{ inputs.apps_script_receipt_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$WIF_PROVIDER" =~ ^projects/[0-9]+/locations/global/workloadIdentityPools/[a-z0-9-]+/providers/[a-z0-9-]+$ ]]
+          [[ "$DEPLOYER_SERVICE_ACCOUNT" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$ ]]
+          [[ "$RUNTIME_SERVICE_ACCOUNT" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\.iam\.gserviceaccount\.com$ ]]
+          [[ "$ARTIFACT_REPOSITORY" =~ ^[a-z][a-z0-9-]{3,62}$ ]]
+          test "$ENVIRONMENT_GUARD" = "BIRDIE_NO_TRAFFIC_PROTECTED_V1"
+          [[ "$APPS_SCRIPT_VERSION" =~ ^[1-9][0-9]{0,9}$ ]]
+          [[ "$APPS_SCRIPT_RECEIPT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$RELEASE_SHA" HEAD
+
+      - name: Download verified image artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: birdie-agent-image-${{ env.RELEASE_SHA }}
+          path: ${{ runner.temp }}/image-artifact
+
+      - name: Load the verified release image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s "$RUNNER_TEMP/image-artifact/birdie-agent-release.tar"
+          docker load --input "$RUNNER_TEMP/image-artifact/birdie-agent-release.tar"
+          docker image inspect "birdie-agent-release:$RELEASE_SHA" > /dev/null
+
+      - name: Authenticate to Google Cloud with OIDC
+        id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+          create_credentials_file: true
+          export_environment_variables: true
+          cleanup_credentials: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          version: "577.0.0"
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Capture protected service state
+        id: before
+        env:
+          RUNTIME_SERVICE_ACCOUNT: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --format=json > "$RUNNER_TEMP/service-before.json"
+          gcloud run services get-iam-policy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --format=json > "$RUNNER_TEMP/iam-before.json"
+
+          current_runtime_sa="$(jq -r '.spec.template.spec.serviceAccountName // .template.serviceAccount // empty' "$RUNNER_TEMP/service-before.json")"
+          test "$current_runtime_sa" = "$RUNTIME_SERVICE_ACCOUNT"
+
+          jq -r '.spec.template.spec.containers[0].env[]?.name // .template.containers[0].env[]?.name' \
+            "$RUNNER_TEMP/service-before.json" | sort -u > "$RUNNER_TEMP/env-names.txt"
+          while IFS= read -r required; do
+            grep -Fxq "$required" "$RUNNER_TEMP/env-names.txt"
+          done <<'REQUIRED_ENV'
+          BIRDIE_AGENT_API_KEY
+          BIRDIE_APP_BIRDIE_ID_CLAIM
+          BIRDIE_APP_OAUTH_AUDIENCE
+          BIRDIE_APP_OAUTH_ISSUER
+          BIRDIE_OS_API_KEY
+          BIRDIE_OS_BASE
+          META_APP_SECRET
+          META_INSTAGRAM_ACCOUNT_ID
+          META_INSTAGRAM_USERNAME
+          META_WEBHOOK_VERIFY_TOKEN
+          OPENAI_API_KEY
+          REQUIRED_ENV
+          if grep -Fxq 'META_INSTAGRAM_ACCESS_TOKEN' "$RUNNER_TEMP/env-names.txt"; then
+            echo 'Outbound Meta access is outside this release gate.' >&2
+            exit 1
+          fi
+
+          jq -e '[.status.traffic[]? | select((.percent // 0) > 0)] | length == 1' \
+            "$RUNNER_TEMP/service-before.json" > /dev/null
+          jq -e '[.status.traffic[]? | select(.latestRevision == true)] | length == 0' \
+            "$RUNNER_TEMP/service-before.json" > /dev/null
+          jq -e '[.spec.traffic[]? | select(.latestRevision == true)] | length == 0' \
+            "$RUNNER_TEMP/service-before.json" > /dev/null
+          jq -e '[.status.traffic[]? | select((.percent // 0) > 0)][0].percent == 100' \
+            "$RUNNER_TEMP/service-before.json" > /dev/null
+          previous_revision="$(jq -r '[.status.traffic[]? | select((.percent // 0) > 0)][0].revisionName' "$RUNNER_TEMP/service-before.json")"
+          test -n "$previous_revision"
+
+          jq -S '{
+            serviceAccount:(.spec.template.spec.serviceAccountName // .template.serviceAccount),
+            serviceLabels:(.metadata.labels // {}),
+            serviceAnnotations:((.metadata.annotations // {}) | del(
+              ."run.googleapis.com/operation-id",
+              ."serving.knative.dev/creator",
+              ."serving.knative.dev/lastModifier"
+            )),
+            templateMetadata:{
+              annotations:((.spec.template.metadata.annotations // {}) | del(
+                ."client.knative.dev/user-image",
+                ."run.googleapis.com/client-name",
+                ."run.googleapis.com/client-version"
+              )),
+              labels:((.spec.template.metadata.labels // {}) | del(."client.knative.dev/nonce"))
+            },
+            templateSpec:((.spec.template.spec // {}) | .containers |= map(del(.image)))
+          }' "$RUNNER_TEMP/service-before.json" > "$RUNNER_TEMP/config-before.json"
+          jq -S '{bindings:([.bindings[]? | {
+            role,
+            members:(.members | sort),
+            condition:(.condition // null)
+          }] | sort_by(.role, (.condition.title // "")))}' \
+            "$RUNNER_TEMP/iam-before.json" > "$RUNNER_TEMP/iam-normalized-before.json"
+
+          config_fingerprint="$(sha256sum "$RUNNER_TEMP/config-before.json" | cut -d' ' -f1)"
+          iam_fingerprint="$(sha256sum "$RUNNER_TEMP/iam-normalized-before.json" | cut -d' ' -f1)"
+          echo "previous_revision=$previous_revision" >> "$GITHUB_OUTPUT"
+          echo "config_fingerprint=$config_fingerprint" >> "$GITHUB_OUTPUT"
+          echo "iam_fingerprint=$iam_fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Verify registry and push the prebuilt image
+        id: registry
+        env:
+          ARTIFACT_REPOSITORY: ${{ vars.GCP_ARTIFACT_REPOSITORY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          format="$(gcloud artifacts repositories describe "$ARTIFACT_REPOSITORY" \
+            --project "$GCP_PROJECT_ID" \
+            --location "$GCP_REGION" \
+            --format='value(format)')"
+          test "$format" = "DOCKER"
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          image_uri="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPOSITORY/$CLOUD_RUN_SERVICE"
+          image_tag="$image_uri:$RELEASE_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker tag "birdie-agent-release:$RELEASE_SHA" "$image_tag"
+          docker push "$image_tag"
+          image_digest="$(gcloud artifacts docker images describe "$image_tag" \
+            --project "$GCP_PROJECT_ID" \
+            --format='value(image_summary.digest)')"
+          [[ "$image_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "image_uri=$image_uri" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$image_digest" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy candidate with zero traffic
+        id: deploy
+        env:
+          IMAGE_URI: ${{ steps.registry.outputs.image_uri }}
+          IMAGE_DIGEST: ${{ steps.registry.outputs.image_digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          short_sha="${RELEASE_SHA:0:12}"
+          revision_suffix="oidc-$short_sha-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          candidate_tag="oidc-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --image "$IMAGE_URI@$IMAGE_DIGEST" \
+            --revision-suffix "$revision_suffix" \
+            --tag "$candidate_tag" \
+            --no-traffic \
+            --quiet
+          echo "image_uri=$IMAGE_URI" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$IMAGE_DIGEST" >> "$GITHUB_OUTPUT"
+          echo "candidate_tag=$candidate_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Verify candidate and protected state
+        id: verify
+        env:
+          EXPECTED_CONFIG_FINGERPRINT: ${{ steps.before.outputs.config_fingerprint }}
+          EXPECTED_IAM_FINGERPRINT: ${{ steps.before.outputs.iam_fingerprint }}
+          EXPECTED_PREVIOUS_REVISION: ${{ steps.before.outputs.previous_revision }}
+          IMAGE_URI: ${{ steps.deploy.outputs.image_uri }}
+          IMAGE_DIGEST: ${{ steps.deploy.outputs.image_digest }}
+          CANDIDATE_TAG: ${{ steps.deploy.outputs.candidate_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --format=json > "$RUNNER_TEMP/service-after.json"
+          gcloud run services get-iam-policy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --format=json > "$RUNNER_TEMP/iam-after.json"
+
+          new_revision="$(jq -r '.status.latestCreatedRevisionName' "$RUNNER_TEMP/service-after.json")"
+          test -n "$new_revision"
+          test "$new_revision" != "$EXPECTED_PREVIOUS_REVISION"
+          gcloud run revisions describe "$new_revision" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --format=json > "$RUNNER_TEMP/revision-after.json"
+
+          jq -e --arg revision "$EXPECTED_PREVIOUS_REVISION" '
+            [.status.traffic[]? | select((.percent // 0) > 0)] |
+            length == 1 and .[0].revisionName == $revision and .[0].percent == 100
+          ' "$RUNNER_TEMP/service-after.json" > /dev/null
+          jq -e --arg revision "$new_revision" '
+            ([.status.traffic[]? | select(.revisionName == $revision) | (.percent // 0)] | add // 0) == 0
+          ' "$RUNNER_TEMP/service-after.json" > /dev/null
+          jq -e --arg image "$IMAGE_URI@$IMAGE_DIGEST" '
+            (.spec.containers[0].image // .spec.template.spec.containers[0].image) == $image
+          ' "$RUNNER_TEMP/revision-after.json" > /dev/null
+          jq -e '[.status.conditions[]? | select(.type == "Ready")][0].status == "True"' \
+            "$RUNNER_TEMP/revision-after.json" > /dev/null
+
+          candidate_url="$(jq -r --arg tag "$CANDIDATE_TAG" \
+            '[.status.traffic[]? | select(.tag == $tag)][0].url // empty' \
+            "$RUNNER_TEMP/service-after.json")"
+          [[ "$candidate_url" =~ ^https:// ]]
+
+          jq -S '{
+            serviceAccount:(.spec.template.spec.serviceAccountName // .template.serviceAccount),
+            serviceLabels:(.metadata.labels // {}),
+            serviceAnnotations:((.metadata.annotations // {}) | del(
+              ."run.googleapis.com/operation-id",
+              ."serving.knative.dev/creator",
+              ."serving.knative.dev/lastModifier"
+            )),
+            templateMetadata:{
+              annotations:((.spec.template.metadata.annotations // {}) | del(
+                ."client.knative.dev/user-image",
+                ."run.googleapis.com/client-name",
+                ."run.googleapis.com/client-version"
+              )),
+              labels:((.spec.template.metadata.labels // {}) | del(."client.knative.dev/nonce"))
+            },
+            templateSpec:((.spec.template.spec // {}) | .containers |= map(del(.image)))
+          }' "$RUNNER_TEMP/service-after.json" > "$RUNNER_TEMP/config-after.json"
+          jq -S '{bindings:([.bindings[]? | {
+            role,
+            members:(.members | sort),
+            condition:(.condition // null)
+          }] | sort_by(.role, (.condition.title // "")))}' \
+            "$RUNNER_TEMP/iam-after.json" > "$RUNNER_TEMP/iam-normalized-after.json"
+          actual_config_fingerprint="$(sha256sum "$RUNNER_TEMP/config-after.json" | cut -d' ' -f1)"
+          actual_iam_fingerprint="$(sha256sum "$RUNNER_TEMP/iam-normalized-after.json" | cut -d' ' -f1)"
+          test "$actual_config_fingerprint" = "$EXPECTED_CONFIG_FINGERPRINT"
+          test "$actual_iam_fingerprint" = "$EXPECTED_IAM_FINGERPRINT"
+
+          curl --fail --silent --show-error --retry 4 --retry-connrefused --max-time 20 \
+            "$candidate_url/" > "$RUNNER_TEMP/root-response.json"
+          jq -e --arg version "$EXPECTED_VERSION" '
+            .success == true and .version == $version and .status == "ONLINE" and
+            .meta == "SIGNED_WEBHOOK_CONTROLLED" and
+            .birdieWorld == "AUTHENTICATED_LEDGER_PROJECTION"
+          ' "$RUNNER_TEMP/root-response.json" > /dev/null
+
+          birdie_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 20 "$candidate_url/birdie-app/v1/world")"
+          test "$birdie_status" = "401"
+          health_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 20 "$candidate_url/health")"
+          test "$health_status" = "401"
+          meta_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --max-time 20 \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header 'X-Hub-Signature-256: sha256=0000000000000000000000000000000000000000000000000000000000000000' \
+            --data '{}' \
+            "$candidate_url/meta/webhook")"
+          test "$meta_status" = "401"
+
+          echo "new_revision=$new_revision" >> "$GITHUB_OUTPUT"
+          echo "candidate_url=$candidate_url" >> "$GITHUB_OUTPUT"
+          echo "config_fingerprint=$actual_config_fingerprint" >> "$GITHUB_OUTPUT"
+          echo "iam_fingerprint=$actual_iam_fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Write sanitized no-traffic receipt
+        env:
+          APPS_SCRIPT_VERSION: ${{ inputs.apps_script_version }}
+          APPS_SCRIPT_RECEIPT_SHA256: ${{ inputs.apps_script_receipt_sha256 }}
+          IMAGE_ARTIFACT_DIGEST: ${{ needs.build.outputs.artifact_digest }}
+          IMAGE_DIGEST: ${{ steps.deploy.outputs.image_digest }}
+          CANDIDATE_TAG: ${{ steps.deploy.outputs.candidate_tag }}
+          CANDIDATE_URL: ${{ steps.verify.outputs.candidate_url }}
+          NEW_REVISION: ${{ steps.verify.outputs.new_revision }}
+          PREVIOUS_REVISION: ${{ steps.before.outputs.previous_revision }}
+          CONFIG_FINGERPRINT: ${{ steps.verify.outputs.config_fingerprint }}
+          IAM_FINGERPRINT: ${{ steps.verify.outputs.iam_fingerprint }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-receipt
+          jq -n \
+            --arg schemaVersion "birdie-cloud-run-no-traffic/v1" \
+            --arg status "NO_TRAFFIC_VERIFIED" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg releaseSha "$RELEASE_SHA" \
+            --arg expectedVersion "$EXPECTED_VERSION" \
+            --arg appsScriptVersion "$APPS_SCRIPT_VERSION" \
+            --arg appsScriptReceiptSha256 "$APPS_SCRIPT_RECEIPT_SHA256" \
+            --arg imageArtifactDigest "$IMAGE_ARTIFACT_DIGEST" \
+            --arg project "$GCP_PROJECT_ID" \
+            --arg region "$GCP_REGION" \
+            --arg service "$CLOUD_RUN_SERVICE" \
+            --arg imageDigest "$IMAGE_DIGEST" \
+            --arg baseImageDigest "sha256:6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3" \
+            --arg revision "$NEW_REVISION" \
+            --arg candidateTag "$CANDIDATE_TAG" \
+            --arg candidateUrl "$CANDIDATE_URL" \
+            --arg previousTrafficRevision "$PREVIOUS_REVISION" \
+            --arg configFingerprint "$CONFIG_FINGERPRINT" \
+            --arg iamFingerprint "$IAM_FINGERPRINT" \
+            --arg workflowRun "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --arg verifiedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '{
+              schemaVersion:$schemaVersion,
+              status:$status,
+              repository:$repository,
+              releaseSha:$releaseSha,
+              expectedVersion:$expectedVersion,
+              appsScriptVersion:$appsScriptVersion,
+              appsScriptReceiptSha256:$appsScriptReceiptSha256,
+              imageArtifactDigest:$imageArtifactDigest,
+              project:$project,
+              region:$region,
+              service:$service,
+              imageDigest:$imageDigest,
+              baseImageDigest:$baseImageDigest,
+              revision:$revision,
+              candidateTag:$candidateTag,
+              candidateUrl:$candidateUrl,
+              traffic:{beforeRevision:$previousTrafficRevision, afterRevision:$previousTrafficRevision, percent:100},
+              configFingerprint:$configFingerprint,
+              iamFingerprint:$iamFingerprint,
+              checks:["root-contract", "health-unauthorized", "birdie-app-unauthorized", "meta-invalid-signature", "traffic-unchanged"],
+              workflowRun:$workflowRun,
+              verifiedAt:$verifiedAt
+            }' > release-receipt/cloud-run-no-traffic.json
+
+      - name: Upload sanitized receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cloud-run-no-traffic-${{ env.RELEASE_SHA }}
+          path: release-receipt/cloud-run-no-traffic.json
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove transient provider material
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          find "$GITHUB_WORKSPACE" -maxdepth 1 -type f -name 'gha-creds-*.json' -delete
+          find "$RUNNER_TEMP" -maxdepth 1 -type f \
+            \( -name 'service-*.json' -o -name 'iam-*.json' -o -name 'config-*.json' -o -name 'revision-*.json' -o -name 'root-response.json' -o -name 'env-names.txt' \) \
+            -delete
