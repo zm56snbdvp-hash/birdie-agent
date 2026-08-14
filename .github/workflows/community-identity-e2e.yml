@@ -1,0 +1,93 @@
+name: Community Identity Resolver E2E
+
+on:
+  push:
+    branches:
+      - test/community-identity-resolver-e2e
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type RUN_IDENTITY_E2E to execute the guarded live resolver test'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run resolver unit tests
+        run: node --test test/community-identity-resolution.test.mjs test/community-identity-service.test.mjs test/community-write-gate.test.mjs
+
+  live-e2e:
+    if: github.event_name == 'workflow_dispatch' && inputs.confirmation == 'RUN_IDENTITY_E2E'
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      BIRDIE_OS_BASE: https://script.google.com/macros/s/AKfycbxw3TfFJzsdL-R44xnFqS-KtdhCZ_iFh9HCZEG7nngTteMab2EdRrBOmB3ia6ci_FbYYw/exec
+      BIRDIE_OS_API_KEY: ${{ secrets.BIRDIE_OS_API_KEY }}
+      BIRDIE_AGENT_BASE: http://127.0.0.1:8080
+      BIRDIE_AGENT_API_KEY: birdie-ci-e2e-local-only
+      OPENAI_API_KEY: birdie-ci-e2e-not-used
+      E2E_CONFIRM: RUN_IDENTITY_E2E
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Require existing Birdie OS CI secret
+        shell: bash
+        run: |
+          if [ -z "$BIRDIE_OS_API_KEY" ]; then
+            echo "BIRDIE_OS_API_KEY is not available to this workflow; refusing live E2E execution."
+            exit 2
+          fi
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Start feature-branch Birdie Agent locally
+        shell: bash
+        run: |
+          node server.mjs > /tmp/birdie-agent-e2e.log 2>&1 &
+          echo $! > /tmp/birdie-agent-e2e.pid
+          for i in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8080/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/birdie-agent-e2e.log
+          exit 1
+
+      - name: Run guarded live resolver E2E
+        run: node scripts/community-identity-e2e.mjs
+
+      - name: Stop local Birdie Agent
+        if: always()
+        shell: bash
+        run: |
+          if [ -f /tmp/birdie-agent-e2e.pid ]; then
+            kill "$(cat /tmp/birdie-agent-e2e.pid)" || true
+          fi
