@@ -184,6 +184,9 @@ test("Apps Script Instagram link contract is guarded and economically inert", ()
   assert.doesNotMatch(implementation, /birdieCoinWriteObject_/);
   assert.doesNotMatch(implementation, /birdieCoinAppendTransaction_/);
   assert.doesNotMatch(implementation, /birdieCoinCreateClaim_/);
+
+  const audit = functionSource("birdieCoinAudit_", "birdieCoinSpreadsheet_");
+  assert.match(audit, /birdieCoinFind_\(sheet, "idempotencyKey", key\)/);
 });
 
 test("Apps Script enforces the canonical Instagram syntax", () => {

@@ -56,12 +56,83 @@ export function createCommunityIdentityService({
 
   async function resolveByWorkItemId(workItemId, signedEvidence) {
     const { id, workItem } = await getWorkItem(workItemId);
-    const evidence = verifyProviderEvidence(signedEvidence, evidenceSigningKey);
-    if (evidence.workItemId !== id) {
-      throw new ProviderEvidenceError("PROVIDER_EVIDENCE_WORK_ITEM_MISMATCH");
+    const profiles = await getProfiles();
+    const exactResolution = resolveInstagramIdentity(workItem, profiles);
+
+    if (!exactResolution.processed) {
+      return {
+        workItemId: id,
+        ...exactResolution
+      };
     }
 
-    const resolution = resolveInstagramIdentity(workItem, evidence);
+    const exactMode = exactResolution.write?.identityDecisionMode;
+    const canonicalExactResult =
+      exactMode === "AUTO_EXACT_LINK" ||
+      exactMode === "FOUNDER_REVIEW_CONFLICT";
+    let resolution = exactResolution;
+    let evidenceMetadata = {};
+
+    if (canonicalExactResult) {
+      if (signedEvidence !== undefined && signedEvidence !== null) {
+        const suppliedEvidence = verifyProviderEvidence(
+          signedEvidence,
+          evidenceSigningKey
+        );
+        if (suppliedEvidence.workItemId !== id) {
+          throw new ProviderEvidenceError("PROVIDER_EVIDENCE_WORK_ITEM_MISMATCH");
+        }
+
+        evidenceMetadata = {
+          evidenceVersion: suppliedEvidence.evidenceVersion,
+          evidenceSource: suppliedEvidence.source
+        };
+
+        const exactBirdieId = String(
+          exactResolution.write?.matchedBirdieId ?? ""
+        ).trim();
+        const evidenceCandidates = Array.isArray(suppliedEvidence.candidates)
+          ? suppliedEvidence.candidates
+          : [];
+        const evidenceBirdieIds = evidenceCandidates
+          .map((candidate) => String(candidate?.birdieId ?? "").trim())
+          .filter(Boolean);
+        const evidenceContradictsExact =
+          exactMode === "AUTO_EXACT_LINK" &&
+          (suppliedEvidence.conflictingEvidence === true ||
+            Number(suppliedEvidence.candidateCount) > 1 ||
+            evidenceBirdieIds.some((candidateId) => candidateId !== exactBirdieId));
+
+        if (evidenceContradictsExact) {
+          const candidatesById = new Map();
+          candidatesById.set(exactBirdieId, { birdieId: exactBirdieId });
+          for (const candidate of evidenceCandidates) {
+            const candidateId = String(candidate?.birdieId ?? "").trim();
+            if (candidateId) candidatesById.set(candidateId, candidate);
+          }
+          const candidates = [...candidatesById.values()];
+          resolution = resolveInstagramIdentity(workItem, {
+            candidates,
+            candidateCount: candidates.length,
+            explicitLink: true,
+            conflictingEvidence: true,
+            confidence: 100,
+            reason: "Canonical exact profile link conflicts with signed provider evidence."
+          });
+        }
+      }
+    } else {
+      const evidence = verifyProviderEvidence(signedEvidence, evidenceSigningKey);
+      if (evidence.workItemId !== id) {
+        throw new ProviderEvidenceError("PROVIDER_EVIDENCE_WORK_ITEM_MISMATCH");
+      }
+
+      resolution = resolveInstagramIdentity(workItem, evidence);
+      evidenceMetadata = {
+        evidenceVersion: evidence.evidenceVersion,
+        evidenceSource: evidence.source
+      };
+    }
 
     if (!resolution.processed) {
       return {
@@ -76,8 +147,7 @@ export function createCommunityIdentityService({
       write: resolution.write,
       resolverVersion: resolution.resolverVersion,
       idempotencyKey: resolution.idempotencyKey,
-      evidenceVersion: evidence.evidenceVersion,
-      evidenceSource: evidence.source,
+      ...evidenceMetadata,
       source: "Birdie Agent"
     });
 

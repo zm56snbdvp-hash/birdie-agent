@@ -325,6 +325,7 @@ const routes = [
   "GET /coin/config",
   "POST /coin/profiles",
   "GET /coin/profiles/{birdieId}",
+  "POST /coin/profiles/{birdieId}/instagram",
   "GET /coin/profiles/{birdieId}/ledger",
   "POST /coin/profiles/{birdieId}/badges",
   "POST /coin/claims",

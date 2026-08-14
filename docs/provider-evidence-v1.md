@@ -46,12 +46,27 @@ Candidate ordering is score-descending and then Birdie-ID ascending. Equal
 winning scores, cross-signal candidates, or a stable-ID contradiction produce a
 conflict. A handle-only match cannot auto-resolve.
 
+## Canonical exact-link path
+
+Before consuming provider evidence, the resolve route reads the target work item
+and `BIRDIE_PROFILES` from BirdieOS. If exactly one `ACTIVE` profile has an
+`instagramHandle` that exactly matches the normalized work-item
+`externalUserId`, the existing `AUTO_EXACT_LINK` path may resolve it. BirdieOS
+re-checks the same unique exact match before accepting the resolver write.
+
+This exception trusts only the canonical work item plus the governed profile
+link. A caller-supplied provider username by itself remains 60-point evidence
+and cannot auto-resolve. If valid signed provider evidence identifies a
+different profile or is itself conflicting, the resolver stays pending for
+Founder review instead of allowing either signal to override the other.
+
 ## Integrity and resolver handoff
 
-The evidence response contains an `integrityToken`. The existing
-`POST /community/identity/resolve` route accepts only the complete signed
-evidence object returned by the evidence endpoint. Any changed, unsigned, or
-caller-authored derived evidence is rejected before a BirdieOS write can occur.
+The evidence response contains an `integrityToken`. Outside the canonical
+exact-link path above, `POST /community/identity/resolve` accepts only the
+complete signed evidence object returned by the evidence endpoint. Any changed,
+unsigned, or caller-authored derived evidence is rejected before a BirdieOS
+write can occur.
 
 ## Activation gate
 
