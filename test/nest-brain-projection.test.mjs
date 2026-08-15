@@ -89,7 +89,7 @@ test("PRIVATE projection exposes only bounded fields and sanitizes sentinels", (
   assert.equal(output.sourceFingerprint.length, 24);
   assert.equal(output.data.tasks[0].taskId, "TASK-123");
   assert.equal(output.data.tasks[0].blocked, true);
-  assert.match(output.data.tasks[0].title, /\[redacted\]/);
+  assert.match(output.data.tasks[0].title, /\[redacted-secret\]/);
   assert.doesNotMatch(JSON.stringify(output), /kevin@example\.com|ops@example\.com|guest@example\.com|supersecret|abc123/);
   assert.equal("finance" in output.data.briefing, false);
   assert.equal("notes" in output.data.briefing, false);
