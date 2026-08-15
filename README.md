@@ -1,6 +1,6 @@
 # Birdie Agent
 
-Current service version: **2.8.0**
+Current service version: **2.9.0**
 
 Production bridge between **ChatGPT / Chatty**, the **Birdie Agent** running on Google Cloud Run, and the authoritative **Birdie OS** backend.
 
@@ -40,12 +40,16 @@ Birdie OS is the source of truth for live company state. The Birdie Agent may ph
 - `BIRDIE_OAUTH_ISSUER` — optional Auth0 issuer override; defaults to the Birdie EU tenant.
 - `BIRDIE_MCP_RESOURCE` — optional OAuth audience/resource override; defaults to the Cloud Run origin.
 - `BIRDIE_OAUTH_JWKS_URL` — optional JWKS endpoint override for tests or a non-standard identity provider.
+- `META_APP_SECRET` / `META_WEBHOOK_VERIFY_TOKEN` — required only for signed Meta webhook intake.
+- `META_INSTAGRAM_USERNAME` / `META_INSTAGRAM_ACCOUNT_ID` — exact receiving Instagram account binding.
+- `BIRDIE_APP_OAUTH_ISSUER` / `BIRDIE_APP_OAUTH_AUDIENCE` / `BIRDIE_APP_BIRDIE_ID_CLAIM` — required together to enable authenticated BirdieWorld V1 routes.
+- `BIRDIE_APP_OAUTH_JWKS_URL` — optional only when the issuer's standard JWKS path is not correct.
 
 Never commit real secret values to GitHub.
 
 ## HTTP API
 
-All routes except `GET /` require either:
+Founder/agent routes require either:
 
 ```http
 Authorization: Bearer <BIRDIE_AGENT_API_KEY>
@@ -56,6 +60,8 @@ or:
 ```http
 X-Birdie-Agent-Key: <BIRDIE_AGENT_API_KEY>
 ```
+
+Meta webhook intake instead requires the configured challenge token and a valid Meta signature. BirdieWorld V1 uses its own user OAuth boundary; the server agent key is never exposed to a browser.
 
 ### `GET /`
 
@@ -106,7 +112,7 @@ For general messages the agent loads the current Birdie OS live briefing before 
 
 ## Chatty MCP Mail Bridge
 
-Version 2.8 exposes a streamable HTTP MCP endpoint at:
+Version 2.9 exposes a streamable HTTP MCP endpoint at:
 
 ```text
 https://birdie-agent-893591677320.europe-west3.run.app/mcp
@@ -245,14 +251,18 @@ curl -X POST http://localhost:8080/chat \
 
 Deploy the repository as the `birdie-agent` service and configure all secrets as Cloud Run environment variables / Secret Manager references. Do not bake secrets into the container image or repository.
 
-After deployment, verify in this order:
+For release `2.9.0`, use [`docs/github-oidc-cloud-run-no-traffic.md`](docs/github-oidc-cloud-run-no-traffic.md). It is the governed keyless Stage-A absent-bundle lane and stops with zero default serving traffic. This infrastructure-only receipt may precede Apps Script but does not activate or reorder the later provider gates; the historical TASK-038 runbook must not drive this release.
+
+After a **later configured, separately approved provider deployment**—not after
+the Stage-A absent-bundle run—verify in this order:
 
 1. `GET /` returns `status: ONLINE`.
 2. Authenticated `GET /health` reaches Birdie OS successfully.
 3. Authenticated `GET /next-task` returns `source: BIRDIE_OS` and `authoritative: true`.
 4. Authenticated `POST /chat` successfully handles both a next-task request and a general company-state request.
 5. Authenticated MCP initialization at `POST /mcp` lists all eight governed Birdie Mail tools.
-6. Only then connect the endpoint as the production Chatty/Birdie MCP server or action.
+6. Only then, under its own production approval, connect the endpoint as the
+   production Chatty/Birdie MCP server or action.
 
 ## Governance
 
