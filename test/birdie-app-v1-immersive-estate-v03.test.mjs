@@ -54,6 +54,15 @@ test("V0.3.5 carries one explicit golden-estate color grade across WebGL and arr
   }
 });
 
+test("V0.3.5 locks the reference composition without expanding gameplay", () => {
+  assert.match(scene, /addEstateBridge\(scene, materials, qualityShadows/);
+  assert.match(scene, /ceremonial: true/);
+  assert.match(scene, /addFormalHotelGardens\(scene, materials, qualityShadows\)/);
+  assert.match(scene, /ESTATE_AMBIENT_POPULATION\.forEach/);
+  assert.match(scene, /dataset\.estateComposition = "reference-axis-v1"/);
+  assert.match(scene, /dataset\.ambientPopulation = String/);
+});
+
 test("V0.3.4 gives the estate a ceremonial court and lived-in grounds", () => {
   assert.match(scene, /addArrivalCourtDetails\(scene, materials, qualityShadows\)/);
   assert.match(scene, /addLakeEstateDetails\(scene, materials, qualityShadows\)/);

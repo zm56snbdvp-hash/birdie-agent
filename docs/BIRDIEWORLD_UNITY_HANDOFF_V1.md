@@ -43,10 +43,15 @@ paths.
 - player spawn, movement bounds and presentation speed;
 - desktop and compact third-person camera values;
 - the six ordered district resolver rules;
-- seven landmark anchors;
+- nine landmark anchors, including the ceremonial entrance bridge and formal
+  hotel gardens;
 - three session-only interaction anchors and radii;
 - hotel, stable and pond collision primitives;
 - the complete V0.3.5 golden-estate palette and light rig;
+- one explicit reference composition: bridge → arrival court → formal gardens
+  → hotel, framed by golf, stables and the lake;
+- nine visual-only ambient people for scale, distributed as guests, golfers,
+  rider and gardener without interaction or gameplay authority;
 - 56 tree instance transforms;
 - the same three bounded product destinations;
 - explicit disabled flags for quests, progression and multiplayer.
@@ -66,8 +71,10 @@ manifest available for diagnostics.
 ### 2. Build the greybox
 
 Create one additive scene named `BirdieEstate_Blockout`. Build the ground,
-landmark anchors and the three collision areas from the manifest. Use stable IDs
-as component data, not Unity object names as domain identifiers.
+landmark anchors, reference composition and the three collision areas from the
+manifest. Use stable IDs as component data, not Unity object names as domain
+identifiers. Preserve the high central hotel silhouette and the lower, wider
+golf/stable landscape frame before adding decorative detail.
 
 Acceptance: the player spawns in the arrival court, faces the estate and can
 walk to the hotel, putting green and stables without entering the two buildings
@@ -91,6 +98,10 @@ environment/ambient setup plus the sun and cool fill specified in the manifest.
 Acceptance: forest depth, fairway readability, warm architecture, restrained
 water and gold accents retain the V0.3.5 hierarchy in daylight and on phone
 screens.
+
+Place the ambient population from its stable anchors only after the blockout
+composition is approved. These figures are visual scale markers. They do not
+receive colliders, triggers, state or navigation in the first spike.
 
 ### 5. Add bounded interactions
 

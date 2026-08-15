@@ -103,6 +103,29 @@ test("handoff captures the estate blockout and golden color grade", () => {
   assert.equal(manifest.visual.lighting.toneMapping, "ACES-filmic");
 });
 
+test("handoff locks the estate reference axis and visual-only population", () => {
+  assert.deepEqual(manifest.visual.composition.primaryAxis, [
+    "entrance-bridge",
+    "arrival-court",
+    "formal-gardens",
+    "birdie-hotel"
+  ]);
+  assert.deepEqual(manifest.visual.composition.districtFrame, {
+    left: "golf-course",
+    center: "birdie-hotel",
+    right: "stables",
+    rear: "lake-pavilion"
+  });
+  assert.equal(manifest.ambientPopulation.length, 9);
+  assert.deepEqual(
+    [...new Set(manifest.ambientPopulation.map(({ role }) => role))].sort(),
+    ["gardener", "golfer", "guest", "rider"]
+  );
+  assert.ok(manifest.landmarks.some(({ id }) => id === "entrance-bridge"));
+  assert.ok(manifest.landmarks.some(({ id }) => id === "formal-gardens"));
+  assert.match(scene, /ESTATE_AMBIENT_POPULATION/);
+});
+
 test("quests and authoritative systems remain outside the Unity handoff", () => {
   assert.deepEqual(manifest.capabilities, {
     quests: false,

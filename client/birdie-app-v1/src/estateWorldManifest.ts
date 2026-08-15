@@ -29,6 +29,15 @@ interface CollisionCircle {
   radius: number;
 }
 
+interface AmbientPopulationInstance {
+  id: string;
+  role: "guest" | "golfer" | "rider" | "gardener";
+  anchor: { x: number; y: number; z: number };
+  yawDegrees: number;
+  shirtMaterial: "cream" | "forest" | "stable" | "gold" | "charcoal";
+  accentMaterial: "cream" | "forest" | "stable" | "gold" | "charcoal";
+}
+
 type TreeInstance = readonly [x: number, z: number, scale: number];
 
 interface DistrictRule {
@@ -72,6 +81,9 @@ export const ESTATE_COLLISION_CIRCLES =
 
 export const ESTATE_TREE_INSTANCES =
   ESTATE_WORLD_MANIFEST.treeInstances as unknown as readonly TreeInstance[];
+
+export const ESTATE_AMBIENT_POPULATION =
+  ESTATE_WORLD_MANIFEST.ambientPopulation as readonly AmbientPopulationInstance[];
 
 export const ESTATE_DISTRICT_RESOLVERS =
   ESTATE_WORLD_MANIFEST.districts as unknown as readonly {

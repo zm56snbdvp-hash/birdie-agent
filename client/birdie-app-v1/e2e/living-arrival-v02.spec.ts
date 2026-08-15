@@ -266,6 +266,8 @@ test("real WebGL outcome is recorded without inventing availability", async ({ p
   if (await canvas.count()) {
     await expect(canvas).toHaveCount(1);
     await expect(canvas).toBeVisible();
+    await expect(canvas).toHaveAttribute("data-estate-composition", "reference-axis-v1");
+    await expect(canvas).toHaveAttribute("data-ambient-population", "9");
     await expect(scene).toHaveAttribute("data-scene-ready", "true");
     await expect(scene).toHaveAttribute("data-render-mode", "webgl");
     const canvasSize = await canvas.evaluate((element) => {

@@ -14,6 +14,7 @@ import {
   type EstateWebglStatus
 } from "./estateContract";
 import {
+  ESTATE_AMBIENT_POPULATION,
   ESTATE_COLLISION_CIRCLES as ROUND_COLLISIONS,
   ESTATE_COLLISION_RECTANGLES as BUILDING_COLLISIONS,
   ESTATE_DISTRICT_RESOLVERS,
@@ -331,6 +332,85 @@ function addLandscapeEllipse(
   return ellipse;
 }
 
+function addEstateBridge(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean,
+  {
+    x,
+    z,
+    rotation,
+    width,
+    length,
+    plankCount,
+    ceremonial = false
+  }: {
+    x: number;
+    z: number;
+    rotation: number;
+    width: number;
+    length: number;
+    plankCount: number;
+    ceremonial?: boolean;
+  }
+) {
+  const bridge = new THREE.Group();
+  const plankWidth = width / plankCount;
+  for (let index = 0; index < plankCount; index += 1) {
+    const plank = new THREE.Mesh(
+      new THREE.BoxGeometry(plankWidth * 0.9, 0.2, length),
+      materials.wood
+    );
+    plank.position.set(-width / 2 + plankWidth * (index + 0.5), 0.32, 0);
+    plank.castShadow = qualityShadows;
+    plank.receiveShadow = true;
+    bridge.add(plank);
+  }
+
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.16, 0.16, length + 0.4),
+      ceremonial ? materials.gold : materials.stableTrim
+    );
+    rail.position.set(side * (width / 2 + 0.08), 1.15, 0);
+    rail.castShadow = qualityShadows;
+    bridge.add(rail);
+    for (const localZ of [-length / 2, -length / 6, length / 6, length / 2]) {
+      const post = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 1.45, 0.2),
+        ceremonial ? materials.stone : materials.stableTrim
+      );
+      post.position.set(side * (width / 2 + 0.08), 0.72, localZ);
+      post.castShadow = qualityShadows;
+      bridge.add(post);
+    }
+  }
+
+  if (ceremonial) {
+    for (const localX of [-width / 2 - 0.5, width / 2 + 0.5]) {
+      for (const localZ of [-length / 2 - 0.35, length / 2 + 0.35]) {
+        const pier = new THREE.Mesh(
+          new THREE.BoxGeometry(0.72, 1.8, 0.72),
+          materials.stone
+        );
+        pier.position.set(localX, 0.9, localZ);
+        pier.castShadow = qualityShadows;
+        bridge.add(pier);
+        const finial = new THREE.Mesh(
+          new THREE.SphereGeometry(0.24, 9, 7),
+          materials.gold
+        );
+        finial.position.set(localX, 1.98, localZ);
+        bridge.add(finial);
+      }
+    }
+  }
+
+  bridge.position.set(x, 0, z);
+  bridge.rotation.y = rotation;
+  scene.add(bridge);
+}
+
 function addWaterLandscape(
   scene: THREE.Scene,
   materials: SceneMaterials,
@@ -360,19 +440,33 @@ function addWaterLandscape(
     );
   });
 
-  const bridge = new THREE.Group();
-  for (const x of [-2.2, -1.1, 0, 1.1, 2.2]) {
-    const plank = new THREE.Mesh(
-      new THREE.BoxGeometry(0.88, 0.2, 5.8),
-      materials.wood
-    );
-    plank.position.set(x, 0.32, 0);
-    plank.castShadow = qualityShadows;
-    bridge.add(plank);
+  for (const [x, z, radiusX, radiusZ, rotation] of [
+    [-19, 50.8, 11.5, 2.3, -0.04],
+    [-7.5, 50.35, 8.5, 2.2, 0.035],
+    [4.5, 50.45, 8.5, 2.25, -0.025],
+    [17, 50.85, 10.5, 2.35, 0.045]
+  ] as const) {
+    addLandscapeEllipse(scene, materials.waterEdge, x, z, radiusX + 0.65, radiusZ + 0.5, 0.03, rotation);
+    addLandscapeEllipse(scene, materials.water, x, z, radiusX, radiusZ, 0.065, rotation);
   }
-  bridge.position.set(-30, 0, 45);
-  bridge.rotation.y = -0.48;
-  scene.add(bridge);
+
+  addEstateBridge(scene, materials, qualityShadows, {
+    x: -30,
+    z: 45,
+    rotation: -0.48,
+    width: 4.8,
+    length: 5.8,
+    plankCount: 6
+  });
+  addEstateBridge(scene, materials, qualityShadows, {
+    x: 0,
+    z: 50.5,
+    rotation: 0,
+    width: 6.4,
+    length: 8.5,
+    plankCount: 9,
+    ceremonial: true
+  });
 }
 
 function addGardenDetails(
@@ -426,6 +520,81 @@ function addGardenDetails(
     flower.castShadow = qualityShadows;
     scene.add(flower);
   });
+}
+
+function addFormalHotelGardens(
+  scene: THREE.Scene,
+  materials: SceneMaterials,
+  qualityShadows: boolean
+) {
+  const flowerMaterials = [
+    materials.flowerWhite,
+    materials.flowerGold,
+    materials.flowerViolet
+  ] as const;
+
+  for (const side of [-1, 1]) {
+    const centerX = side * 8.7;
+    const centerZ = 22;
+    const border = new THREE.Mesh(
+      new THREE.BoxGeometry(6.8, 0.08, 14.2),
+      materials.pathEdge
+    );
+    border.position.set(centerX, 0.055, centerZ);
+    border.receiveShadow = true;
+    scene.add(border);
+    const bed = new THREE.Mesh(
+      new THREE.BoxGeometry(5.9, 0.1, 13.25),
+      materials.meadowDark
+    );
+    bed.position.set(centerX, 0.1, centerZ);
+    bed.receiveShadow = true;
+    scene.add(bed);
+
+    for (const localX of [-2.55, 2.55]) {
+      const hedge = new THREE.Mesh(
+        new THREE.BoxGeometry(0.44, 0.62, 12.5),
+        materials.foliageLight
+      );
+      hedge.position.set(centerX + localX, 0.38, centerZ);
+      hedge.castShadow = qualityShadows;
+      scene.add(hedge);
+    }
+    for (const localZ of [-5.95, 5.95]) {
+      const hedge = new THREE.Mesh(
+        new THREE.BoxGeometry(5.55, 0.62, 0.44),
+        materials.foliageLight
+      );
+      hedge.position.set(centerX, 0.38, centerZ + localZ);
+      hedge.castShadow = qualityShadows;
+      scene.add(hedge);
+    }
+
+    for (let index = 0; index < 12; index += 1) {
+      const flower = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 7, 5),
+        flowerMaterials[(index + (side > 0 ? 1 : 0)) % flowerMaterials.length]
+      );
+      flower.position.set(
+        centerX + (index % 3 - 1) * 1.45,
+        0.3,
+        centerZ - 4.5 + Math.floor(index / 3) * 3
+      );
+      flower.castShadow = qualityShadows;
+      scene.add(flower);
+    }
+
+    for (const localZ of [-4.2, 0, 4.2]) {
+      const topiary = new THREE.Mesh(
+        new THREE.SphereGeometry(0.7, 10, 8),
+        materials.foliage
+      );
+      topiary.scale.set(0.82, 1.18, 0.82);
+      topiary.position.set(centerX, 0.92, centerZ + localZ);
+      topiary.castShadow = qualityShadows;
+      scene.add(topiary);
+    }
+  }
 }
 
 function addDistantRidge(
@@ -1119,6 +1288,10 @@ export function ImmersiveEstateScene({
 
     renderer.domElement.dataset.estateRenderer = "webgl2";
     renderer.domElement.dataset.estateColorGrade = ESTATE_COLOR_GRADE_VERSION;
+    renderer.domElement.dataset.estateComposition = "reference-axis-v1";
+    renderer.domElement.dataset.ambientPopulation = String(
+      ESTATE_AMBIENT_POPULATION.length
+    );
     renderer.domElement.setAttribute("aria-hidden", "true");
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1232,6 +1405,7 @@ export function ImmersiveEstateScene({
     addPathSegment(scene, materials, 22, 11, 41, -4, 5.2);
     addPathSegment(scene, materials, -42, 5, -50, -20, 3.6);
     addPathSegment(scene, materials, 41, -4, 46, 24, 3.6);
+    addFormalHotelGardens(scene, materials, qualityShadows);
 
     const arrivalCourt = new THREE.Mesh(
       new THREE.CircleGeometry(12, 40),
@@ -1543,6 +1717,29 @@ export function ImmersiveEstateScene({
       makeNpc(materials, stableShirt, materials.charcoal, 41, -4.5, 0.2, qualityShadows)
     ];
     npcGroups.forEach((npc) => scene.add(npc));
+
+    const ambientMaterialByToken = {
+      cream: materials.cream,
+      forest: materials.foliage,
+      stable: materials.stable,
+      gold: materials.gold,
+      charcoal: materials.charcoal
+    } as const;
+    ESTATE_AMBIENT_POPULATION.forEach((person) => {
+      const guest = makeNpc(
+        materials,
+        ambientMaterialByToken[person.shirtMaterial],
+        ambientMaterialByToken[person.accentMaterial],
+        person.anchor.x,
+        person.anchor.z,
+        THREE.MathUtils.degToRad(person.yawDegrees),
+        qualityShadows
+      );
+      guest.position.y = person.anchor.y + 0.08;
+      guest.userData.ambientPopulationId = person.id;
+      guest.userData.ambientRole = person.role;
+      scene.add(guest);
+    });
 
     const interactionRings = new Map<EstateInteractionId, THREE.Mesh>();
     PRIVATE_INTERACTION_POINTS.forEach((point) => {
