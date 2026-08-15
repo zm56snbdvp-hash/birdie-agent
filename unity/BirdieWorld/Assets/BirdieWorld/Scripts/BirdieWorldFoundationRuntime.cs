@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.Rendering;
 
 namespace BirdieWorld.Foundation
 {
@@ -67,18 +68,27 @@ namespace BirdieWorld.Foundation
 
         private void AddMaterial(string token, string htmlColor)
         {
-            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
-            if (shader == null)
-            {
-                throw new InvalidOperationException("No compatible foundation shader is available.");
-            }
-
+            var shader = ResolveFoundationShader();
             var material = new Material(shader) { name = $"BW_{token}" };
             if (ColorUtility.TryParseHtmlString(htmlColor, out var color))
             {
                 material.color = color;
             }
             materials[token] = material;
+        }
+
+        private static Shader ResolveFoundationShader()
+        {
+            var activePipeline = GraphicsSettings.currentRenderPipeline;
+            var shader = activePipeline == null
+                ? Shader.Find("Standard")
+                : activePipeline.defaultShader;
+            if (shader == null)
+            {
+                throw new InvalidOperationException("No compatible foundation shader is available.");
+            }
+
+            return shader;
         }
 
         private void BuildGround(BirdieWorldEstateManifest manifest, Transform parent)
