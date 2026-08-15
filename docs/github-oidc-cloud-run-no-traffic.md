@@ -24,13 +24,14 @@ the four permissions described below.
 | Environment | `birdie-cloud-run-no-traffic` |
 | Event | `workflow_dispatch` |
 | Workflow ref | `zm56snbdvp-hash/birdie-agent/.github/workflows/deploy-cloud-run-no-traffic.yml@refs/heads/main` |
-| OIDC subject | `repo:zm56snbdvp-hash@315131667/birdie-agent@1329217661:environment:birdie-cloud-run-no-traffic` |
+| OIDC subject | `repo:zm56snbdvp-hash/birdie-agent:environment:birdie-cloud-run-no-traffic` |
 | Google project | `gen-lang-client-0251788487` |
 | Region | `europe-west3` |
 | Cloud Run service | `birdie-agent` |
 
-The numeric GitHub IDs make a rename or namespace takeover fail closed. Do not
-replace them with mutable names in the Google attribute condition.
+GitHub's default environment subject is checked together with the numeric
+repository and owner IDs. The numeric claims make a rename or namespace
+takeover fail closed; do not remove them from the Google attribute condition.
 
 > **Pre-merge blocker:** `main` is currently unprotected and the repository has
 > no GitHub environment. Keep this pull request in Draft, keep the Google WIF
@@ -87,7 +88,7 @@ gcloud iam workload-identity-pools providers create-oidc "$PROVIDER_ID" \
   --display-name 'GitHub Birdie Agent immutable identity' \
   --issuer-uri 'https://token.actions.githubusercontent.com' \
   --attribute-mapping 'google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_id=assertion.repository_id,attribute.repository_owner_id=assertion.repository_owner_id,attribute.ref=assertion.ref,attribute.environment=assertion.environment,attribute.event_name=assertion.event_name,attribute.workflow_ref=assertion.workflow_ref' \
-  --attribute-condition "assertion.sub == 'repo:zm56snbdvp-hash@315131667/birdie-agent@1329217661:environment:birdie-cloud-run-no-traffic' && assertion.repository_id == '1329217661' && assertion.repository_owner_id == '315131667' && assertion.ref == 'refs/heads/main' && assertion.environment == 'birdie-cloud-run-no-traffic' && assertion.event_name == 'workflow_dispatch' && assertion.workflow_ref == 'zm56snbdvp-hash/birdie-agent/.github/workflows/deploy-cloud-run-no-traffic.yml@refs/heads/main'"
+  --attribute-condition "assertion.sub == 'repo:zm56snbdvp-hash/birdie-agent:environment:birdie-cloud-run-no-traffic' && assertion.repository_id == '1329217661' && assertion.repository_owner_id == '315131667' && assertion.ref == 'refs/heads/main' && assertion.environment == 'birdie-cloud-run-no-traffic' && assertion.event_name == 'workflow_dispatch' && assertion.workflow_ref == 'zm56snbdvp-hash/birdie-agent/.github/workflows/deploy-cloud-run-no-traffic.yml@refs/heads/main'"
 
 PRINCIPAL_SET="principalSet://iam.googleapis.com/projects/$PROJECT_NUMBER/locations/global/workloadIdentityPools/$POOL_ID/attribute.repository_id/1329217661"
 gcloud iam service-accounts add-iam-policy-binding "$DEPLOYER_SA" \
