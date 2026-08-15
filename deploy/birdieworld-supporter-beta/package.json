@@ -1,7 +1,8 @@
 {
-  "name": "birdieworld-supporter-beta",
+  "name": "birdieworld-supporter-beta-runtime-preview",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "node scripts/assemble.mjs"
   }

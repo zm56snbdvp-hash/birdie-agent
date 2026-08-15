@@ -7,78 +7,39 @@
     {
       "source": "/index.html",
       "headers": [
-        {
-          "key": "Cache-Control",
-          "value": "no-store"
-        },
-        {
-          "key": "X-Content-Type-Options",
-          "value": "nosniff"
-        }
+        { "key": "Cache-Control", "value": "no-store" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" }
       ]
     },
     {
       "source": "/Build/Web.loader.js",
       "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/javascript; charset=utf-8"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, must-revalidate"
-        }
+        { "key": "Content-Type", "value": "application/javascript; charset=utf-8" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
       ]
     },
     {
       "source": "/Build/Web.framework.js.unityweb",
       "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/javascript"
-        },
-        {
-          "key": "Content-Encoding",
-          "value": "gzip"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, must-revalidate"
-        }
+        { "key": "Content-Type", "value": "application/javascript" },
+        { "key": "Content-Encoding", "value": "gzip" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
       ]
     },
     {
       "source": "/Build/Web.wasm.unityweb",
       "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/wasm"
-        },
-        {
-          "key": "Content-Encoding",
-          "value": "gzip"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, must-revalidate"
-        }
+        { "key": "Content-Type", "value": "application/wasm" },
+        { "key": "Content-Encoding", "value": "gzip" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
       ]
     },
     {
       "source": "/Build/Web.data.unityweb",
       "headers": [
-        {
-          "key": "Content-Type",
-          "value": "application/octet-stream"
-        },
-        {
-          "key": "Content-Encoding",
-          "value": "gzip"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600, must-revalidate"
-        }
+        { "key": "Content-Type", "value": "application/octet-stream" },
+        { "key": "Content-Encoding", "value": "gzip" },
+        { "key": "Cache-Control", "value": "public, max-age=3600, must-revalidate" }
       ]
     }
   ]
