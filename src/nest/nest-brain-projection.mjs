@@ -34,7 +34,8 @@ const DENIED_KEY_PATTERNS = [
   /redemption/i,
   /balance/i,
   /coin/i,
-  /source/i,
+  /^(?:raw)?source(?:ref(?:erence)?|url|notes?|data)?$/i,
+  /canonicalSource/i,
   /evidence/i,
   /notes?/i,
   /location/i,
@@ -51,6 +52,7 @@ const EMAIL_RE = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const PHONE_RE = /(?<!\w)(?:\+|00)?\d[\d\s()./-]{7,}\d(?!\w)/g;
 const BEARER_RE = /\bBearer\s+[A-Za-z0-9._~+/-]+=*\b/gi;
 const SECRET_QUERY_RE = /([?&](?:token|key|secret|password|api_key)=)[^&#\s]+/gi;
+const INLINE_SECRET_RE = /\b(api[_ -]?key|token|secret|password|credential)\s*[:=]\s*[^\s,;]+/gi;
 const LONG_HEX_RE = /\b[a-f0-9]{32,}\b/gi;
 
 export const NEST_BRAIN_PROJECTION_POLICY = Object.freeze({
@@ -102,6 +104,7 @@ function sanitizeString(value) {
     .replace(PHONE_RE, "[redacted-phone]")
     .replace(BEARER_RE, "Bearer [redacted]")
     .replace(SECRET_QUERY_RE, "$1[redacted]")
+    .replace(INLINE_SECRET_RE, "$1=[redacted]")
     .replace(LONG_HEX_RE, "[redacted-id]");
 }
 
@@ -179,7 +182,9 @@ function projectHealth(data, mode) {
     criticality: cleanText(item?.criticality || "", 24),
     status: cleanText(item?.status || "", 60)
   }));
-  return mode === "SAFE_TO_FILM" ? rows.filter((item) => item.criticality === "CRITICAL" || item.status.includes("BLOCK")).slice(0, 20) : rows;
+  return mode === "SAFE_TO_FILM"
+    ? rows.filter((item) => item.criticality === "CRITICAL" || item.status.includes("BLOCK")).slice(0, 20)
+    : rows;
 }
 
 function projectExceptions(data, mode) {
@@ -189,7 +194,9 @@ function projectExceptions(data, mode) {
     severity: cleanText(item?.severity || item?.criticality || "", 24),
     status: cleanText(item?.status || item?.state || "", 60)
   }));
-  return mode === "SAFE_TO_FILM" ? rows.filter((item) => item.severity === "CRITICAL" || item.severity === "HIGH").slice(0, 12) : rows;
+  return mode === "SAFE_TO_FILM"
+    ? rows.filter((item) => item.severity === "CRITICAL" || item.severity === "HIGH").slice(0, 12)
+    : rows;
 }
 
 const PROJECTORS = Object.freeze({
@@ -229,16 +236,29 @@ function assertFreshSource({ projection, source, nowMs, maxAgeMs }) {
   return { timestampMs, ageMs };
 }
 
+function regexHas(regex, value) {
+  regex.lastIndex = 0;
+  const matched = regex.test(value);
+  regex.lastIndex = 0;
+  return matched;
+}
+
 function assertNoDeniedOutput(value, path = "root") {
   if (value === null || value === undefined) return;
   if (typeof value === "string") {
-    if (EMAIL_RE.test(value) || PHONE_RE.test(value) || BEARER_RE.test(value) || SECRET_QUERY_RE.test(value)) {
+    if (
+      regexHas(EMAIL_RE, value) ||
+      regexHas(PHONE_RE, value) ||
+      regexHas(BEARER_RE, value) ||
+      regexHas(SECRET_QUERY_RE, value) ||
+      regexHas(INLINE_SECRET_RE, value) ||
+      regexHas(LONG_HEX_RE, value)
+    ) {
       const error = new Error(`Denied sentinel survived NEST sanitization at ${path}`);
       error.code = "NEST_SANITIZATION_FAILED";
       error.status = 500;
       throw error;
     }
-    EMAIL_RE.lastIndex = PHONE_RE.lastIndex = BEARER_RE.lastIndex = SECRET_QUERY_RE.lastIndex = 0;
     return;
   }
   if (typeof value !== "object") return;
