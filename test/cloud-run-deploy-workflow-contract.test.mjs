@@ -303,12 +303,25 @@ test("candidate evidence binds revision, zero-percent tag, route results and dri
   );
   assert.match(
     workflow,
-    /test "\$actual_config_fingerprint" = "\$EXPECTED_CONFIG_FINGERPRINT"/
+    /if \[\[ "\$actual_config_fingerprint" != "\$EXPECTED_CONFIG_FINGERPRINT" \]\]; then/
   );
   assert.match(
     workflow,
-    /test "\$actual_iam_fingerprint" = "\$EXPECTED_IAM_FINGERPRINT"/
+    /if \[\[ "\$actual_iam_fingerprint" != "\$EXPECTED_IAM_FINGERPRINT" \]\]; then/
   );
+  const serviceAnnotationBlocks = [
+    ...workflow.matchAll(
+      /serviceAnnotations:\(\(\.metadata\.annotations \/\/ \{\}\) \| del\(([\s\S]*?)\n\s*\)\),/g
+    )
+  ];
+  assert.equal(serviceAnnotationBlocks.length, 2);
+  for (const [, block] of serviceAnnotationBlocks) {
+    assert.match(block, /\."run\.googleapis\.com\/client-name"/);
+    assert.match(block, /\."run\.googleapis\.com\/client-version"/);
+  }
+  assert.equal((workflow.match(/title=CONFIG_FINGERPRINT_MISMATCH/g) || []).length, 1);
+  assert.equal((workflow.match(/title=IAM_FINGERPRINT_MISMATCH/g) || []).length, 1);
+  assert.doesNotMatch(workflow, /cat "\$RUNNER_TEMP\/(?:config|iam)-/);
   assert.match(
     workflow,
     /RUNTIME_SERVICE_ACCOUNT: \$\{\{ steps\.before\.outputs\.runtime_service_account \}\}/
