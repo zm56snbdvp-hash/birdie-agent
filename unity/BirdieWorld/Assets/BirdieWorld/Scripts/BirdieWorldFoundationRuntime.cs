@@ -206,6 +206,11 @@ namespace BirdieWorld.Foundation
 
             var walker = player.AddComponent<BirdieWorldFoundationWalker>();
             walker.Configure(controller, camera.transform, manifest.player);
+
+            var accountObject = new GameObject("BirdieWorld_AccountGate");
+            accountObject.transform.SetParent(parent, false);
+            var accountGate = accountObject.AddComponent<BirdieWorldAccountGate>();
+            accountGate.Configure(walker);
         }
 
         private GameObject CreatePrimitive(PrimitiveType primitive, string stableId, Transform parent, Material material)

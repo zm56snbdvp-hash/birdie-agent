@@ -31,7 +31,7 @@ namespace BirdieWorld.Editor
             EditorBuildSettings.scenes = new[] { new EditorBuildSettingsScene(ScenePath, true) };
 
             PlayerSettings.companyName = "Birdie & Breakfast";
-            PlayerSettings.productName = "BirdieWorld Private Supporter Foundation";
+            PlayerSettings.productName = "BirdieWorld Supporter Beta";
             PlayerSettings.colorSpace = ColorSpace.Linear;
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Gzip;
             PlayerSettings.WebGL.decompressionFallback = true;
@@ -40,8 +40,8 @@ namespace BirdieWorld.Editor
             Debug.Log("BirdieWorld Unity foundation prepared. Press Play to inspect the generated greybox.");
         }
 
-        [MenuItem("BirdieWorld/Build Private Review Web")]
-        public static void BuildPrivateReviewWeb()
+        [MenuItem("BirdieWorld/Build Supporter Web")]
+        public static void BuildSupporterWeb()
         {
             PrepareFoundation();
             var output = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Builds", "Web"));
@@ -59,7 +59,7 @@ namespace BirdieWorld.Editor
                 throw new InvalidOperationException($"BirdieWorld Web build failed: {report.summary.result}");
             }
 
-            Debug.Log($"BirdieWorld private-review Web build created at {output}. Hosting access control is still mandatory.");
+            Debug.Log($"BirdieWorld supporter Web build created at {output}. Verify account signup/login before sharing the URL.");
         }
 
         private static void CopyAndValidateCanonicalManifest()

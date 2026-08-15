@@ -1,6 +1,6 @@
 # BirdieWorld Unity Foundation
 
-This is the bounded Unity foundation for the private supporter version of
+This is the bounded Unity foundation for the public supporter beta of
 BirdieWorld. It lives in the existing canonical repository and imports the
 existing `birdieworld-estate-handoff-v1` contract. It does not fork product
 truth or reproduce coordinates by hand.
@@ -10,6 +10,7 @@ truth or reproduce coordinates by hand.
 - Unity `6000.3.0f1` (Unity 6.3 LTS)
 - Universal Render Pipeline `17.3.0`
 - Input System `1.17.0`
+- Unity Authentication `3.7.3` with username/password accounts
 - Web build first, mobile-browser controls included
 - one generated scene: `BirdieEstate_Blockout`
 - presentation-only, client-session-only state
@@ -22,18 +23,21 @@ truth or reproduce coordinates by hand.
 4. In Unity choose **BirdieWorld → Prepare Unity Foundation**.
 5. Open `Assets/BirdieWorld/Scenes/BirdieEstate_Blockout.unity` and press Play.
 6. Walk with WASD/arrows or drag with one finger/mouse.
-7. For a local Web candidate choose **BirdieWorld → Build Private Review Web**.
+7. Link the project under **Edit → Project Settings → Services**.
+8. Under **Services → Authentication → Configure**, add and save the
+   **Username and Password** identity provider.
+9. For a local Web candidate choose **BirdieWorld → Build Supporter Web**.
 
 The preparation command copies the canonical manifest into Unity's Resources
 folder, validates both contract versions and refuses any manifest that enables
 quests, progression, multiplayer, persistence, location tracking or authority.
 
-## Private supporter rule
+## Supporter account rule
 
-The generated Web build is not private merely because its URL is unlisted.
-Before any supporter receives a link, hosting must enforce an actual access gate
-and the existing beta device/feedback gates must pass. This foundation does not
-send telemetry, contact supporters, write Coin state or call a network service.
+The world is publicly reachable after hosting, but movement is locked until the
+visitor creates an account or signs in through Unity Authentication. The client
+does not store passwords or service secrets. It does not send hidden telemetry,
+contact supporters, write Coin state, process payments or grant permissions.
 
 ## Scope freeze
 
@@ -41,5 +45,8 @@ Included: ground, locked nine-landmark composition, hotel/stable/pond collision
 geometry, Golden Estate palette, nine visual-only scale figures, bounded player
 movement and third-person camera.
 
-Excluded: quests, progression, multiplayer, persistent world state, identity,
-inventory/economy, Coin, payments, production merge and public release.
+Included account scope: username/password signup, sign-in, sign-out and session
+resume only.
+
+Excluded: quests, progression, multiplayer, world persistence, profile editing,
+inventory/economy, Coin, payments and unrelated product features.

@@ -4,7 +4,7 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Unity foundation pins the production LTS, URP and mobile input baseline", async () => {
+test("Unity foundation pins the production LTS, rendering, input and account baseline", async () => {
   const [version, packages] = await Promise.all([
     read("unity/BirdieWorld/ProjectSettings/ProjectVersion.txt"),
     read("unity/BirdieWorld/Packages/manifest.json")
@@ -13,6 +13,7 @@ test("Unity foundation pins the production LTS, URP and mobile input baseline", 
   assert.deepEqual(JSON.parse(packages).dependencies, {
     "com.unity.inputsystem": "1.17.0",
     "com.unity.render-pipelines.universal": "17.3.0",
+    "com.unity.services.authentication": "3.7.3",
     "com.unity.modules.ai": "1.0.0",
     "com.unity.modules.jsonserialize": "1.0.0",
     "com.unity.modules.physics": "1.0.0",
@@ -33,16 +34,25 @@ test("Unity imports the canonical manifest and mirrors Z only at the adapter bou
   assert.match(builder, /BirdieWorldEstateManifest\.ParseAndValidate/);
 });
 
-test("foundation remains presentation-only and feature-frozen", async () => {
-  const [manifest, runtime, readme] = await Promise.all([
+test("foundation adds only the explicitly approved account gate", async () => {
+  const [manifest, runtime, account, builder, readme] = await Promise.all([
     read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldEstateManifest.cs"),
     read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldFoundationRuntime.cs"),
+    read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldAccountGate.cs"),
+    read("unity/BirdieWorld/Assets/BirdieWorld/Editor/BirdieWorldFoundationBuilder.cs"),
     read("unity/BirdieWorld/README.md")
   ]);
   assert.match(manifest, /quests \|\| progression \|\| multiplayer \|\| persistentWorldState \|\| teleport \|\| locationTracking/);
   assert.match(runtime, /BuildGround\(manifest/);
   assert.match(runtime, /BuildCollisionVolumes\(manifest/);
   assert.match(runtime, /BuildPlayerAndCamera\(manifest/);
-  assert.match(readme, /not private merely because its URL is unlisted/i);
+  assert.match(runtime, /BirdieWorldAccountGate/);
+  assert.match(account, /SignUpWithUsernamePasswordAsync/);
+  assert.match(account, /SignInWithUsernamePasswordAsync/);
+  assert.match(account, /SignInAnonymouslyAsync/);
+  assert.match(account, /ClearSessionToken/);
+  assert.match(builder, /Build Supporter Web/);
+  assert.match(readme, /public supporter beta/i);
+  assert.doesNotMatch(account, /PlayerPrefs|File\.Write|UnityWebRequest|HttpClient|CoinService|PaymentService|PurchaseService/i);
   assert.doesNotMatch(runtime, /UnityWebRequest|HttpClient|PlayerPrefs|File\.Write|Coin|quest/i);
 });
