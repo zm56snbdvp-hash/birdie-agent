@@ -103,8 +103,8 @@ function sanitizeString(value) {
     .replace(EMAIL_RE, "[redacted-email]")
     .replace(PHONE_RE, "[redacted-phone]")
     .replace(BEARER_RE, "Bearer [redacted]")
-    .replace(SECRET_QUERY_RE, "$1[redacted]")
-    .replace(INLINE_SECRET_RE, "$1=[redacted]")
+    .replace(SECRET_QUERY_RE, "[redacted-secret]")
+    .replace(INLINE_SECRET_RE, "[redacted-secret]")
     .replace(LONG_HEX_RE, "[redacted-id]");
 }
 
