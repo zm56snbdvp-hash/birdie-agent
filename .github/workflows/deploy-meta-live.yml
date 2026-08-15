@@ -33,6 +33,8 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    environment:
+      name: birdie-cloud-run-no-traffic
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -42,6 +44,8 @@ jobs:
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
           service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
           create_credentials_file: true
           export_environment_variables: true
 
