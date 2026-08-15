@@ -65,16 +65,31 @@ $executeMethod = if ($Action -eq "prepare") {
 }
 
 Write-Host "Running BirdieWorld '$Action' automation..."
-& $unityExe `
-    -batchmode `
-    -nographics `
-    -quit `
-    -projectPath $ProjectPath `
-    -executeMethod $executeMethod `
-    -logFile $logFile
+$unityArguments = '-batchmode -nographics -quit -projectPath "{0}" -executeMethod "{1}" -logFile "{2}"' -f `
+    $ProjectPath.Replace('"', '\"'), `
+    $executeMethod.Replace('"', '\"'), `
+    $logFile.Replace('"', '\"')
 
-if ($LASTEXITCODE -ne 0) {
-    throw "Unity automation failed with exit code $LASTEXITCODE. See $logFile"
+$startInfo = New-Object System.Diagnostics.ProcessStartInfo
+$startInfo.FileName = $unityExe
+$startInfo.Arguments = $unityArguments
+$startInfo.UseShellExecute = $false
+$startInfo.CreateNoWindow = $true
+
+$unityProcess = New-Object System.Diagnostics.Process
+$unityProcess.StartInfo = $startInfo
+try {
+    if (-not $unityProcess.Start()) {
+        throw "Unity automation could not be started."
+    }
+    $unityProcess.WaitForExit()
+    $unityExitCode = $unityProcess.ExitCode
+} finally {
+    $unityProcess.Dispose()
+}
+
+if ($unityExitCode -ne 0) {
+    throw "Unity automation failed with exit code $unityExitCode. See $logFile"
 }
 
 if ($Action -eq "build") {
