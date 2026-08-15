@@ -41,6 +41,18 @@ test("runtime materials follow the active Unity render pipeline", async () => {
   assert.doesNotMatch(runtime, /Shader\.Find\("Universal Render Pipeline\/Lit"\)\s*\?\?/);
 });
 
+test("runtime self-bootstraps from Resources and never fails to a silent black screen", async () => {
+  const runtime = await read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldFoundationRuntime.cs");
+  assert.match(runtime, /ManifestResourcePath = "BirdieWorld\/birdieworld-estate-handoff-v1"/);
+  assert.match(runtime, /RuntimeInitializeOnLoadMethod\(RuntimeInitializeLoadType\.AfterSceneLoad\)/);
+  assert.match(runtime, /FindFirstObjectByType<BirdieWorldFoundationRuntime>/);
+  assert.match(runtime, /Resources\.Load<TextAsset>\(ManifestResourcePath\)/);
+  assert.match(runtime, /try\s*\{[\s\S]*BuildFoundation\(\);[\s\S]*\}\s*catch \(Exception exception\)/);
+  assert.match(runtime, /BirdieWorldRuntimeFailure\.Show\(exception\)/);
+  assert.match(runtime, /BirdieWorld_FallbackCamera/);
+  assert.match(runtime, /Bitte neu laden oder den Test-Link melden/);
+});
+
 test("foundation adds only the explicitly approved account gate", async () => {
   const [manifest, runtime, account, builder, readme] = await Promise.all([
     read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldEstateManifest.cs"),
