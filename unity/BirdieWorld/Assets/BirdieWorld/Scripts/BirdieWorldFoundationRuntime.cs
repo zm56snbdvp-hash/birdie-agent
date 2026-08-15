@@ -8,18 +8,43 @@ namespace BirdieWorld.Foundation
 {
     public sealed class BirdieWorldFoundationRuntime : MonoBehaviour
     {
+        internal const string ManifestResourcePath = "BirdieWorld/birdieworld-estate-handoff-v1";
+
         [SerializeField] private TextAsset estateManifest;
         [SerializeField] private bool buildOnStart = true;
 
         private readonly Dictionary<string, Material> materials = new();
+        private bool hasBuilt;
 
         public void SetManifestAsset(TextAsset source) => estateManifest = source;
 
+        public void EnsureManifestAsset()
+        {
+            if (estateManifest == null)
+            {
+                estateManifest = Resources.Load<TextAsset>(ManifestResourcePath);
+            }
+        }
+
         private void Start()
         {
-            if (buildOnStart)
+            if (buildOnStart && !hasBuilt)
             {
+                TryBuildFoundation();
+            }
+        }
+
+        private void TryBuildFoundation()
+        {
+            try
+            {
+                EnsureManifestAsset();
                 BuildFoundation();
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+                BirdieWorldRuntimeFailure.Show(exception);
             }
         }
 
@@ -39,6 +64,7 @@ namespace BirdieWorld.Foundation
             BuildAmbientScaleMarkers(manifest, generated.transform);
             BuildLighting(manifest, generated.transform);
             BuildPlayerAndCamera(manifest, generated.transform);
+            hasBuilt = true;
         }
 
         private void ClearGeneratedRoot()
@@ -275,6 +301,100 @@ namespace BirdieWorld.Foundation
         private static Color ParseColor(string html, Color fallback)
         {
             return ColorUtility.TryParseHtmlString(html, out var parsed) ? parsed : fallback;
+        }
+    }
+
+    public static class BirdieWorldRuntimeBootstrap
+    {
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void EnsureFoundationRuntime()
+        {
+            var runtime = UnityEngine.Object.FindFirstObjectByType<BirdieWorldFoundationRuntime>();
+            if (runtime == null)
+            {
+                var root = new GameObject("BirdieWorld_Foundation_RuntimeBootstrap");
+                runtime = root.AddComponent<BirdieWorldFoundationRuntime>();
+            }
+
+            runtime.EnsureManifestAsset();
+        }
+    }
+
+    public sealed class BirdieWorldRuntimeFailure : MonoBehaviour
+    {
+        private string diagnostic = "BirdieWorld konnte nicht gestartet werden.";
+        private GUIStyle cardStyle;
+        private GUIStyle titleStyle;
+        private GUIStyle bodyStyle;
+        private Texture2D cardTexture;
+
+        public static void Show(Exception exception)
+        {
+            EnsureFallbackCamera();
+
+            var existing = UnityEngine.Object.FindFirstObjectByType<BirdieWorldRuntimeFailure>();
+            var overlay = existing != null
+                ? existing
+                : new GameObject("BirdieWorld_RuntimeFailure").AddComponent<BirdieWorldRuntimeFailure>();
+            overlay.diagnostic = $"Startfehler: {exception.GetType().Name}. Bitte neu laden oder den Test-Link melden.";
+        }
+
+        private static void EnsureFallbackCamera()
+        {
+            if (Camera.main != null) return;
+
+            var cameraObject = new GameObject("BirdieWorld_FallbackCamera");
+            cameraObject.tag = "MainCamera";
+            var fallbackCamera = cameraObject.AddComponent<Camera>();
+            fallbackCamera.clearFlags = CameraClearFlags.SolidColor;
+            fallbackCamera.backgroundColor = new Color(0.015f, 0.035f, 0.028f, 1f);
+        }
+
+        private void OnGUI()
+        {
+            EnsureStyles();
+            var width = Mathf.Min(Screen.width - 32f, 560f);
+            var height = 190f;
+            var rect = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+            GUI.Box(rect, GUIContent.none, cardStyle);
+            GUI.Label(new Rect(rect.x + 24f, rect.y + 22f, rect.width - 48f, 44f), "BIRDIEWORLD", titleStyle);
+            GUI.Label(new Rect(rect.x + 24f, rect.y + 76f, rect.width - 48f, 88f), diagnostic, bodyStyle);
+        }
+
+        private void EnsureStyles()
+        {
+            if (cardStyle != null) return;
+
+            cardTexture = new Texture2D(1, 1);
+            cardTexture.SetPixel(0, 0, new Color(0.025f, 0.075f, 0.055f, 0.96f));
+            cardTexture.Apply();
+
+            cardStyle = new GUIStyle(GUI.skin.box)
+            {
+                normal = { background = cardTexture }
+            };
+            titleStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.MiddleCenter,
+                fontSize = Mathf.Clamp(Screen.width / 20, 20, 34),
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = new Color(0.88f, 0.66f, 0.27f) }
+            };
+            bodyStyle = new GUIStyle(GUI.skin.label)
+            {
+                alignment = TextAnchor.UpperCenter,
+                fontSize = Mathf.Clamp(Screen.width / 34, 14, 20),
+                wordWrap = true,
+                normal = { textColor = new Color(0.95f, 0.92f, 0.82f) }
+            };
+        }
+
+        private void OnDestroy()
+        {
+            if (cardTexture != null)
+            {
+                Destroy(cardTexture);
+            }
         }
     }
 
