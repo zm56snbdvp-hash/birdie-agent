@@ -56,3 +56,15 @@ test("foundation adds only the explicitly approved account gate", async () => {
   assert.doesNotMatch(account, /PlayerPrefs|File\.Write|UnityWebRequest|HttpClient|CoinService|PaymentService|PurchaseService/i);
   assert.doesNotMatch(runtime, /UnityWebRequest|HttpClient|PlayerPrefs|File\.Write|Coin|quest/i);
 });
+
+test("Windows automation fails closed and invokes only bounded Unity methods", async () => {
+  const script = await read("scripts/birdieworld-unity.ps1");
+  assert.match(script, /6000\.5\.8f1/);
+  assert.match(script, /ValidateSet\("check", "prepare", "build"\)/);
+  assert.match(script, /BirdieWorld\.Editor\.BirdieWorldFoundationBuilder\.PrepareFoundation/);
+  assert.match(script, /BirdieWorld\.Editor\.BirdieWorldFoundationBuilder\.BuildSupporterWeb/);
+  assert.match(script, /-batchmode/);
+  assert.match(script, /-projectPath/);
+  assert.match(script, /Close the Unity Editor/);
+  assert.doesNotMatch(script, /Remove-Item|Invoke-WebRequest|Start-Process|git push|deploy/i);
+});
