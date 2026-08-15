@@ -4,12 +4,12 @@ import test from "node:test";
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("Unity foundation pins the production LTS, rendering, input and account baseline", async () => {
+test("Unity foundation pins the production editor, rendering, input and account baseline", async () => {
   const [version, packages] = await Promise.all([
     read("unity/BirdieWorld/ProjectSettings/ProjectVersion.txt"),
     read("unity/BirdieWorld/Packages/manifest.json")
   ]);
-  assert.match(version, /6000\.3\.0f1/);
+  assert.match(version, /6000\.5\.8f1/);
   assert.deepEqual(JSON.parse(packages).dependencies, {
     "com.unity.inputsystem": "1.17.0",
     "com.unity.render-pipelines.universal": "17.3.0",
