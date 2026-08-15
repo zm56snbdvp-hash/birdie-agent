@@ -11,7 +11,7 @@ test("Unity foundation pins the production editor, rendering, input and account 
   ]);
   assert.match(version, /6000\.5\.8f1/);
   assert.deepEqual(JSON.parse(packages).dependencies, {
-    "com.unity.inputsystem": "1.17.0",
+    "com.unity.inputsystem": "1.20.0",
     "com.unity.render-pipelines.universal": "17.3.0",
     "com.unity.services.authentication": "3.7.3",
     "com.unity.modules.ai": "1.0.0",
