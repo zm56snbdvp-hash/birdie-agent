@@ -28,6 +28,24 @@ truth or reproduce coordinates by hand.
    **Username and Password** identity provider.
 9. For a local Web candidate choose **BirdieWorld → Build Supporter Web**.
 
+## Birdie automation on Windows
+
+The repository includes a fail-closed PowerShell runner for the installed
+Unity `6000.5.8f1` Editor. Run it from the repository root after closing the
+Unity Editor:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\birdieworld-unity.ps1 check
+powershell -ExecutionPolicy Bypass -File .\scripts\birdieworld-unity.ps1 prepare
+powershell -ExecutionPolicy Bypass -File .\scripts\birdieworld-unity.ps1 build
+```
+
+`check` performs no Unity write. `prepare` regenerates the bounded scene from
+the canonical handoff. `build` prepares the scene and writes the Web candidate
+to `unity/BirdieWorld/Builds/Web`. Logs are written to `artifacts/unity`.
+The runner refuses the wrong project folder, wrong Editor version, a missing
+canonical handoff or an already-open Unity Editor.
+
 The preparation command copies the canonical manifest into Unity's Resources
 folder, validates both contract versions and refuses any manifest that enables
 quests, progression, multiplayer, persistence, location tracking or authority.
