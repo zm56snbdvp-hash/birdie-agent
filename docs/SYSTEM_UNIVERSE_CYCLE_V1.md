@@ -85,12 +85,22 @@ three identifiers and must not append another row.
 All preparation before these gates is source-only or read-only. Each gate is a
 separate, auditable Founder decision.
 
+One bounded exception may precede the provider gate: the governed Cloud Run
+**Stage-A absent-bundle lane** may create a directly addressable tagged revision
+at 0% default traffic solely to prove OIDC, registry, unchanged runtime/IAM
+fingerprints, and fail-closed Meta/BirdieWorld-userauth absence. It evaluates no
+Apps Script deployment, performs no authenticated application call, and does
+not satisfy or reorder any activation gate. Its authoritative runbook is
+`docs/github-oidc-cloud-run-no-traffic.md`.
+
 1. **Identity gate:** choose one exact ACTIVE private `birdieId` and confirm
    ownership of its exact Instagram handle.
 2. **Economy gate:** confirm `IG_COMMENT = +1 Birdie`, manual approval,
    per-distinct-comment. The catalog row stays DRAFT before this decision.
-3. **Provider gate:** approve in-place Apps Script deployment, then a no-traffic
-   Birdie Agent revision, read-only verification and explicit traffic switch.
+3. **Provider gate:** after any optional Stage-A infrastructure receipt, approve
+   the in-place Apps Script deployment, then separately approve configured
+   no-traffic Birdie Agent capability revisions, read-only verification and an
+   explicit traffic switch.
 4. **App-auth gate:** approve the BirdieWorld user-session issuer, audience and
    signed Birdie-ID claim/JWKS configuration. The server agent key is never
    exposed to a browser.

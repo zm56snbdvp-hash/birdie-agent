@@ -251,7 +251,7 @@ curl -X POST http://localhost:8080/chat \
 
 Deploy the repository as the `birdie-agent` service and configure all secrets as Cloud Run environment variables / Secret Manager references. Do not bake secrets into the container image or repository.
 
-For release `2.9.0`, use [`docs/github-oidc-cloud-run-no-traffic.md`](docs/github-oidc-cloud-run-no-traffic.md). It is the governed keyless candidate lane and stops with zero serving traffic; the historical TASK-038 runbook must not drive this release.
+For release `2.9.0`, use [`docs/github-oidc-cloud-run-no-traffic.md`](docs/github-oidc-cloud-run-no-traffic.md). It is the governed keyless Stage-A absent-bundle lane and stops with zero default serving traffic. This infrastructure-only receipt may precede Apps Script but does not activate or reorder the later provider gates; the historical TASK-038 runbook must not drive this release.
 
 After deployment, verify in this order:
 
@@ -268,4 +268,3 @@ After deployment, verify in this order:
 - No live data may be invented when the upstream source is unavailable.
 - External financial, legal, reputational, or irreversible actions require explicit founder approval.
 - Secrets must never be returned in API responses or committed to GitHub.
-
