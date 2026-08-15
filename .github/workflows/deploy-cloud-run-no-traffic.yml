@@ -322,6 +322,8 @@ jobs:
             serviceAccount:(.spec.template.spec.serviceAccountName // .template.serviceAccount),
             serviceLabels:(.metadata.labels // {}),
             serviceAnnotations:((.metadata.annotations // {}) | del(
+              ."run.googleapis.com/client-name",
+              ."run.googleapis.com/client-version",
               ."run.googleapis.com/operation-id",
               ."serving.knative.dev/creator",
               ."serving.knative.dev/lastModifier"
@@ -486,6 +488,8 @@ jobs:
             serviceAccount:(.spec.template.spec.serviceAccountName // .template.serviceAccount),
             serviceLabels:(.metadata.labels // {}),
             serviceAnnotations:((.metadata.annotations // {}) | del(
+              ."run.googleapis.com/client-name",
+              ."run.googleapis.com/client-version",
               ."run.googleapis.com/operation-id",
               ."serving.knative.dev/creator",
               ."serving.knative.dev/lastModifier"
@@ -508,8 +512,16 @@ jobs:
             "$RUNNER_TEMP/iam-after.json" > "$RUNNER_TEMP/iam-normalized-after.json"
           actual_config_fingerprint="$(sha256sum "$RUNNER_TEMP/config-after.json" | cut -d' ' -f1)"
           actual_iam_fingerprint="$(sha256sum "$RUNNER_TEMP/iam-normalized-after.json" | cut -d' ' -f1)"
-          test "$actual_config_fingerprint" = "$EXPECTED_CONFIG_FINGERPRINT"
-          test "$actual_iam_fingerprint" = "$EXPECTED_IAM_FINGERPRINT"
+          if [[ "$actual_config_fingerprint" != "$EXPECTED_CONFIG_FINGERPRINT" ]]; then
+            echo "::error title=CONFIG_FINGERPRINT_MISMATCH::Runtime configuration fingerprint changed outside allowed deploy provenance." >&2
+            printf 'expected=%s actual=%s\n' "$EXPECTED_CONFIG_FINGERPRINT" "$actual_config_fingerprint" >&2
+            exit 1
+          fi
+          if [[ "$actual_iam_fingerprint" != "$EXPECTED_IAM_FINGERPRINT" ]]; then
+            echo "::error title=IAM_FINGERPRINT_MISMATCH::Service IAM policy fingerprint changed during the no-traffic deployment." >&2
+            printf 'expected=%s actual=%s\n' "$EXPECTED_IAM_FINGERPRINT" "$actual_iam_fingerprint" >&2
+            exit 1
+          fi
 
           root_status="$(curl --silent --show-error --retry 4 --retry-connrefused \
             --output "$RUNNER_TEMP/root-response.json" --write-out '%{http_code}' \
