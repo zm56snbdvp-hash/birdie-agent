@@ -253,14 +253,16 @@ Deploy the repository as the `birdie-agent` service and configure all secrets as
 
 For release `2.9.0`, use [`docs/github-oidc-cloud-run-no-traffic.md`](docs/github-oidc-cloud-run-no-traffic.md). It is the governed keyless Stage-A absent-bundle lane and stops with zero default serving traffic. This infrastructure-only receipt may precede Apps Script but does not activate or reorder the later provider gates; the historical TASK-038 runbook must not drive this release.
 
-After deployment, verify in this order:
+After a **later configured, separately approved provider deployment**—not after
+the Stage-A absent-bundle run—verify in this order:
 
 1. `GET /` returns `status: ONLINE`.
 2. Authenticated `GET /health` reaches Birdie OS successfully.
 3. Authenticated `GET /next-task` returns `source: BIRDIE_OS` and `authoritative: true`.
 4. Authenticated `POST /chat` successfully handles both a next-task request and a general company-state request.
 5. Authenticated MCP initialization at `POST /mcp` lists all eight governed Birdie Mail tools.
-6. Only then connect the endpoint as the production Chatty/Birdie MCP server or action.
+6. Only then, under its own production approval, connect the endpoint as the
+   production Chatty/Birdie MCP server or action.
 
 ## Governance
 

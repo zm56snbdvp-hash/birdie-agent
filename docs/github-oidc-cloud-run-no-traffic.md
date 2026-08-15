@@ -120,11 +120,21 @@ gcloud run services get-iam-policy "$SERVICE" \
 gcloud iam service-accounts get-iam-policy "$RUNTIME_SA" \
   --project "$PROJECT_ID" \
   --format=json
+
+gcloud projects get-iam-policy "$PROJECT_ID" --format=json | \
+  jq --arg deployer "serviceAccount:$DEPLOYER_SA" \
+     --arg runtime "serviceAccount:$RUNTIME_SA" '
+    [.bindings[]? | {
+      role,
+      members:[.members[]? | select(. == $deployer or . == $runtime)]
+    } | select(.members | length > 0)] | sort_by(.role)
+  '
 ```
 
 The receipt must show the existing `roles/iam.workloadIdentityUser`,
 `roles/artifactregistry.writer`, `roles/run.developer`, and
-`roles/iam.serviceAccountUser` bindings for the exact principals above. Do not
+`roles/iam.serviceAccountUser` bindings for the exact principals above, plus
+the filtered project-level role export for both service accounts. Do not
 grant Project Editor, Owner, Cloud Run Admin, Service Account Admin, or
 service-account-key creation. Keep the deployment identity separate from the
 Cloud Run runtime identity.

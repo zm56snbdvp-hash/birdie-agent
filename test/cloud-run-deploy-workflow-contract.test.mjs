@@ -97,6 +97,8 @@ test("operator entrypoint points at the 2.9.0 governed lane", () => {
   assert.match(readme, /github-oidc-cloud-run-no-traffic\.md/);
   assert.match(readme, /Stage-A absent-bundle lane/);
   assert.match(readme, /may precede Apps Script but does not activate/);
+  assert.match(readme, /later configured, separately approved provider deployment/);
+  assert.match(readme, /not after\n+the Stage-A absent-bundle run/);
   assert.match(readme, /historical TASK-038 runbook must not drive this release/);
   assert.match(readme, /BirdieWorld V1 uses its own user OAuth boundary/);
 });
@@ -352,6 +354,8 @@ test("bootstrap contract pins immutable GitHub identity and least privilege", ()
   assert.match(runbook, /roles\/artifactregistry\.writer/);
   assert.match(runbook, /roles\/run\.developer/);
   assert.match(runbook, /roles\/iam\.serviceAccountUser/);
+  assert.match(runbook, /gcloud projects get-iam-policy "\$PROJECT_ID"/);
+  assert.match(runbook, /filtered project-level role export/);
   assert.match(
     runbook,
     /893591677320-compute@developer\.gserviceaccount\.com/
