@@ -16,6 +16,8 @@ namespace BirdieWorld.Foundation
         private const int MaximumUsernameLength = 20;
         private const int MinimumPasswordLength = 8;
         private const int MaximumPasswordLength = 30;
+        private const string PasswordRequirements =
+            "Passwort: 8–30 Zeichen mit mindestens einem Großbuchstaben, einem Kleinbuchstaben, einer Zahl und einem Symbol.";
 
         private BirdieWorldFoundationWalker walker;
         private string username = string.Empty;
@@ -130,11 +132,35 @@ namespace BirdieWorld.Foundation
 
             if (password.Length < MinimumPasswordLength || password.Length > MaximumPasswordLength)
             {
-                status = "Passwort: 8 bis 30 Zeichen.";
+                status = PasswordRequirements;
+                return false;
+            }
+
+            if (!HasRequiredPasswordCharacters(password))
+            {
+                status = PasswordRequirements;
                 return false;
             }
 
             return true;
+        }
+
+        private static bool HasRequiredPasswordCharacters(string candidate)
+        {
+            var hasUppercase = false;
+            var hasLowercase = false;
+            var hasDigit = false;
+            var hasSymbol = false;
+
+            foreach (var character in candidate)
+            {
+                if (char.IsUpper(character)) hasUppercase = true;
+                if (char.IsLower(character)) hasLowercase = true;
+                if (char.IsDigit(character)) hasDigit = true;
+                if (!char.IsLetterOrDigit(character) && !char.IsWhiteSpace(character)) hasSymbol = true;
+            }
+
+            return hasUppercase && hasLowercase && hasDigit && hasSymbol;
         }
 
         private void HandleSignedIn()
