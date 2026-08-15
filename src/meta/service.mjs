@@ -1,6 +1,13 @@
+import { createHmac } from "node:crypto";
+
 import { normalizeMetaWebhook, verifyMetaSignature } from "./normalize.mjs";
 
 const DEFAULT_API_VERSION = "v24.0";
+const DEFAULT_MESSAGING_GRAPH_HOST = "graph.instagram.com";
+const ALLOWED_MESSAGING_GRAPH_HOSTS = new Set([
+  "graph.facebook.com",
+  "graph.instagram.com"
+]);
 
 function serviceError(code, message, status = 400) {
   const error = new Error(message || code);
@@ -94,6 +101,33 @@ function validateDmReadback(event, response) {
   return data;
 }
 
+function buildMessagingUrl({
+  apiVersion,
+  appSecret,
+  graphHost,
+  messagingAccountId,
+  messagingAccessToken
+}) {
+  const host = required(graphHost, "META_MESSAGING_GRAPH_HOST").toLowerCase();
+  if (!ALLOWED_MESSAGING_GRAPH_HOSTS.has(host)) {
+    throw serviceError(
+      "META_MESSAGING_HOST_INVALID",
+      "META_MESSAGING_GRAPH_HOST must be a supported Meta Graph host",
+      503
+    );
+  }
+
+  const token = required(messagingAccessToken, "META_MESSAGING_ACCESS_TOKEN");
+  const secret = required(appSecret, "META_APP_SECRET");
+  const accountId = required(messagingAccountId, "META_MESSAGING_ACCOUNT_ID");
+  const proof = createHmac("sha256", secret).update(token).digest("hex");
+  const url = new URL(
+    `https://${host}/${required(apiVersion, "META_API_VERSION")}/${encodeURIComponent(accountId)}/messages`
+  );
+  url.searchParams.set("appsecret_proof", proof);
+  return { token, url };
+}
+
 export function createMetaCommunityService({
   birdieOSPost,
   fetchImpl = fetch,
@@ -101,6 +135,9 @@ export function createMetaCommunityService({
   verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN,
   accessToken = process.env.META_INSTAGRAM_ACCESS_TOKEN,
   instagramAccountId = process.env.META_INSTAGRAM_ACCOUNT_ID,
+  messagingAccessToken = process.env.META_MESSAGING_ACCESS_TOKEN || accessToken,
+  messagingAccountId = process.env.META_MESSAGING_ACCOUNT_ID || instagramAccountId,
+  messagingGraphHost = process.env.META_MESSAGING_GRAPH_HOST || DEFAULT_MESSAGING_GRAPH_HOST,
   apiVersion = process.env.META_API_VERSION || DEFAULT_API_VERSION,
   sourceAccount = process.env.META_INSTAGRAM_USERNAME || "birdieandbreakfast"
 }) {
@@ -168,20 +205,22 @@ export function createMetaCommunityService({
   }
 
   async function postMessage(body) {
-    const token = required(accessToken, "META_INSTAGRAM_ACCESS_TOKEN");
-    const accountId = required(instagramAccountId, "META_INSTAGRAM_ACCOUNT_ID");
-    const response = await fetchImpl(
-      `https://graph.instagram.com/${apiVersion}/${encodeURIComponent(accountId)}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json"
-        },
-        body: JSON.stringify(body)
-      }
-    );
+    const { token, url } = buildMessagingUrl({
+      apiVersion,
+      appSecret,
+      graphHost: messagingGraphHost,
+      messagingAccountId,
+      messagingAccessToken
+    });
+    const response = await fetchImpl(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(body)
+    });
     const raw = await response.text();
     let data = {};
     try {
