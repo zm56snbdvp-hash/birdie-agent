@@ -116,6 +116,7 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   assert.equal(root.version, "2.9.0");
   assert.equal(root.meta, "SIGNED_WEBHOOK_CONTROLLED");
   assert.equal(root.birdieWorld, "AUTH_GATE_NOT_CONFIGURED");
+  assert.equal(root.dna, "GOVERNED");
 
   const unauthorized = await fetch(`${baseUrl}/coin/config`);
   assert.equal(unauthorized.status, 401);
