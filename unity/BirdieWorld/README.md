@@ -7,7 +7,7 @@ truth or reproduce coordinates by hand.
 
 ## Locked technical baseline
 
-- Unity `6000.3.0f1` (Unity 6.3 LTS)
+- Unity `6000.5.8f1` (Unity 6.5 Update)
 - Universal Render Pipeline `17.3.0`
 - Input System `1.17.0`
 - Unity Authentication `3.7.3` with username/password accounts
@@ -17,7 +17,7 @@ truth or reproduce coordinates by hand.
 
 ## First local start
 
-1. Install Unity Hub and Unity 6.3 LTS with **Web Build Support**.
+1. Install Unity Hub and Unity 6.5 (`6000.5.8f1`) with **Web Build Support**.
 2. Open the project folder `unity/BirdieWorld` from this repository.
 3. Wait for package import to finish.
 4. In Unity choose **BirdieWorld → Prepare Unity Foundation**.
