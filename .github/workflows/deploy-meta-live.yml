@@ -1,0 +1,108 @@
+name: Deploy Birdie Agent Meta live
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/meta/**'
+      - 'birdie-os/community-meta.gs'
+      - 'birdie-os/social-outreach-events.gs'
+      - 'server.mjs'
+      - '.github/workflows/deploy-meta-live.yml'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: birdie-agent-meta-live
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: gen-lang-client-0251788487
+  GCP_REGION: europe-west3
+  CLOUD_RUN_SERVICE: birdie-agent
+  ARTIFACT_REPOSITORY: birdie-agent-releases
+  WIF_PROVIDER: projects/893591677320/locations/global/workloadIdentityPools/github-birdie-agent/providers/github-birdie-agent
+  DEPLOYER_SERVICE_ACCOUNT: birdie-github-deployer@gen-lang-client-0251788487.iam.gserviceaccount.com
+  META_INSTAGRAM_ACCOUNT_ID: '17841440257520993'
+  META_INSTAGRAM_USERNAME: birdieandbreakfast
+  META_API_VERSION: v24.0
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          version: '577.0.0'
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Verify required Meta secrets exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for secret in META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN META_INSTAGRAM_ACCESS_TOKEN; do
+            gcloud secrets describe "$secret" --project "$GCP_PROJECT_ID" --format='value(name)' >/dev/null
+          done
+
+      - name: Build and push exact main image
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPOSITORY/$CLOUD_RUN_SERVICE:$GITHUB_SHA"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - name: Deploy candidate with zero traffic and Meta runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="meta-${GITHUB_SHA::12}"
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --image "$IMAGE" \
+            --tag "$TAG" \
+            --no-traffic \
+            --update-env-vars "META_INSTAGRAM_ACCOUNT_ID=$META_INSTAGRAM_ACCOUNT_ID,META_INSTAGRAM_USERNAME=$META_INSTAGRAM_USERNAME,META_API_VERSION=$META_API_VERSION" \
+            --update-secrets "META_APP_SECRET=META_APP_SECRET:latest,META_WEBHOOK_VERIFY_TOKEN=META_WEBHOOK_VERIFY_TOKEN:latest,META_INSTAGRAM_ACCESS_TOKEN=META_INSTAGRAM_ACCESS_TOKEN:latest" \
+            --quiet
+          URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format="value(status.traffic[?tag='$TAG'].url)")"
+          test -n "$URL"
+          echo "CANDIDATE_URL=$URL" >> "$GITHUB_ENV"
+
+      - name: Minimal candidate smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 3 "$CANDIDATE_URL/health" >/tmp/health.json
+          grep -Eq 'success|ok|healthy|version' /tmp/health.json
+
+      - name: Shift live traffic to candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          REVISION="$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.latestCreatedRevisionName)')"
+          test -n "$REVISION"
+          gcloud run services update-traffic "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --to-revisions "$REVISION=100" \
+            --quiet
+          gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)'
