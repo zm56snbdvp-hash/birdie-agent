@@ -124,7 +124,7 @@ test("temporary credentials and private build context are excluded", () => {
 test("bootstrap contract pins immutable GitHub identity and least privilege", () => {
   assert.match(
     runbook,
-    /repo:zm56snbdvp-hash@315131667\/birdie-agent@1329217661:environment:birdie-cloud-run-no-traffic/
+    /repo:zm56snbdvp-hash\/birdie-agent:environment:birdie-cloud-run-no-traffic/
   );
   assert.match(runbook, /assertion\.repository_id == '1329217661'/);
   assert.match(runbook, /assertion\.repository_owner_id == '315131667'/);
