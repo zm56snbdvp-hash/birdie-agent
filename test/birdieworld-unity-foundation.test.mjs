@@ -102,5 +102,9 @@ test("Windows automation fails closed and invokes only bounded Unity methods", a
   assert.match(script, /-batchmode/);
   assert.match(script, /-projectPath/);
   assert.match(script, /Close the Unity Editor/);
+  assert.match(script, /System\.Diagnostics\.ProcessStartInfo/);
+  assert.match(script, /WaitForExit\(\)/);
+  assert.match(script, /unityProcess\.ExitCode/);
+  assert.doesNotMatch(script, /LASTEXITCODE/);
   assert.doesNotMatch(script, /Remove-Item|Invoke-WebRequest|Start-Process|git push|deploy/i);
 });
