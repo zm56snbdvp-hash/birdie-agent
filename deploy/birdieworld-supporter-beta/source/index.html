@@ -112,7 +112,8 @@
         document.querySelector("#unity-container").className = "unity-mobile";
         canvas.className = "unity-mobile";
 
-        // Keep iOS and in-app browsers inside a mobile-safe GPU budget.
+        // To lower canvas resolution on mobile devices to gain some
+        // performance, uncomment the following line:
         config.devicePixelRatio = 1;
 
 
