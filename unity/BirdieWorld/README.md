@@ -9,7 +9,7 @@ truth or reproduce coordinates by hand.
 
 - Unity `6000.5.8f1` (Unity 6.5 Update)
 - Universal Render Pipeline `17.3.0`
-- Input System `1.17.0`
+- Input System `1.20.0` (released for Unity 6.5)
 - Unity Authentication `3.7.3` with username/password accounts
 - Web build first, mobile-browser controls included
 - one generated scene: `BirdieEstate_Blockout`
