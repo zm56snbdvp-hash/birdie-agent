@@ -38,17 +38,35 @@
           warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
         }
         var div = document.createElement('div');
-        div.innerHTML = msg;
+        div.textContent = String(msg);
+        div.style.whiteSpace = 'pre-wrap';
         warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
+        if (type == 'error') {
+          div.style.background = '#7a1010';
+          div.style.color = '#ffffff';
+          div.style.padding = '12px';
+          div.style.whiteSpace = 'pre-wrap';
+        }
         else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+          if (type == 'warning') {
+            div.style.background = '#f1c84b';
+            div.style.color = '#111111';
+            div.style.padding = '10px';
+          }
           setTimeout(function() {
             warningBanner.removeChild(div);
             updateBannerVisibility();
           }, 5000);
         }
         updateBannerVisibility();
+      }
+
+      function birdieWorldStartupError(message) {
+        var loadingBar = document.querySelector("#unity-loading-bar");
+        if (loadingBar) loadingBar.style.display = "none";
+        console.error("[BirdieWorld startup]", message);
+        unityShowBanner(message, "error");
+        return true;
       }
 
       var buildUrl = "Build";
@@ -63,12 +81,9 @@
         productName: "BirdieWorld Supporter Beta",
         productVersion: "1.0",
         showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
+        errorHandler: function(err) {
+          return birdieWorldStartupError(err);
+        },
       };
 
       // By default, Unity keeps WebGL canvas render target size matched with
@@ -97,9 +112,8 @@
         document.querySelector("#unity-container").className = "unity-mobile";
         canvas.className = "unity-mobile";
 
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
+        // Keep iOS and in-app browsers inside a mobile-safe GPU budget.
+        config.devicePixelRatio = 1;
 
 
       } else {
@@ -109,6 +123,11 @@
       }
 
       document.querySelector("#unity-loading-bar").style.display = "block";
+
+      canvas.addEventListener("webglcontextlost", function(event) {
+        event.preventDefault();
+        birdieWorldStartupError("Die Grafikverbindung wurde unterbrochen. Bitte öffne den Link direkt in Safari oder Chrome und lade die Seite neu.");
+      }, false);
 
       var script = document.createElement("script");
       script.src = loaderUrl;
@@ -122,7 +141,7 @@
                 };
 
               }).catch((message) => {
-                alert(message);
+                birdieWorldStartupError(message);
               });
             };
 
