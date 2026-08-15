@@ -34,6 +34,13 @@ test("Unity imports the canonical manifest and mirrors Z only at the adapter bou
   assert.match(builder, /BirdieWorldEstateManifest\.ParseAndValidate/);
 });
 
+test("runtime materials follow the active Unity render pipeline", async () => {
+  const runtime = await read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldFoundationRuntime.cs");
+  assert.match(runtime, /GraphicsSettings\.currentRenderPipeline/);
+  assert.match(runtime, /activePipeline == null\s*\? Shader\.Find\("Standard"\)\s*:\s*activePipeline\.defaultShader/);
+  assert.doesNotMatch(runtime, /Shader\.Find\("Universal Render Pipeline\/Lit"\)\s*\?\?/);
+});
+
 test("foundation adds only the explicitly approved account gate", async () => {
   const [manifest, runtime, account, builder, readme] = await Promise.all([
     read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldEstateManifest.cs"),
@@ -55,6 +62,23 @@ test("foundation adds only the explicitly approved account gate", async () => {
   assert.match(readme, /public supporter beta/i);
   assert.doesNotMatch(account, /PlayerPrefs|File\.Write|UnityWebRequest|HttpClient|CoinService|PaymentService|PurchaseService/i);
   assert.doesNotMatch(runtime, /UnityWebRequest|HttpClient|PlayerPrefs|File\.Write|Coin|quest/i);
+});
+
+test("account gate rejects passwords that do not meet UGS complexity before authentication", async () => {
+  const account = await read("unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldAccountGate.cs");
+  const validationCall = account.indexOf("if (!ValidateCredentials()) return;");
+  const signUpCall = account.indexOf("SignUpWithUsernamePasswordAsync");
+
+  assert.ok(validationCall >= 0 && validationCall < signUpCall);
+  assert.match(account, /password\.Length < MinimumPasswordLength \|\| password\.Length > MaximumPasswordLength/);
+  assert.match(account, /char\.IsUpper\(character\)/);
+  assert.match(account, /char\.IsLower\(character\)/);
+  assert.match(account, /char\.IsDigit\(character\)/);
+  assert.match(account, /!char\.IsLetterOrDigit\(character\) && !char\.IsWhiteSpace\(character\)/);
+  assert.match(
+    account,
+    /Passwort: 8–30 Zeichen mit mindestens einem Großbuchstaben, einem Kleinbuchstaben, einer Zahl und einem Symbol\./
+  );
 });
 
 test("Windows automation fails closed and invokes only bounded Unity methods", async () => {
