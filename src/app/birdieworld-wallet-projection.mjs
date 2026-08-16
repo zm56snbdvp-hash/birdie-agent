@@ -1,3 +1,5 @@
+import { resolveUnityPlayerFromCanonicalProfiles } from "./birdieworld-unity-identity.mjs";
+
 const WALLET_SCHEMA_VERSION = "birdieworld-wallet-projection/v1";
 
 function asTrimmed(value) {
@@ -74,10 +76,21 @@ export function projectApprovedLedgerBalance({ birdieId, transactions = [] } = {
   return { schemaVersion: WALLET_SCHEMA_VERSION, birdieId: targetBirdieId, balance, currency: "BIRDIE_COIN", authority: "COIN_TRANSACTIONS", projectionMode: "SUM_APPROVED_TRANSACTION_AMOUNTS", appliedTransactionIds: applied.map((t)=>t.transactionId), transactionCount: applied.length, readOnly: true };
 }
 
-export function buildUnityWalletProjection({ unityPlayerId, bindings = [], transactions = [] } = {}) {
-  const binding = resolveExactUnityBirdieBinding({ unityPlayerId, bindings });
-  if (binding.status !== "BOUND") return { schemaVersion: WALLET_SCHEMA_VERSION, subject:{unityPlayerId:asTrimmed(unityPlayerId)||null}, identityStatus:binding.status, identityReason:binding.reason, birdieId:null, balanceAvailable:false, balance:null, currency:"BIRDIE_COIN", authority:"COIN_TRANSACTIONS", readOnly:true };
+function unavailableProjection(unityPlayerId, binding) {
+  return { schemaVersion: WALLET_SCHEMA_VERSION, subject:{unityPlayerId:asTrimmed(unityPlayerId)||null}, identityStatus:binding.status, identityReason:binding.reason, birdieId:null, balanceAvailable:false, balance:null, currency:"BIRDIE_COIN", authority:"COIN_TRANSACTIONS", readOnly:true };
+}
+
+function walletProjection(unityPlayerId, binding, transactions) {
+  if (binding.status !== "BOUND") return unavailableProjection(unityPlayerId, binding);
   const wallet = projectApprovedLedgerBalance({ birdieId: binding.birdieId, transactions });
   return { ...wallet, subject:{unityPlayerId:asTrimmed(unityPlayerId)}, identityStatus:"BOUND", identityReason:binding.reason, balanceAvailable:true };
+}
+
+export function buildUnityWalletProjection({ unityPlayerId, bindings = [], transactions = [] } = {}) {
+  return walletProjection(unityPlayerId, resolveExactUnityBirdieBinding({ unityPlayerId, bindings }), transactions);
+}
+
+export function buildUnityWalletProjectionFromCanonicalProfiles({ unityPlayerId, profiles = [], transactions = [] } = {}) {
+  return walletProjection(unityPlayerId, resolveUnityPlayerFromCanonicalProfiles({ unityPlayerId, profiles }), transactions);
 }
 export { WALLET_SCHEMA_VERSION };
