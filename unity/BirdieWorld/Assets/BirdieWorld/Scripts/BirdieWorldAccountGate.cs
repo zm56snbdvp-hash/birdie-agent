@@ -265,8 +265,16 @@ namespace BirdieWorld.Foundation
             GUILayout.BeginVertical();
             GUILayout.Label("BIRDIEWORLD · ONLINE", bodyStyle);
             GUILayout.Label($"Birdie {ShortPlayerId(PlayerId)}", statusStyle);
+            GUILayout.Label($"Player ID: {PlayerId}", statusStyle);
             GUILayout.EndVertical();
-            if (GUILayout.Button("Logout", secondaryButtonStyle, GUILayout.Width(82f), GUILayout.Height(38f))) SignOut();
+            GUILayout.BeginVertical(GUILayout.Width(110f));
+            if (GUILayout.Button("ID kopieren", secondaryButtonStyle, GUILayout.Width(104f), GUILayout.Height(32f)))
+            {
+                GUIUtility.systemCopyBuffer = PlayerId;
+                status = "Player ID kopiert.";
+            }
+            if (GUILayout.Button("Logout", secondaryButtonStyle, GUILayout.Width(104f), GUILayout.Height(32f))) SignOut();
+            GUILayout.EndVertical();
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
         }
