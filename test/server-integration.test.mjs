@@ -103,7 +103,19 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
       OPENAI_API_KEY: "test-openai-key",
       BIRDIE_OS_API_KEY: "test-birdie-os-key",
       BIRDIE_AGENT_API_KEY: "test-agent-key",
-      BIRDIE_OS_BASE: `http://127.0.0.1:${upstreamPort}`
+      BIRDIE_OS_BASE: `http://127.0.0.1:${upstreamPort}`,
+      META_APP_ID: "1028523216674895",
+      META_APP_SECRET: "test-meta-app-secret",
+      META_INSTAGRAM_ACCOUNT_ID: "17841440257520993",
+      META_MESSAGING_ACCOUNT_ID: "1265475843314216",
+      META_MESSAGING_GRAPH_HOST: "graph.facebook.com",
+      META_OAUTH_PAGE_ID: "1265475843314216",
+      META_OAUTH_INSTAGRAM_ACCOUNT_ID: "17841440257520993",
+      META_OAUTH_REDIRECT_URI: "https://agent.example/meta/oauth/callback",
+      META_OAUTH_STATE_SECRET: "test-state-secret-that-is-at-least-thirty-two-bytes",
+      META_CREDENTIAL_STORE: "GCP_SECRET_MANAGER",
+      META_MESSAGING_SECRET_PROJECT: "gen-lang-client-0251788487",
+      META_MESSAGING_ACCESS_TOKEN_SECRET_ID: "META_MESSAGING_ACCESS_TOKEN"
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -128,6 +140,9 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   assert.ok(catalogue.routes.includes("POST /coin/profiles/{birdieId}/instagram"));
   assert.ok(catalogue.routes.includes("POST /family/mcp"));
   assert.ok(catalogue.routes.includes("POST /meta/webhook"));
+  assert.ok(catalogue.routes.includes("POST /meta/oauth/start"));
+  assert.ok(catalogue.routes.includes("GET /meta/oauth/callback"));
+  assert.ok(catalogue.routes.includes("GET /meta/conversations"));
   assert.ok(catalogue.routes.includes("GET /birdie-app/v1/world"));
   assert.ok(catalogue.routes.includes("POST /admin/birdie-app/v1/reconcile"));
   assert.ok(
@@ -135,6 +150,33 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
       "POST /coin/social-events/{eventId}/instagram-comment/claim"
     )
   );
+
+  const unauthorizedConversations = await fetch(`${baseUrl}/meta/conversations`);
+  assert.equal(unauthorizedConversations.status, 401);
+
+  const oauthStartResponse = await fetch(`${baseUrl}/meta/oauth/start`, {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer test-agent-key",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ confirmation: "START_META_PAGE_OAUTH" })
+  });
+  const oauthStart = await oauthStartResponse.json();
+  assert.equal(oauthStartResponse.status, 200);
+  assert.equal(oauthStart.source, "META_PAGE_OAUTH");
+  assert.equal(
+    new URL(oauthStart.data.authorizationUrl).searchParams.get("scope"),
+    "instagram_basic,instagram_manage_messages,pages_manage_metadata,pages_show_list"
+  );
+  assert.equal(oauthStart.data.authorizationUrl.includes("test-meta-app-secret"), false);
+
+  const missingSecretConversations = await fetch(`${baseUrl}/meta/conversations`, {
+    headers: { Authorization: "Bearer test-agent-key" }
+  });
+  const missingSecretBody = await missingSecretConversations.json();
+  assert.equal(missingSecretConversations.status, 503);
+  assert.equal(missingSecretBody.error, "META_CONFIG_MISSING");
   assert.ok(
     catalogue.routes.includes(
       "POST /coin/social-events/{eventId}/instagram-comment/written"

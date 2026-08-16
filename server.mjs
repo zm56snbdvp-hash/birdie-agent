@@ -21,6 +21,7 @@ import {
   routeMetaPublicRequest
 } from "./src/meta/router.mjs";
 import { createMetaCommunityService } from "./src/meta/service.mjs";
+import { createGcpSecretManagerCredentialStore } from "./src/meta/gcp-secret-manager.mjs";
 import {
   authenticateMcpRequest,
   createMcpAuthConfig,
@@ -229,7 +230,11 @@ const communityIdentityService = createCommunityIdentityService({
   birdieOSPost,
   evidenceSigningKey: BIRDIE_AGENT_API_KEY
 });
-const metaCommunityService = createMetaCommunityService({ birdieOSPost });
+const metaCredentialStore = createGcpSecretManagerCredentialStore();
+const metaCommunityService = createMetaCommunityService({
+  birdieOSPost,
+  storeMetaCredential: metaCredentialStore
+});
 const birdieWorldStorage = createBirdieOsWorldStorage({
   birdieOSGet,
   birdieOSPost,
@@ -367,6 +372,9 @@ const routes = [
   "POST /community/identity/resolve",
   "GET /meta/webhook",
   "POST /meta/webhook",
+  "POST /meta/oauth/start",
+  "GET /meta/oauth/callback",
+  "GET /meta/conversations",
   "POST /meta/messages/private-reply",
   "POST /meta/messages/send",
   "GET /birdie-app/v1/world",
