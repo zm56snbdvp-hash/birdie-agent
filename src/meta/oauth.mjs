@@ -162,6 +162,17 @@ export function createMetaPageOAuthFlow({
   randomBytesImpl = randomBytes
 } = {}) {
   const states = ensureStateStore(stateStore);
+  let credentialStoreVerificationRequired = false;
+
+  function requireKnownCredentialStoreOutcome() {
+    if (credentialStoreVerificationRequired) {
+      throw oauthError(
+        "META_OAUTH_CREDENTIAL_STORE_VERIFICATION_REQUIRED",
+        "Verify Secret Manager before starting or completing another OAuth attempt",
+        503
+      );
+    }
+  }
 
   function configuration() {
     const secret = required(appSecret, "META_APP_SECRET");
@@ -257,6 +268,7 @@ export function createMetaPageOAuthFlow({
 
   function createAuthorizationUrl() {
     const config = configuration();
+    requireKnownCredentialStoreOutcome();
     if (typeof storeMetaCredential !== "function") {
       throw oauthError(
         "META_OAUTH_CREDENTIAL_SINK_MISSING",
@@ -279,6 +291,7 @@ export function createMetaPageOAuthFlow({
 
   async function completeAuthorization(searchParams) {
     const config = configuration();
+    requireKnownCredentialStoreOutcome();
     const params = searchParams instanceof URLSearchParams
       ? searchParams
       : new URLSearchParams(searchParams ?? {});
@@ -417,7 +430,15 @@ export function createMetaPageOAuthFlow({
         scopes: [...META_PAGE_OAUTH_SCOPES],
         observedAt: new Date(Number(now())).toISOString()
       });
-    } catch {
+    } catch (error) {
+      if (error?.code === "META_CREDENTIAL_STORE_OUTCOME_UNKNOWN") {
+        credentialStoreVerificationRequired = true;
+        throw oauthError(
+          "META_OAUTH_CREDENTIAL_STORE_OUTCOME_UNKNOWN",
+          "Credential storage outcome is unknown; verify Secret Manager before a new OAuth attempt",
+          502
+        );
+      }
       throw oauthError(
         "META_OAUTH_CREDENTIAL_STORE_FAILED",
         "Governed Meta credential storage failed",

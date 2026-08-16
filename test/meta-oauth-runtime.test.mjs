@@ -281,6 +281,67 @@ test("credential sink failures are sanitized and never expose provider secrets",
   assert.equal(h.calls.length, 4);
 });
 
+test("ambiguous credential storage remains distinct and sanitized", async () => {
+  const h = providerHarness();
+  const flow = createFlow({
+    ...h,
+    async storeMetaCredential() {
+      const error = new Error(`unknown ${PAGE_TOKEN_CANARY}`);
+      error.code = "META_CREDENTIAL_STORE_OUTCOME_UNKNOWN";
+      throw error;
+    },
+    randomBytesImpl: () => Buffer.alloc(32, 32)
+  });
+  const state = new URL(flow.createAuthorizationUrl().authorizationUrl)
+    .searchParams.get("state");
+
+  await assert.rejects(
+    flow.completeAuthorization(new URLSearchParams({ state, code: "CODE_CANARY" })),
+    (error) => {
+      assert.equal(error.code, "META_OAUTH_CREDENTIAL_STORE_OUTCOME_UNKNOWN");
+      assert.equal(error.message.includes(PAGE_TOKEN_CANARY), false);
+      return true;
+    }
+  );
+  assert.equal(h.calls.length, 4);
+
+  await assert.rejects(
+    flow.completeAuthorization(new URLSearchParams({ state, code: "CODE_CANARY" })),
+    (error) => error.code === "META_OAUTH_CREDENTIAL_STORE_VERIFICATION_REQUIRED"
+  );
+  assert.equal(h.calls.length, 4);
+});
+
+test("unknown storage outcome blocks every new OAuth attempt until operator verification", async () => {
+  const h = providerHarness();
+  const flow = createFlow({
+    ...h,
+    async storeMetaCredential() {
+      const error = new Error("unknown");
+      error.code = "META_CREDENTIAL_STORE_OUTCOME_UNKNOWN";
+      throw error;
+    },
+    randomBytesImpl: () => Buffer.alloc(32, 33)
+  });
+  const state = new URL(flow.createAuthorizationUrl().authorizationUrl)
+    .searchParams.get("state");
+  await assert.rejects(
+    flow.completeAuthorization(new URLSearchParams({ state, code: "code" })),
+    (error) => error.code === "META_OAUTH_CREDENTIAL_STORE_OUTCOME_UNKNOWN"
+  );
+  assert.throws(
+    () => flow.createAuthorizationUrl(),
+    (error) =>
+      error.code === "META_OAUTH_CREDENTIAL_STORE_VERIFICATION_REQUIRED" &&
+      error.status === 503
+  );
+  await assert.rejects(
+    flow.completeAuthorization(new URLSearchParams({ state, code: "code" })),
+    (error) => error.code === "META_OAUTH_CREDENTIAL_STORE_VERIFICATION_REQUIRED"
+  );
+  assert.equal(h.calls.length, 4);
+});
+
 function responseHarness() {
   return {
     status: null,

@@ -18,6 +18,9 @@ test("Meta deploy workflow binds the verified Page route and secret-only OAuth i
     "META_OAUTH_PAGE_ID: '1265475843314216'",
     "META_OAUTH_INSTAGRAM_ACCOUNT_ID: '17841440257520993'",
     "META_OAUTH_REDIRECT_URI: https://birdie-agent-893591677320.europe-west3.run.app/meta/oauth/callback",
+    "META_CREDENTIAL_STORE: GCP_SECRET_MANAGER",
+    "META_MESSAGING_SECRET_PROJECT: gen-lang-client-0251788487",
+    "META_MESSAGING_ACCESS_TOKEN_SECRET_ID: META_MESSAGING_ACCESS_TOKEN",
     "META_API_VERSION: v26.0"
   ]) {
     assert.equal(workflow.includes(expected), true, `missing ${expected}`);
@@ -33,7 +36,21 @@ test("Meta deploy workflow binds the verified Page route and secret-only OAuth i
     assert.match(workflow, new RegExp(`for secret in[^\\n]*${secret}`));
   }
 
+  assert.match(
+    workflow,
+    /--update-env-vars "[^\n]*META_CREDENTIAL_STORE=\$META_CREDENTIAL_STORE[^\n]*META_MESSAGING_SECRET_PROJECT=\$META_MESSAGING_SECRET_PROJECT[^\n]*META_MESSAGING_ACCESS_TOKEN_SECRET_ID=\$META_MESSAGING_ACCESS_TOKEN_SECRET_ID/
+  );
+  assert.match(
+    workflow,
+    /gcloud secrets versions describe latest --secret "\$secret"[^\n]*--format='value\(state\)'/
+  );
+  assert.match(workflow, /test "\$STATE" = "ENABLED"/);
+  assert.equal(workflow.includes("gcloud run services update-traffic"), false);
+  assert.equal(workflow.includes("--to-revisions"), false);
+  assert.match(workflow, /curl[^\n]*"\$CANDIDATE_URL\/"/);
+
   assert.equal(workflow.includes("META_INSTAGRAM_ACCESS_TOKEN"), false);
   assert.equal(workflow.includes("page-access-token"), false);
+  assert.equal(workflow.includes("dummy-token"), false);
   assert.equal(workflow.includes("APP_SECRET_CANARY"), false);
 });
