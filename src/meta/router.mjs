@@ -7,6 +7,24 @@ function requireConfirmation(body, expected) {
   }
 }
 
+function writeJson(res, status, body, extraHeaders = {}) {
+  res.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    ...extraHeaders
+  });
+  res.end(JSON.stringify(body));
+}
+
+function methodNotAllowed(res, allow) {
+  res.writeHead(405, {
+    "Content-Type": "text/plain; charset=utf-8",
+    "Cache-Control": "no-store",
+    Allow: allow
+  });
+  res.end("Method Not Allowed");
+}
+
 export async function routeMetaPublicRequest({
   req,
   res,
@@ -14,6 +32,25 @@ export async function routeMetaPublicRequest({
   service,
   readRawBody
 }) {
+  if (url.pathname === "/meta/oauth/callback") {
+    if (req.method !== "GET") {
+      methodNotAllowed(res, "GET");
+      return true;
+    }
+    const data = await service.completeOAuth(url.searchParams);
+    writeJson(
+      res,
+      200,
+      { success: true, source: "META_PAGE_OAUTH", data },
+      {
+        "Content-Security-Policy": "default-src 'none'; frame-ancestors 'none'",
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff"
+      }
+    );
+    return true;
+  }
+
   if (url.pathname !== "/meta/webhook") return false;
 
   if (req.method === "GET") {
@@ -51,11 +88,7 @@ export async function routeMetaPublicRequest({
     return true;
   }
 
-  res.writeHead(405, {
-    "Content-Type": "text/plain; charset=utf-8",
-    Allow: "GET, POST"
-  });
-  res.end("Method Not Allowed");
+  methodNotAllowed(res, "GET, POST");
   return true;
 }
 
@@ -67,6 +100,41 @@ export async function routeMetaGovernedRequest({
   readBody,
   service
 }) {
+  if (url.pathname === "/meta/oauth/start") {
+    if (req.method !== "POST") {
+      methodNotAllowed(res, "POST");
+      return true;
+    }
+    const body = await readBody(req);
+    requireConfirmation(body, "START_META_PAGE_OAUTH");
+    const data = service.startOAuth();
+    json(
+      res,
+      200,
+      { success: true, source: "META_PAGE_OAUTH", data },
+      { "Cache-Control": "no-store" }
+    );
+    return true;
+  }
+
+  if (url.pathname === "/meta/conversations") {
+    if (req.method !== "GET") {
+      methodNotAllowed(res, "GET");
+      return true;
+    }
+    const data = await service.listInstagramConversations({
+      limit: url.searchParams.get("limit") || 1,
+      after: url.searchParams.get("after") || ""
+    });
+    json(
+      res,
+      200,
+      { success: true, source: "META_INSTAGRAM_API", data },
+      { "Cache-Control": "no-store" }
+    );
+    return true;
+  }
+
   if (req.method === "POST" && url.pathname === "/meta/messages/private-reply") {
     const body = await readBody(req);
     requireConfirmation(body, "SEND_META_PRIVATE_REPLY");

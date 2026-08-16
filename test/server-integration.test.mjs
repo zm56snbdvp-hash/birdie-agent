@@ -103,7 +103,12 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
       OPENAI_API_KEY: "test-openai-key",
       BIRDIE_OS_API_KEY: "test-birdie-os-key",
       BIRDIE_AGENT_API_KEY: "test-agent-key",
-      BIRDIE_OS_BASE: `http://127.0.0.1:${upstreamPort}`
+      BIRDIE_OS_BASE: `http://127.0.0.1:${upstreamPort}`,
+      META_INSTAGRAM_ACCOUNT_ID: "17841440257520993",
+      META_MESSAGING_ACCOUNT_ID: "1265475843314216",
+      META_MESSAGING_GRAPH_HOST: "graph.facebook.com",
+      META_OAUTH_PAGE_ID: "1265475843314216",
+      META_OAUTH_INSTAGRAM_ACCOUNT_ID: "17841440257520993"
     },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -128,6 +133,9 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
   assert.ok(catalogue.routes.includes("POST /coin/profiles/{birdieId}/instagram"));
   assert.ok(catalogue.routes.includes("POST /family/mcp"));
   assert.ok(catalogue.routes.includes("POST /meta/webhook"));
+  assert.ok(catalogue.routes.includes("POST /meta/oauth/start"));
+  assert.ok(catalogue.routes.includes("GET /meta/oauth/callback"));
+  assert.ok(catalogue.routes.includes("GET /meta/conversations"));
   assert.ok(catalogue.routes.includes("GET /birdie-app/v1/world"));
   assert.ok(catalogue.routes.includes("POST /admin/birdie-app/v1/reconcile"));
   assert.ok(
@@ -135,6 +143,16 @@ test("Birdie Coin HTTP contract runs through the real server", async (context) =
       "POST /coin/social-events/{eventId}/instagram-comment/claim"
     )
   );
+
+  const unauthorizedConversations = await fetch(`${baseUrl}/meta/conversations`);
+  assert.equal(unauthorizedConversations.status, 401);
+
+  const missingSecretConversations = await fetch(`${baseUrl}/meta/conversations`, {
+    headers: { Authorization: "Bearer test-agent-key" }
+  });
+  const missingSecretBody = await missingSecretConversations.json();
+  assert.equal(missingSecretConversations.status, 503);
+  assert.equal(missingSecretBody.error, "META_CONFIG_MISSING");
   assert.ok(
     catalogue.routes.includes(
       "POST /coin/social-events/{eventId}/instagram-comment/written"

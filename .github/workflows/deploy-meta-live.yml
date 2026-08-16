@@ -25,9 +25,15 @@ env:
   ARTIFACT_REPOSITORY: birdie-agent-releases
   WIF_PROVIDER: projects/893591677320/locations/global/workloadIdentityPools/github-birdie-agent/providers/github-birdie-agent
   DEPLOYER_SERVICE_ACCOUNT: birdie-github-deployer@gen-lang-client-0251788487.iam.gserviceaccount.com
+  META_APP_ID: '1028523216674895'
   META_INSTAGRAM_ACCOUNT_ID: '17841440257520993'
   META_INSTAGRAM_USERNAME: birdieandbreakfast
-  META_API_VERSION: v24.0
+  META_MESSAGING_ACCOUNT_ID: '1265475843314216'
+  META_MESSAGING_GRAPH_HOST: graph.facebook.com
+  META_OAUTH_PAGE_ID: '1265475843314216'
+  META_OAUTH_INSTAGRAM_ACCOUNT_ID: '17841440257520993'
+  META_OAUTH_REDIRECT_URI: https://birdie-agent-893591677320.europe-west3.run.app/meta/oauth/callback
+  META_API_VERSION: v26.0
 
 jobs:
   deploy:
@@ -58,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for secret in META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN META_INSTAGRAM_ACCESS_TOKEN; do
+          for secret in META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN META_MESSAGING_ACCESS_TOKEN META_OAUTH_STATE_SECRET; do
             gcloud secrets describe "$secret" --project "$GCP_PROJECT_ID" --format='value(name)' >/dev/null
           done
 
@@ -84,8 +90,8 @@ jobs:
             --image "$IMAGE" \
             --tag "$TAG" \
             --no-traffic \
-            --update-env-vars "META_INSTAGRAM_ACCOUNT_ID=$META_INSTAGRAM_ACCOUNT_ID,META_INSTAGRAM_USERNAME=$META_INSTAGRAM_USERNAME,META_API_VERSION=$META_API_VERSION" \
-            --update-secrets "META_APP_SECRET=META_APP_SECRET:latest,META_WEBHOOK_VERIFY_TOKEN=META_WEBHOOK_VERIFY_TOKEN:latest,META_INSTAGRAM_ACCESS_TOKEN=META_INSTAGRAM_ACCESS_TOKEN:latest" \
+            --update-env-vars "META_APP_ID=$META_APP_ID,META_INSTAGRAM_ACCOUNT_ID=$META_INSTAGRAM_ACCOUNT_ID,META_INSTAGRAM_USERNAME=$META_INSTAGRAM_USERNAME,META_MESSAGING_ACCOUNT_ID=$META_MESSAGING_ACCOUNT_ID,META_MESSAGING_GRAPH_HOST=$META_MESSAGING_GRAPH_HOST,META_OAUTH_PAGE_ID=$META_OAUTH_PAGE_ID,META_OAUTH_INSTAGRAM_ACCOUNT_ID=$META_OAUTH_INSTAGRAM_ACCOUNT_ID,META_OAUTH_REDIRECT_URI=$META_OAUTH_REDIRECT_URI,META_API_VERSION=$META_API_VERSION" \
+            --update-secrets "META_APP_SECRET=META_APP_SECRET:latest,META_WEBHOOK_VERIFY_TOKEN=META_WEBHOOK_VERIFY_TOKEN:latest,META_MESSAGING_ACCESS_TOKEN=META_MESSAGING_ACCESS_TOKEN:latest,META_OAUTH_STATE_SECRET=META_OAUTH_STATE_SECRET:latest" \
             --quiet
           URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format="value(status.traffic[?tag='$TAG'].url)")"
           test -n "$URL"
