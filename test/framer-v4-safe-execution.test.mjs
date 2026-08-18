@@ -61,11 +61,11 @@ test("V4 requires branching runtime and starts from main", () => {
 
 test("V4 writes only after stale-plan check and verifies readback", () => {
   const textHashCheck = serviceSource.indexOf("textState(node.id, before) !== baseHash");
-  const textWrite = serviceSource.indexOf("node.setText(normalized.text)");
+  const textWrite = serviceSource.indexOf("await node.setText(normalized.text)");
   assert.ok(textHashCheck >= 0 && textWrite > textHashCheck);
 
   const cmsHashCheck = serviceSource.indexOf("cmsState(item) !== baseHash");
-  const cmsWrite = serviceSource.indexOf("item.setAttributes");
+  const cmsWrite = serviceSource.indexOf("await item.setAttributes");
   assert.ok(cmsHashCheck >= 0 && cmsWrite > cmsHashCheck);
 
   assert.match(serviceSource, /FRAMER_V4_READBACK_FAILED/);
