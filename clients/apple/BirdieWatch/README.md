@@ -5,20 +5,40 @@ Voice-first Apple Watch companion for Birdie.
 ## V0.1 UX
 
 - Birdie is the primary surface, not a miniature desktop dashboard.
-- Tap the `Mit Birdie sprechen` field and use the native Apple Watch dictation input.
+- Tap `Mit Birdie sprechen` and use native Apple Watch dictation.
 - Birdie's answer is rendered as a short watch-readable response.
 - The Inbox section shows up to five unread mail cards.
-- Sending mail is a governed action and must never happen from an implicit voice transcript alone.
+- Sending mail is a governed action and never happens from an implicit transcript alone.
+- A WidgetKit complication provides a direct Birdie entry point from the watch face.
 
-## Backend contract
+## Production request path
 
-The branch introduces `src/watch-router.mjs` with:
+```text
+Apple Watch
+    |
+    | WatchConnectivity sendMessage
+    v
+iPhone Companion
+    |
+    | BIRDIE_WATCH_API_KEY from iPhone Keychain
+    v
+Birdie Agent /watch/*
+    |
+    +--> Birdie OS / OpenAI chat path
+    +--> Governed IONOS Mail Service
+```
+
+The watch binary contains no Birdie backend credential.
+
+## Backend routes
 
 - `GET /watch/briefing`
 - `POST /watch/command`
 - `POST /watch/mail/reply`
 
-`/watch/mail/reply` fails closed unless the request contains:
+All `/watch/*` requests pass through the dedicated watch auth gate before the general Birdie Agent auth gate.
+
+`/watch/mail/reply` additionally fails closed unless the request contains:
 
 ```json
 {
@@ -29,37 +49,54 @@ The branch introduces `src/watch-router.mjs` with:
 
 The existing mail service remains authoritative for IMAP/SMTP execution.
 
-## Security boundary
+## Credential boundary
 
-Do **not** put `BIRDIE_AGENT_API_KEY` into the watch app bundle.
+Cloud Run receives a dedicated `BIRDIE_WATCH_API_KEY` secret with at least 32 characters. It must be independent from `BIRDIE_AGENT_API_KEY`.
 
-The intended production flow is:
+On iPhone, `WatchTokenStore` persists this credential in Keychain using `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`. `BirdiePhoneSetupView` is the development/setup surface for connecting or removing the credential. `WatchRelay` reads it only when forwarding a request to Cloud Run.
 
-```text
-Apple Watch
-    |
-    | WatchConnectivity / paired-device bootstrap
-    v
-iPhone Companion
-    |
-    | obtains short-lived Birdie Watch credential
-    v
-Birdie Agent /watch/*
-    |
-    +--> Birdie OS
-    +--> Governed Mail Service
-```
-
-The watch credential must be scoped to the watch API, stored in Keychain, revocable, and short-lived. Sensitive outbound operations keep their server-side founder-confirmation requirements.
+The Apple Watch receives only request results through WatchConnectivity; it never receives or persists the credential.
 
 ## Xcode integration
 
-Create an iOS app with a paired watchOS app target, then add the Swift files in this directory to the watch target. Add a watchOS Widget Extension separately for the Birdie complication. The complication should be glanceable (Birdie state/unread count) and deep-link to the app rather than execute destructive actions itself.
+Create an iOS app with a paired watchOS app target.
 
-## Next implementation gate
+### iPhone target
 
-1. Wire `routeWatchRequest` into `server.mjs` behind a dedicated watch authentication function.
-2. Add iPhone companion credential bootstrap with WatchConnectivity.
-3. Store the watch credential in Keychain and replace the placeholder provider in `BirdieWatchAPI.swift`.
-4. Add the WidgetKit Birdie complication.
-5. Add explicit on-watch approval UI for prepared mail sends.
+Add:
+
+- `clients/apple/BirdiePhone/WatchRelay.swift`
+- `clients/apple/BirdiePhone/WatchTokenStore.swift`
+- `clients/apple/BirdiePhone/BirdiePhoneSetupView.swift`
+
+Ensure `WatchRelay.shared` is initialized when the iPhone companion launches.
+
+### watchOS app target
+
+Add the Swift files in `clients/apple/BirdieWatch/`.
+
+### watchOS Widget Extension
+
+Add:
+
+- `clients/apple/BirdieWatchWidget/BirdieWatchWidget.swift`
+
+The complication supports accessory circular, rectangular, and inline families and deep-links into the watch app when tapped.
+
+## Deployment gate
+
+Before production traffic:
+
+1. Create a strong random `BIRDIE_WATCH_API_KEY` in Secret Manager / Cloud Run.
+2. Deploy the Birdie Agent revision with that secret bound as an environment variable.
+3. Put the same value into the iPhone companion through `BirdiePhoneSetupView`; it is persisted only in Keychain.
+4. Verify unauthenticated `/watch/*` returns `401 WATCH_UNAUTHORIZED`.
+5. Verify authenticated `/watch/briefing` returns the compact inbox.
+6. Verify a voice command reaches `/watch/command` through the paired iPhone.
+7. Verify mail sending still requires the explicit on-watch approval UI and exact `SEND_EMAIL` confirmation.
+
+## Still to finish before calling V0.1 complete
+
+- Build/sign the paired iOS + watchOS targets in Xcode on a Mac.
+- Add the explicit prepared-mail review/approval screen to the watch UI before exposing send as a normal user action.
+- Add device-level smoke tests on the paired iPhone and Apple Watch.
