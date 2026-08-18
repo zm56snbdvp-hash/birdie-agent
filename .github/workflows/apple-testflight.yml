@@ -1,0 +1,43 @@
+name: Birdie TestFlight
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: birdie-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_KEY_B64: ${{ secrets.APP_STORE_CONNECT_KEY_B64 }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate required Apple secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_KEY_B64 APPLE_TEAM_ID; do
+            test -n "${!name:-}" || { echo "Missing GitHub secret: $name" >&2; exit 1; }
+          done
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: clients/apple
+      - name: Generate Xcode project
+        working-directory: clients/apple
+        run: xcodegen generate
+      - name: Build and upload to TestFlight
+        working-directory: clients/apple
+        run: bundle exec fastlane ios beta
