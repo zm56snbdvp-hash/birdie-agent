@@ -8,7 +8,8 @@ Voice-first Apple Watch companion for Birdie.
 - Tap `Mit Birdie sprechen` and use native Apple Watch dictation.
 - Birdie's answer is rendered as a short watch-readable response.
 - The Inbox section shows up to five unread mail cards.
-- Sending mail is a governed action and never happens from an implicit transcript alone.
+- Tap a mail, dictate an answer, review the text, then explicitly confirm `Jetzt senden`.
+- Sending mail never happens from an implicit transcript alone.
 - A WidgetKit complication provides a direct Birdie entry point from the watch face.
 
 ## Production request path
@@ -47,7 +48,7 @@ All `/watch/*` requests pass through the dedicated watch auth gate before the ge
 }
 ```
 
-The existing mail service remains authoritative for IMAP/SMTP execution.
+The watch UI only produces that confirmation after the dedicated send confirmation dialog. The existing mail service remains authoritative for IMAP/SMTP execution.
 
 ## Credential boundary
 
@@ -93,10 +94,10 @@ Before production traffic:
 4. Verify unauthenticated `/watch/*` returns `401 WATCH_UNAUTHORIZED`.
 5. Verify authenticated `/watch/briefing` returns the compact inbox.
 6. Verify a voice command reaches `/watch/command` through the paired iPhone.
-7. Verify mail sending still requires the explicit on-watch approval UI and exact `SEND_EMAIL` confirmation.
+7. Verify a mail reply requires the on-watch review dialog and exact `SEND_EMAIL` confirmation.
 
 ## Still to finish before calling V0.1 complete
 
 - Build/sign the paired iOS + watchOS targets in Xcode on a Mac.
-- Add the explicit prepared-mail review/approval screen to the watch UI before exposing send as a normal user action.
-- Add device-level smoke tests on the paired iPhone and Apple Watch.
+- Bind the production Watch secret to Cloud Run without exposing it in source or chat.
+- Run paired-device smoke tests on the actual iPhone and Apple Watch.
