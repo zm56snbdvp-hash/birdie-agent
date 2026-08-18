@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.IO;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 
@@ -18,10 +19,12 @@ namespace BirdieWorld.Editor
 
             PlayerSettings.companyName = "Birdie & Breakfast";
             PlayerSettings.productName = "BirdieWorld Beta";
-            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.WebGL, "de.birdieandbreakfast.birdieworld.beta");
+            PlayerSettings.SetApplicationIdentifier(
+                NamedBuildTarget.WebGL,
+                "de.birdieandbreakfast.birdieworld.beta"
+            );
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
             PlayerSettings.WebGL.decompressionFallback = true;
-            PlayerSettings.WebGL.initialMemorySize = 256;
 
             Directory.CreateDirectory(OutputPath);
             var options = new BuildPlayerOptions
@@ -49,7 +52,9 @@ namespace BirdieWorld.Editor
         private static void EnsureScene()
         {
             if (File.Exists(ScenePath)) return;
-            Directory.CreateDirectory(Path.GetDirectoryName(ScenePath)!);
+            var directory = Path.GetDirectoryName(ScenePath);
+            if (!string.IsNullOrEmpty(directory)) Directory.CreateDirectory(directory);
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             new GameObject("BirdieWorld Beta Bootstrap").AddComponent<BirdieWorldBetaBootstrap>();
             EditorSceneManager.SaveScene(scene, ScenePath);
