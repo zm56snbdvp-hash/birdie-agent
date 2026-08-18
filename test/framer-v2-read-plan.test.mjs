@@ -63,7 +63,8 @@ test("Framer V2 does not expose CMS or text apply routes", () => {
   assert.doesNotMatch(serviceSource, /\.addItems\s*\(/);
 });
 
-test("preview and production remain separately founder gated", () => {
-  assert.match(routerSource, /PUBLISH_FRAMER_PREVIEW/);
+test("legacy preview is disabled while production remains separately founder gated", () => {
+  assert.match(routerSource, /FRAMER_UNSAFE_PREVIEW_DISABLED/);
   assert.match(routerSource, /DEPLOY_FRAMER_PRODUCTION/);
+  assert.doesNotMatch(routerSource, /PUBLISH_FRAMER_PREVIEW/);
 });
