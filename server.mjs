@@ -27,6 +27,12 @@ import {
   oauthChallenge,
   protectedResourceMetadata
 } from "./src/mcp-auth.mjs";
+import { routeWatchRequest } from "./src/watch-router.mjs";
+import {
+  authenticateWatchRequest,
+  createWatchAuthConfig,
+  watchUnauthorized
+} from "./src/watch-auth.mjs";
 
 const PORT = process.env.PORT || 8080;
 const BIRDIE_AGENT_VERSION = "2.9.0";
@@ -40,6 +46,7 @@ const BIRDIE_FAMILY_API_KEY = process.env.BIRDIE_FAMILY_API_KEY;
 const BIRDIE_OS_BASE = process.env.BIRDIE_OS_BASE;
 const MCP_AUTH_CONFIG = createMcpAuthConfig();
 const BIRDIE_APP_AUTH_CONFIG = createBirdieAppAuthConfig();
+const WATCH_AUTH_CONFIG = createWatchAuthConfig();
 
 for (const [name, value] of Object.entries({
   OPENAI_API_KEY,
@@ -363,6 +370,9 @@ const routes = [
   "POST /ideas",
   "POST /tasks/{taskId}",
   "POST /chat",
+  "GET /watch/briefing",
+  "POST /watch/command",
+  "POST /watch/mail/reply",
   "POST /community/identity/evidence",
   "POST /community/identity/resolve",
   "GET /meta/webhook",
@@ -468,6 +478,7 @@ const server = http.createServer(async (req, res) => {
         birdieOS: "CONNECTED",
         writeAccess: "CONTROLLED",
         mail: "FULL_CONTROL_GOVERNED",
+        watch: WATCH_AUTH_CONFIG.enabled ? "SCOPED_AUTH_READY" : "AUTH_GATE_NOT_CONFIGURED",
         framer: "GOVERNED_ADAPTER",
         mcp: "AUTH0_GOVERNED_FULL_MAIL_TOOLS",
         meta: "SIGNED_WEBHOOK_CONTROLLED",
@@ -507,6 +518,21 @@ const server = http.createServer(async (req, res) => {
         authContext,
         authConfig: MCP_AUTH_CONFIG
       })) return;
+    }
+
+    if (url.pathname.startsWith("/watch/")) {
+      if (!authenticateWatchRequest(req, WATCH_AUTH_CONFIG)) {
+        return watchUnauthorized(json, res);
+      }
+      if (await routeWatchRequest({
+        req,
+        res,
+        url,
+        json,
+        readBody,
+        handleChat
+      })) return;
+      return json(res, 404, { success: false, error: "WATCH_ROUTE_NOT_FOUND" });
     }
 
     if (!isAgentAuthorized(req)) {
