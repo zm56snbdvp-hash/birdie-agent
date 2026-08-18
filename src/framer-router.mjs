@@ -8,9 +8,15 @@ import {
   listFramerCmsCollections,
   getFramerCmsCollection,
   planFramerCmsItemUpdate,
-  publishFramerPreview,
   deployFramerProduction
 } from "./framer-service.mjs";
+import {
+  getFramerV4Policy,
+  planFramerV4TextUpdate,
+  planFramerV4CmsItemUpdate,
+  applyFramerV4TextPreview,
+  applyFramerV4CmsPreview
+} from "./framer-v4-service.mjs";
 
 function requireConfirmation(body, expected) {
   if (body?.confirmation !== expected) {
@@ -21,13 +27,23 @@ function requireConfirmation(body, expected) {
   }
 }
 
+function unsafeLegacyPreviewDisabled() {
+  const error = new Error(
+    "Legacy /framer/preview is disabled because publishing main can reach Production when staging is unavailable. Use the governed V4 isolated-branch preview flow."
+  );
+  error.code = "FRAMER_UNSAFE_PREVIEW_DISABLED";
+  error.status = 410;
+  return error;
+}
+
 export async function routeFramerRequest({ req, res, url, json, readBody }) {
   if (req.method === "GET" && url.pathname === "/framer/config") {
     return json(res, 200, {
       success: true,
       configured: isFramerConfigured(),
       secretExposed: false,
-      planPolicy: getFramerPlanPolicy()
+      planPolicy: getFramerPlanPolicy(),
+      v4Policy: getFramerV4Policy()
     });
   }
 
@@ -66,11 +82,36 @@ export async function routeFramerRequest({ req, res, url, json, readBody }) {
     return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
   }
 
-  if (req.method === "POST" && url.pathname === "/framer/preview") {
-    const body = await readBody(req);
-    requireConfirmation(body, "PUBLISH_FRAMER_PREVIEW");
-    const data = await publishFramerPreview();
+  if (req.method === "GET" && url.pathname === "/framer/v4/policy") {
+    return json(res, 200, {
+      success: true,
+      source: "BIRDIEOS_GOVERNANCE",
+      data: getFramerV4Policy()
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/framer/v4/site/text-plan") {
+    const data = await planFramerV4TextUpdate(await readBody(req));
     return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
+  }
+
+  if (req.method === "POST" && url.pathname === "/framer/v4/cms/plan") {
+    const data = await planFramerV4CmsItemUpdate(await readBody(req));
+    return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
+  }
+
+  if (req.method === "POST" && url.pathname === "/framer/v4/site/text-apply-preview") {
+    const data = await applyFramerV4TextPreview(await readBody(req));
+    return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
+  }
+
+  if (req.method === "POST" && url.pathname === "/framer/v4/cms/apply-preview") {
+    const data = await applyFramerV4CmsPreview(await readBody(req));
+    return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
+  }
+
+  if (req.method === "POST" && url.pathname === "/framer/preview") {
+    throw unsafeLegacyPreviewDisabled();
   }
 
   if (req.method === "POST" && url.pathname === "/framer/deploy") {
