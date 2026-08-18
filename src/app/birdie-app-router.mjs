@@ -34,6 +34,14 @@ function rejectQueryScope(url) {
   }
 }
 
+function actorFields(authContext) {
+  return {
+    authSubject: authContext.subject,
+    authBirdieId: authContext.birdieId,
+    source: "Birdie Agent BirdieWorld V1"
+  };
+}
+
 export async function routeBirdieAppRequest({
   req,
   res,
@@ -41,10 +49,36 @@ export async function routeBirdieAppRequest({
   json,
   readBody,
   service,
-  authenticateBirdie
+  authenticateBirdie,
+  birdieOSPost
 }) {
   if (url.pathname !== PREFIX && !url.pathname.startsWith(`${PREFIX}/`)) {
     return false;
+  }
+
+  if (url.pathname === `${PREFIX}/character`) {
+    rejectQueryScope(url);
+    const authContext = await authenticateBirdie(req);
+
+    if (req.method === "GET") {
+      const result = await birdieOSPost({
+        action: "worldGetCharacter",
+        ...actorFields(authContext)
+      });
+      json(res, 200, resultBody(result.data ?? null));
+      return true;
+    }
+
+    if (req.method === "PUT" || req.method === "POST") {
+      const body = await readBody(req);
+      const result = await birdieOSPost({
+        action: "worldSaveCharacter",
+        character: body.character ?? body,
+        ...actorFields(authContext)
+      });
+      json(res, 200, resultBody(result.data));
+      return true;
+    }
   }
 
   if (req.method === "GET" && url.pathname === `${PREFIX}/world`) {
