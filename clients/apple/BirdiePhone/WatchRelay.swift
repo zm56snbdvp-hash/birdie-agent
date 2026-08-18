@@ -7,16 +7,17 @@ final class WatchRelay: NSObject, ObservableObject, WCSessionDelegate {
     private let session: WCSession? = WCSession.isSupported() ? .default : nil
     private let baseURL = URL(string: "https://birdie-agent-893591677320.europe-west3.run.app")!
 
-    // Store this in Keychain in the iPhone app. Never hard-code production credentials.
-    var watchTokenProvider: () -> String? = { nil }
-
     override private init() {
         super.init()
         session?.delegate = self
         session?.activate()
     }
 
-    func session(_ session: WCSession, didReceiveMessage message: [String : Any], replyHandler: @escaping ([String : Any]) -> Void) {
+    func session(
+        _ session: WCSession,
+        didReceiveMessage message: [String : Any],
+        replyHandler: @escaping ([String : Any]) -> Void
+    ) {
         Task {
             do {
                 let result = try await handle(message)
@@ -47,35 +48,58 @@ final class WatchRelay: NSObject, ObservableObject, WCSessionDelegate {
     }
 
     private func request(path: String, method: String, body: [String: Any]?) async throws -> Any {
-        guard let token = watchTokenProvider(), !token.isEmpty else { throw RelayError.notAuthenticated }
+        guard let token = WatchTokenStore.shared.load(), !token.isEmpty else {
+            throw RelayError.notAuthenticated
+        }
+
         var request = URLRequest(url: baseURL.appending(path: path))
         request.httpMethod = method
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 20
         if let body { request.httpBody = try JSONSerialization.data(withJSONObject: body) }
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        guard let http = response as? HTTPURLResponse else {
             throw RelayError.backendRejected
+        }
+        if http.statusCode == 401 { throw RelayError.notAuthenticated }
+        guard (200..<300).contains(http.statusCode) else {
+            let serverMessage = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["message"] as? String
+            throw RelayError.backendMessage(serverMessage ?? "Birdie Agent hat die Anfrage abgelehnt.")
         }
         return try JSONSerialization.jsonObject(with: data)
     }
 
-    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {}
+    func session(
+        _ session: WCSession,
+        activationDidCompleteWith activationState: WCSessionActivationState,
+        error: Error?
+    ) {}
+
     func sessionDidBecomeInactive(_ session: WCSession) {}
-    func sessionDidDeactivate(_ session: WCSession) { session.activate() }
+
+    func sessionDidDeactivate(_ session: WCSession) {
+        session.activate()
+    }
 }
 
 enum RelayError: LocalizedError {
     case invalidRequest
     case notAuthenticated
     case backendRejected
+    case backendMessage(String)
 
     var errorDescription: String? {
         switch self {
-        case .invalidRequest: return "Ungültige Watch-Anfrage."
-        case .notAuthenticated: return "Birdie Watch ist noch nicht sicher angemeldet."
-        case .backendRejected: return "Birdie Agent hat die Anfrage abgelehnt."
+        case .invalidRequest:
+            return "Ungültige Watch-Anfrage."
+        case .notAuthenticated:
+            return "Birdie Watch ist noch nicht sicher angemeldet."
+        case .backendRejected:
+            return "Birdie Agent hat die Anfrage abgelehnt."
+        case .backendMessage(let message):
+            return message
         }
     }
 }
