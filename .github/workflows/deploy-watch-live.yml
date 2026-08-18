@@ -1,0 +1,78 @@
+name: Deploy Birdie Watch Live
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: birdie-watch-live
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: gen-lang-client-0251788487
+  GCP_REGION: europe-west3
+  CLOUD_RUN_SERVICE: birdie-agent
+  ARTIFACT_REPOSITORY: birdie-agent-releases
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: birdie-watch-live
+    env:
+      BIRDIE_WATCH_API_KEY: ${{ secrets.BIRDIE_WATCH_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate watch secret
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ${#BIRDIE_WATCH_API_KEY} -ge 32 || { echo 'BIRDIE_WATCH_API_KEY must be at least 32 characters.' >&2; exit 1; }
+      - name: Authenticate to Google Cloud with OIDC
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ env.GCP_PROJECT_ID }}
+      - name: Store watch key in Secret Manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! gcloud secrets describe birdie-watch-api-key --project "$GCP_PROJECT_ID" >/dev/null 2>&1; then
+            gcloud secrets create birdie-watch-api-key --project "$GCP_PROJECT_ID" --replication-policy=automatic
+          fi
+          printf '%s' "$BIRDIE_WATCH_API_KEY" | gcloud secrets versions add birdie-watch-api-key --project "$GCP_PROJECT_ID" --data-file=- >/dev/null
+      - name: Build container
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="$GCP_REGION-docker.pkg.dev/$GCP_PROJECT_ID/$ARTIFACT_REPOSITORY/birdie-agent:${GITHUB_SHA}"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          gcloud auth configure-docker "$GCP_REGION-docker.pkg.dev" --quiet
+          gcloud builds submit --project "$GCP_PROJECT_ID" --tag "$IMAGE" .
+      - name: Deploy watch-enabled revision live
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run deploy "$CLOUD_RUN_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --platform managed \
+            --image "$IMAGE" \
+            --service-account "${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}" \
+            --update-secrets "BIRDIE_WATCH_API_KEY=birdie-watch-api-key:latest" \
+            --quiet
+      - name: Verify public service responds
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="$(gcloud run services describe "$CLOUD_RUN_SERVICE" --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format='value(status.url)')"
+          test -n "$URL"
+          curl --fail --silent --show-error "$URL/" | grep -q 'Birdie Agent'

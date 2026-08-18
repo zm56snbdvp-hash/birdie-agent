@@ -1,0 +1,39 @@
+name: Apple Build
+
+on:
+  pull_request:
+    paths:
+      - "clients/apple/**"
+      - ".github/workflows/apple-build.yml"
+  push:
+    branches: [main]
+    paths:
+      - "clients/apple/**"
+      - ".github/workflows/apple-build.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        working-directory: clients/apple
+        run: xcodegen generate
+      - name: Build without signing
+        working-directory: clients/apple
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Birdie.xcodeproj \
+            -scheme Birdie \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
