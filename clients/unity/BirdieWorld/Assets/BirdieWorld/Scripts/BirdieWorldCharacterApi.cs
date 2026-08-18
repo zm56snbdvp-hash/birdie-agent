@@ -63,7 +63,7 @@ namespace BirdieWorld
         public IEnumerator Save(CharacterData character, Action<CharacterData> onSuccess, Action<string> onError)
         {
             var payload = JsonUtility.ToJson(new CharacterRequest { character = character });
-            using var request = new UnityWebRequest($"{baseUrl}/birdie-app/v1/character", "PUT");
+            using var request = new UnityWebRequest($"{baseUrl}/birdie-app/v1/character", "POST");
             request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(payload));
             request.downloadHandler = new DownloadHandlerBuffer();
             request.SetRequestHeader("Content-Type", "application/json");
