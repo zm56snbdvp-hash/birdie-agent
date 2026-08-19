@@ -11,6 +11,14 @@ settings:
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
 
+packages:
+  MetaWearablesDAT:
+    url: https://github.com/facebook/meta-wearables-dat-ios
+    from: 0.8.0
+  HaishinKit:
+    url: https://github.com/HaishinKit/HaishinKit.swift
+    from: 2.1.0
+
 targets:
   BirdiePhone:
     type: application
@@ -26,6 +34,29 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
     dependencies:
       - target: BirdieWatch
+
+  BirdiePOV:
+    type: application
+    platform: iOS
+    sources:
+      - path: BirdiePOV
+    info:
+      path: BirdiePOV/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.pov
+        PRODUCT_NAME: Birdie POV
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+    dependencies:
+      - package: MetaWearablesDAT
+        product: MWDATCore
+      - package: MetaWearablesDAT
+        product: MWDATCamera
+      - package: HaishinKit
+        product: HaishinKit
+      - package: HaishinKit
+        product: RTMPHaishinKit
 
   BirdieWatch:
     type: application
@@ -62,6 +93,15 @@ schemes:
         BirdiePhone: all
         BirdieWatch: all
         BirdieWatchWidget: all
+    run:
+      config: Debug
+    archive:
+      config: Release
+
+  BirdiePOV:
+    build:
+      targets:
+        BirdiePOV: all
     run:
       config: Debug
     archive:
