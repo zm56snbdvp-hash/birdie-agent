@@ -88,6 +88,12 @@ transitions all require the exact linked work item and Birdie profile. See
 `docs/task038-controlled-e2e.md` and `docs/task038-deploy-runbook.md` before
 any provider deployment or live test.
 
+## Sprint 02 — supporter API slice
+
+Authenticated supporter routes are now available under `/birdie-app/v1/coin/*` for profile, ledger, rewards, Instagram linking, claim submission and reward redemption. The public app layer derives `birdieId` exclusively from the verified OAuth token and rejects client-controlled Birdie identity input. Admin/founder mutations remain behind the internal Birdie Agent API.
+
+Browser/mobile login still requires runtime configuration of `BIRDIE_APP_OAUTH_ISSUER`, `BIRDIE_APP_OAUTH_AUDIENCE`, `BIRDIE_APP_BIRDIE_ID_CLAIM` and, when needed, `BIRDIE_APP_OAUTH_JWKS_URL`.
+
 ## Security boundary
 
 These endpoints are currently an internal Birdie Agent/Admin API. They are not yet a public Supporter login API. A public dashboard needs individual user authentication and authorization before it may call profile, ledger or redemption endpoints directly.

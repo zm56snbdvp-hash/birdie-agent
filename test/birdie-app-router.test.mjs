@@ -43,6 +43,32 @@ function routeFixture(overrides = {}) {
           calls.push(["ack", auth, input]);
           return { responseId: input.responseId, acknowledged: true };
         }
+      },
+      coinService: {
+        async getProfile(birdieId) {
+          calls.push(["coin-profile", birdieId]);
+          return { birdieId };
+        },
+        async getLedger(birdieId) {
+          calls.push(["coin-ledger", birdieId]);
+          return { birdieId, transactions: [] };
+        },
+        async listRewards(...args) {
+          calls.push(["coin-rewards", ...args]);
+          return [];
+        },
+        async linkInstagramHandle(birdieId, input) {
+          calls.push(["coin-instagram", birdieId, input]);
+          return { birdieId };
+        },
+        async createClaim(input) {
+          calls.push(["coin-claim", input]);
+          return input;
+        },
+        async createRedemption(input) {
+          calls.push(["coin-redemption", input]);
+          return input;
+        }
       }
     }
   };
@@ -115,6 +141,54 @@ test("ACK responseId comes from the route and cannot be overridden by body", asy
       leaseId: "lease:test-1"
     }
   ]]);
+});
+
+test("supporter profile is scoped to authenticated Birdie identity", async () => {
+  const fixture = routeFixture({ path: "/birdie-app/v1/coin/profile" });
+  await routeBirdieAppRequest(fixture.input);
+  assert.deepEqual(fixture.calls, [["coin-profile", "BIRDIE-1"]]);
+  assert.equal(fixture.recorder.calls[0].status, 200);
+});
+
+test("supporter claim rejects client-controlled birdieId", async () => {
+  const fixture = routeFixture({
+    method: "POST",
+    path: "/birdie-app/v1/coin/claims",
+    body: { birdieId: "BIRDIE-2", actionCode: "TEST" }
+  });
+  await assert.rejects(
+    routeBirdieAppRequest(fixture.input),
+    { code: "CLIENT_BIRDIE_ID_FORBIDDEN", status: 403 }
+  );
+  assert.equal(fixture.calls.length, 0);
+});
+
+test("supporter redemption injects authenticated Birdie identity", async () => {
+  const fixture = routeFixture({
+    method: "POST",
+    path: "/birdie-app/v1/coin/redemptions",
+    body: { rewardId: "REWARD-1", idempotencyKey: "redeem-1" }
+  });
+  await routeBirdieAppRequest(fixture.input);
+  assert.deepEqual(fixture.calls, [["coin-redemption", {
+    rewardId: "REWARD-1",
+    idempotencyKey: "redeem-1",
+    birdieId: "BIRDIE-1"
+  }]]);
+});
+
+test("supporter rewards ignore accountType query overrides", async () => {
+  const fixture = routeFixture({
+    path: "/birdie-app/v1/coin/rewards?accountType=BUSINESS"
+  });
+  await routeBirdieAppRequest(fixture.input);
+  assert.deepEqual(fixture.calls, [["coin-rewards"]]);
+});
+
+test("supporter API does not expose admin queue", async () => {
+  const fixture = routeFixture({ path: "/birdie-app/v1/coin/admin/queue" });
+  await routeBirdieAppRequest(fixture.input);
+  assert.equal(fixture.recorder.calls[0].status, 404);
 });
 
 test("unknown Birdie-app routes return a bounded 404", async () => {
