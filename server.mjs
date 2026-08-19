@@ -382,6 +382,12 @@ const routes = [
   "GET /birdie-app/v1/world",
   "POST /birdie-app/v1/responses/lease",
   "POST /birdie-app/v1/responses/{responseId}/ack",
+  "GET /birdie-app/v1/coin/profile",
+  "GET /birdie-app/v1/coin/ledger",
+  "GET /birdie-app/v1/coin/rewards",
+  "POST /birdie-app/v1/coin/instagram",
+  "POST /birdie-app/v1/coin/claims",
+  "POST /birdie-app/v1/coin/redemptions",
   "POST /admin/birdie-app/v1/reconcile",
   "POST /mcp",
   "POST /family/mcp",
@@ -450,6 +456,7 @@ const server = http.createServer(async (req, res) => {
       json,
       readBody,
       service: birdieAppService,
+      coinService,
       authenticateBirdie
     })) return;
 
