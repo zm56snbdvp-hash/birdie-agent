@@ -1,0 +1,42 @@
+name: Birdie POV iOS
+
+on:
+  pull_request:
+    paths:
+      - 'clients/apple/BirdiePOV/**'
+      - 'clients/apple/project.yml'
+      - '.github/workflows/birdie-pov-ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.4.app/Contents/Developer || true
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        working-directory: clients/apple
+        run: xcodegen generate
+
+      - name: Resolve packages
+        working-directory: clients/apple
+        run: xcodebuild -project Birdie.xcodeproj -scheme BirdiePOV -resolvePackageDependencies
+
+      - name: Compile BirdiePOV
+        working-directory: clients/apple
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Birdie.xcodeproj \
+            -scheme BirdiePOV \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcpretty
