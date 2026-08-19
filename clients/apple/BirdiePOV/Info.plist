@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>$(DEVELOPMENT_LANGUAGE)</string>
+  <key>CFBundleDisplayName</key>
+  <string>Birdie POV</string>
+  <key>CFBundleExecutable</key>
+  <string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key>
+  <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>BirdiePOV</string>
+  <key>CFBundlePackageType</key>
+  <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+  <key>CFBundleShortVersionString</key>
+  <string>$(MARKETING_VERSION)</string>
+  <key>CFBundleVersion</key>
+  <string>$(CURRENT_PROJECT_VERSION)</string>
+
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeRole</key>
+      <string>Editor</string>
+      <key>CFBundleURLName</key>
+      <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>birdiepov</string>
+      </array>
+    </dict>
+  </array>
+
+  <key>MWDAT</key>
+  <dict>
+    <key>AppLinkURLScheme</key>
+    <string>birdiepov://</string>
+    <key>MetaAppID</key>
+    <string>0</string>
+    <key>TeamID</key>
+    <string>$(DEVELOPMENT_TEAM)</string>
+  </dict>
+
+  <key>LSApplicationQueriesSchemes</key>
+  <array>
+    <string>fb-viewapp</string>
+  </array>
+
+  <key>UISupportedExternalAccessoryProtocols</key>
+  <array>
+    <string>com.meta.ar.wearable</string>
+  </array>
+
+  <key>UIBackgroundModes</key>
+  <array>
+    <string>bluetooth-peripheral</string>
+    <string>bluetooth-central</string>
+    <string>external-accessory</string>
+    <string>audio</string>
+    <string>processing</string>
+  </array>
+
+  <key>NSBluetoothAlwaysUsageDescription</key>
+  <string>Birdie POV connects to your Meta glasses for first-person video.</string>
+  <key>NSBluetoothPeripheralUsageDescription</key>
+  <string>Birdie POV connects to your Meta glasses for first-person video.</string>
+  <key>NSLocalNetworkUsageDescription</key>
+  <string>Birdie POV can use the local network for higher-quality glasses video.</string>
+  <key>NSBonjourServices</key>
+  <array>
+    <string>_bonjour._tcp</string>
+  </array>
+  <key>NSCameraUsageDescription</key>
+  <string>Birdie POV uses camera access for Meta glasses streaming and testing.</string>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Birdie POV uses microphone audio for your Twitch broadcast.</string>
+
+  <key>UILaunchScreen</key>
+  <dict/>
+  <key>UIRequiredDeviceCapabilities</key>
+  <array>
+    <string>arm64</string>
+  </array>
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+  </array>
+</dict>
+</plist>
