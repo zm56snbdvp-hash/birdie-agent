@@ -1,9 +1,10 @@
 import SwiftUI
 
 struct BirdiePhoneSetupView: View {
+    @ObservedObject private var relay = WatchRelay.shared
     @State private var token = ""
     @State private var status = ""
-    @State private var isConnected = false
+    @State private var hasWatchToken = false
 
     var body: some View {
         NavigationStack {
@@ -14,40 +15,53 @@ struct BirdiePhoneSetupView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text("Birdie")
                                 .font(.title2.weight(.semibold))
-                            Label(
-                                isConnected ? "Watch verbunden" : "Watch noch nicht verbunden",
-                                systemImage: isConnected ? "checkmark.circle.fill" : "applewatch"
-                            )
-                            .font(.subheadline)
-                            .foregroundStyle(isConnected ? Color.green : Color.gray)
+                            Label(watchStatusTitle, systemImage: watchStatusIcon)
+                                .font(.subheadline)
+                                .foregroundStyle(watchStatusColor)
                         }
                     }
                     .padding(.vertical, 6)
                 }
 
-                Section("Birdie Watch") {
+                Section("Sicherer Zugang") {
+                    Label(
+                        hasWatchToken ? "API-Schlüssel hinterlegt" : "API-Schlüssel fehlt",
+                        systemImage: hasWatchToken ? "key.fill" : "key"
+                    )
+                    .foregroundStyle(hasWatchToken ? Color.green : Color.secondary)
+
                     SecureField("Watch API Token", text: $token)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
-                    Button("Sicher verbinden") {
+                    Button(hasWatchToken ? "API-Schlüssel aktualisieren" : "API-Schlüssel hinterlegen") {
                         do {
                             try WatchTokenStore.shared.save(token)
                             token = ""
-                            _ = WatchRelay.shared
-                            isConnected = true
-                            status = "Birdie Watch ist verbunden."
+                            hasWatchToken = true
+                            status = "Der API-Schlüssel wurde sicher im iPhone-Keychain hinterlegt."
                         } catch {
                             status = error.localizedDescription
                         }
                     }
                     .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).count < 32)
 
-                    Button("Verbindung entfernen", role: .destructive) {
+                    Button("API-Schlüssel entfernen", role: .destructive) {
                         WatchTokenStore.shared.remove()
-                        isConnected = false
-                        status = "Birdie Watch wurde getrennt."
+                        hasWatchToken = false
+                        status = "Der API-Schlüssel wurde entfernt. Die Gerätekopplung bleibt unverändert."
                     }
+                }
+
+                Section("Gerätestatus") {
+                    connectionRow("Session aktiviert", isReady: relay.activationState == .activated)
+                    connectionRow("Watch gekoppelt", isReady: relay.isPaired)
+                    connectionRow("Watch-App installiert", isReady: relay.isWatchAppInstalled)
+                    connectionRow("Watch erreichbar", isReady: relay.isReachable)
+
+                    Text("Erreichbar bedeutet, dass die Watch-App gerade direkte Nachrichten mit dieser iPhone-App austauschen kann.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 if !status.isEmpty {
@@ -59,11 +73,40 @@ struct BirdiePhoneSetupView: View {
             }
             .navigationTitle("Birdie")
             .onAppear {
-                _ = WatchRelay.shared
-                isConnected = WatchTokenStore.shared.load() != nil
+                hasWatchToken = WatchTokenStore.shared.load() != nil
+                relay.refreshConnectionState()
             }
             .tint(Color(red: 0.035, green: 0.245, blue: 0.155))
         }
+    }
+
+    private var watchStatusTitle: String {
+        guard relay.activationState == .activated else {
+            return "Watch-Verbindung wird vorbereitet"
+        }
+        guard relay.isPaired else {
+            return "Keine Watch gekoppelt"
+        }
+        guard relay.isWatchAppInstalled else {
+            return "Watch-App nicht installiert"
+        }
+        return relay.isReachable ? "Watch erreichbar" : "Watch gekoppelt · aktuell nicht erreichbar"
+    }
+
+    private var watchStatusIcon: String {
+        if relay.isReachable {
+            return "checkmark.circle.fill"
+        }
+        return relay.isPaired ? "applewatch" : "questionmark.circle"
+    }
+
+    private var watchStatusColor: Color {
+        relay.isReachable ? Color.green : Color.secondary
+    }
+
+    private func connectionRow(_ title: String, isReady: Bool) -> some View {
+        Label(title, systemImage: isReady ? "checkmark.circle.fill" : "circle")
+            .foregroundStyle(isReady ? Color.green : Color.secondary)
     }
 }
 
