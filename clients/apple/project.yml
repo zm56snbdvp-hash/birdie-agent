@@ -10,6 +10,8 @@ settings:
     SWIFT_VERSION: "5.10"
     DEVELOPMENT_TEAM: ""
     CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
 
 targets:
   BirdiePhone:
@@ -24,6 +26,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Birdie
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: BirdieWatch
 
@@ -39,6 +42,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Birdie
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: de.birdieandbreakfast.birdie
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: BirdieWatchWidget
 
