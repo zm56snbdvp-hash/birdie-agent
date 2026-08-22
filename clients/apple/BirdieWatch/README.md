@@ -101,3 +101,11 @@ Before production traffic:
 - Build/sign the paired iOS + watchOS targets in Xcode on a Mac.
 - Bind the production Watch secret to Cloud Run without exposing it in source or chat.
 - Run paired-device smoke tests on the actual iPhone and Apple Watch.
+
+## Free own-device install
+
+Kevin can install Birdie on his own iPhone and Apple Watch with Xcode's free
+Personal Team. GitHub generates a ready-to-open `BirdiePersonal.xcodeproj` and
+packages it as the `Birdie-Personal-Watch-Xcode` workflow artifact. The exact
+German install flow and the seven-day reprovisioning limit are documented in
+[`../PERSONAL_WATCH_INSTALL_DE.md`](../PERSONAL_WATCH_INSTALL_DE.md).

@@ -1,0 +1,71 @@
+name: BirdiePersonal
+options:
+  deploymentTarget:
+    iOS: "18.0"
+    watchOS: "11.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+
+targets:
+  BirdiePhone:
+    type: application
+    platform: iOS
+    sources:
+      - path: BirdiePhone
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie
+        PRODUCT_NAME: Birdie
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Birdie
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: BirdieWatch
+
+  BirdieWatch:
+    type: application
+    platform: watchOS
+    sources:
+      - path: BirdieWatch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.watchkitapp
+        PRODUCT_NAME: Birdie
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Birdie
+        INFOPLIST_KEY_WKCompanionAppBundleIdentifier: de.birdieandbreakfast.kevin.birdie
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    dependencies:
+      - target: BirdieWatchWidget
+
+  BirdieWatchWidget:
+    type: app-extension
+    platform: watchOS
+    sources:
+      - path: BirdieWatchWidget
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.watchkitapp.widget
+        PRODUCT_NAME: BirdieWidget
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        APPLICATION_EXTENSION_API_ONLY: YES
+
+schemes:
+  BirdiePersonal:
+    build:
+      targets:
+        BirdiePhone: all
+        BirdieWatch: all
+        BirdieWatchWidget: all
+    run:
+      config: Debug
+    archive:
+      config: Release
