@@ -1,0 +1,53 @@
+name: Birdie Personal Watch Project
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "clients/apple/**"
+      - ".github/workflows/apple-personal-project.yml"
+  push:
+    branches: [main]
+    paths:
+      - "clients/apple/**"
+      - ".github/workflows/apple-personal-project.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  personal-project:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate free Personal Team project
+        working-directory: clients/apple
+        run: xcodegen generate --spec project.personal.yml
+      - name: Verify project without signing
+        working-directory: clients/apple
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project BirdiePersonal.xcodeproj \
+            -scheme BirdiePersonal \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+      - name: Package ready-to-open Xcode project
+        working-directory: clients
+        run: |
+          set -euo pipefail
+          ditto -c -k --sequesterRsrc --keepParent apple "$RUNNER_TEMP/Birdie-Personal-Watch-Xcode.zip"
+      - name: Upload personal install package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: Birdie-Personal-Watch-Xcode
+          path: ${{ runner.temp }}/Birdie-Personal-Watch-Xcode.zip
+          if-no-files-found: error
+          retention-days: 30
