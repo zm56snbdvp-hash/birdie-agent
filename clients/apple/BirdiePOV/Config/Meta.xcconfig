@@ -1,0 +1,6 @@
+// Safe defaults for Meta AI Developer Mode. Keep real registration values local.
+BIRDIE_META_APP_ID = 0
+BIRDIE_META_CLIENT_TOKEN =
+
+// Optional, gitignored overrides for a registered Wearables Developer project.
+#include? "Meta.local.xcconfig"

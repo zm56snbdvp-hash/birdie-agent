@@ -1,0 +1,78 @@
+name: Birdie POV IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/meta-twitch-pov
+    paths:
+      - '.github/workflows/birdie-pov-ipa.yml'
+      - 'clients/apple/BirdiePOV/**'
+      - 'clients/apple/project.yml'
+      - 'clients/apple/Gemfile*'
+  pull_request:
+    paths:
+      - '.github/workflows/birdie-pov-ipa.yml'
+      - 'clients/apple/BirdiePOV/**'
+      - 'clients/apple/project.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ipa:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show Xcode version
+        run: |
+          xcode-select -p
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: clients/apple
+        run: xcodegen generate
+
+      - name: Resolve packages
+        working-directory: clients/apple
+        run: xcodebuild -project Birdie.xcodeproj -scheme BirdiePOV -resolvePackageDependencies
+
+      - name: Build unsigned Birdie POV for iPhone
+        working-directory: clients/apple
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project Birdie.xcodeproj \
+            -scheme BirdiePOV \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$RUNNER_TEMP/BirdiePOVDerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | xcpretty
+
+      - name: Package unsigned IPA for AltStore
+        run: |
+          set -euo pipefail
+          APP="$RUNNER_TEMP/BirdiePOVDerivedData/Build/Products/Release-iphoneos/Birdie POV.app"
+          test -d "$APP" || { echo "Birdie POV.app not found at $APP" >&2; find "$RUNNER_TEMP/BirdiePOVDerivedData/Build/Products" -maxdepth 3 -type d -name '*.app' -print || true; exit 1; }
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          ditto "$APP" "$RUNNER_TEMP/ipa/Payload/Birdie POV.app"
+          cd "$RUNNER_TEMP/ipa"
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/BirdiePOV-unsigned.ipa" Payload
+          ls -lh "$GITHUB_WORKSPACE/BirdiePOV-unsigned.ipa"
+
+      - name: Upload Birdie POV IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: BirdiePOV-unsigned-ipa
+          path: BirdiePOV-unsigned.ipa
+          if-no-files-found: error
+          retention-days: 14
