@@ -30,6 +30,16 @@ function rejectQueryScope(url) {
   }
 }
 
+function rejectBodyScope(input) {
+  if (Object.prototype.hasOwnProperty.call(input || {}, "birdieId")) {
+    throw new BirdieAppError(
+      "CLIENT_BIRDIE_ID_FORBIDDEN",
+      "birdieId is derived exclusively from the authenticated session",
+      403
+    );
+  }
+}
+
 function actorFields(authContext) {
   return {
     authSubject: authContext.subject,
@@ -66,6 +76,7 @@ export async function routeBirdieAppRequest({
   json,
   readBody,
   service,
+  coinService,
   authenticateBirdie
 }) {
   if (url.pathname !== PREFIX && !url.pathname.startsWith(`${PREFIX}/`)) return false;
@@ -94,6 +105,48 @@ export async function routeBirdieAppRequest({
     rejectQueryScope(url);
     const authContext = await authenticateBirdie(req);
     json(res, 200, resultBody(await service.getWorld(authContext)));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === `${PREFIX}/coin/profile`) {
+    const authContext = await authenticateBirdie(req);
+    json(res, 200, resultBody(await coinService.getProfile(authContext.birdieId)));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === `${PREFIX}/coin/ledger`) {
+    const authContext = await authenticateBirdie(req);
+    json(res, 200, resultBody(await coinService.getLedger(authContext.birdieId)));
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === `${PREFIX}/coin/rewards`) {
+    await authenticateBirdie(req);
+    json(res, 200, resultBody(await coinService.listRewards()));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === `${PREFIX}/coin/instagram`) {
+    const authContext = await authenticateBirdie(req);
+    const body = await readBody(req);
+    rejectBodyScope(body);
+    json(res, 200, resultBody(await coinService.linkInstagramHandle(authContext.birdieId, body)));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === `${PREFIX}/coin/claims`) {
+    const authContext = await authenticateBirdie(req);
+    const body = await readBody(req);
+    rejectBodyScope(body);
+    json(res, 200, resultBody(await coinService.createClaim({ ...body, birdieId: authContext.birdieId })));
+    return true;
+  }
+
+  if (req.method === "POST" && url.pathname === `${PREFIX}/coin/redemptions`) {
+    const authContext = await authenticateBirdie(req);
+    const body = await readBody(req);
+    rejectBodyScope(body);
+    json(res, 200, resultBody(await coinService.createRedemption({ ...body, birdieId: authContext.birdieId })));
     return true;
   }
 

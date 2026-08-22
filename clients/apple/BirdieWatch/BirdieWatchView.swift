@@ -9,8 +9,7 @@ struct BirdieWatchView: View {
             List {
                 Section {
                     VStack(spacing: 10) {
-                        Text("🐦")
-                            .font(.system(size: 34))
+                        BirdieBrandMark(size: 46)
                         Text("Birdie")
                             .font(.headline)
                         Text(model.answer)
@@ -77,6 +76,7 @@ struct BirdieWatchView: View {
                 }
             }
             .navigationTitle("Birdie")
+            .tint(BirdiePalette.gold)
             .task { await model.refresh() }
             .refreshable { await model.refresh() }
         }
@@ -125,6 +125,7 @@ private struct BirdieMailReplyView: View {
             }
         }
         .navigationTitle("Antwort")
+        .tint(BirdiePalette.gold)
         .confirmationDialog(
             "Diese Mail wirklich senden?",
             isPresented: $showingApproval,

@@ -1,0 +1,91 @@
+name: BirdieWorld WebGL Deploy
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: birdieworld-webgl-production
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+    steps:
+      - name: Require Unity CI credentials
+        run: |
+          test -n "$UNITY_LICENSE" || { echo 'UNITY_LICENSE is not configured'; exit 2; }
+          test -n "$UNITY_EMAIL" || { echo 'UNITY_EMAIL is not configured'; exit 2; }
+          test -n "$UNITY_PASSWORD" || { echo 'UNITY_PASSWORD is not configured'; exit 2; }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Cache Unity Library
+        uses: actions/cache@v4
+        with:
+          path: clients/unity/BirdieWorld/Library
+          key: birdieworld-library-${{ runner.os }}-webgl-${{ hashFiles('clients/unity/BirdieWorld/Packages/manifest.json', 'clients/unity/BirdieWorld/ProjectSettings/ProjectVersion.txt') }}
+          restore-keys: |
+            birdieworld-library-${{ runner.os }}-webgl-
+
+      - name: Build BirdieWorld WebGL
+        uses: game-ci/unity-builder@v5
+        with:
+          projectPath: clients/unity/BirdieWorld
+          unityVersion: 6000.0.76f1
+          targetPlatform: WebGL
+          buildMethod: BirdieWorld.Editor.BirdieWorldWebBuild.BuildWebGL
+          buildsPath: clients/unity/BirdieWorld/Builds
+
+      - name: Verify WebGL output
+        run: test -f clients/unity/BirdieWorld/Builds/WebGL/index.html
+
+      - name: Add Vercel headers
+        run: |
+          cat > clients/unity/BirdieWorld/Builds/WebGL/vercel.json <<'JSON'
+          {
+            "cleanUrls": true,
+            "trailingSlash": false,
+            "headers": [
+              {
+                "source": "/(.*)",
+                "headers": [
+                  { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+                  { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" },
+                  { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+                ]
+              }
+            ]
+          }
+          JSON
+
+      - name: Upload WebGL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: birdieworld-webgl
+          path: clients/unity/BirdieWorld/Builds/WebGL
+          if-no-files-found: error
+
+      - name: Deploy production to Vercel
+        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+        working-directory: clients/unity/BirdieWorld/Builds/WebGL
+        run: |
+          mkdir -p .vercel
+          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
+          npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
+
+      - name: Explain missing Vercel secrets
+        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
+        run: |
+          echo 'WebGL build succeeded, but production deploy was skipped.'
+          echo 'Add VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID as GitHub Actions secrets.'
