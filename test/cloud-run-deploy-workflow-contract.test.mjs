@@ -60,7 +60,7 @@ test("provider coordinates and user auth values are exact", () => {
 test("candidate is zero traffic until security smoke and exact promotion", () => {
   assert.match(workflow, /--no-traffic/);
   assert.match(workflow, /--update-env-vars "BIRDIE_APP_OAUTH_ISSUER=/);
-  assert.match(workflow, /META_INSTAGRAM_ACCOUNT_ID=\\$EXPECTED_META_INSTAGRAM_ACCOUNT_ID/);
+  assert.match(workflow, /META_INSTAGRAM_ACCOUNT_ID=\$EXPECTED_META_INSTAGRAM_ACCOUNT_ID/);
   assert.match(workflow, /--update-secrets "META_APP_SECRET=META_APP_SECRET:latest,META_WEBHOOK_VERIFY_TOKEN=META_WEBHOOK_VERIFY_TOKEN:latest,META_INSTAGRAM_ACCESS_TOKEN=META_INSTAGRAM_ACCESS_TOKEN:latest"/);
   assert.match(workflow, /meta-wrong-token\\.txt/);
   assert.match(workflow, /live-meta-wrong-token\\.txt/);
