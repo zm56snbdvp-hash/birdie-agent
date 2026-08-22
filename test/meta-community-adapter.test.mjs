@@ -248,7 +248,7 @@ test("mismatching or incomplete BirdieOS comment readback fails closed", async (
   );
 });
 
-test("inbound DM remains queue-only and ignores echoes", () => {
+test("first inbound DM derives one deterministic welcome entitlement per sender", () => {
   const events = normalizeMetaWebhook({
     object: "instagram",
     entry: [
@@ -263,8 +263,13 @@ test("inbound DM remains queue-only and ignores echoes", () => {
           },
           {
             sender: { id: "17841400000000001" },
-            timestamp: 1786500000000,
-            message: { mid: "m_2.abc", text: "Echo", is_echo: true }
+            timestamp: 1786500001000,
+            message: { mid: "m_2.abc", text: "BIRDIE" }
+          },
+          {
+            sender: { id: "17841400000000001" },
+            timestamp: 1786500002000,
+            message: { mid: "m_3.abc", text: "Echo", is_echo: true }
           }
         ]
       }
@@ -272,10 +277,66 @@ test("inbound DM remains queue-only and ignores echoes", () => {
   }, { instagramAccountId: INSTAGRAM_ACCOUNT_ID });
 
   assert.equal(events.length, 1);
-  assert.equal(events[0].eventType, "DM_RECEIVED");
-  assert.equal(events[0].actionCode, "INSTAGRAM_DM");
-  assert.equal(Object.hasOwn(events[0], "workItemId"), false);
+  assert.deepEqual(
+    {
+      syncEventId: events[0].syncEventId,
+      workItemId: events[0].workItemId,
+      sourceSnapshotKey: events[0].sourceSnapshotKey,
+      sourceReference: events[0].sourceReference,
+      externalUserId: events[0].externalUserId,
+      eventType: events[0].eventType,
+      actionCode: events[0].actionCode,
+      idempotencyKey: events[0].idempotencyKey
+    },
+    {
+      syncEventId: "SCE-IG-DM-WELCOME-17841400000000001",
+      workItemId: "WORK-IG-DM-WELCOME-17841400000000001",
+      sourceSnapshotKey: "SSK-IG-DM-WELCOME-17841400000000001",
+      sourceReference: "17841400000000001",
+      externalUserId: "17841400000000001",
+      eventType: "IG_DM_WELCOME",
+      actionCode: "IG_DM_WELCOME",
+      idempotencyKey: "ig:ig_dm_welcome:17841400000000001"
+    }
+  );
   assert.equal(Object.hasOwn(events[0], "points"), false);
+  assert.equal(Object.hasOwn(events[0], "birdieId"), false);
+});
+
+test("signed first-DM entitlement requires sync, work and +1 social readback", async () => {
+  const calls = [];
+  const payload = {
+    object: "instagram",
+    entry: [
+      {
+        id: INSTAGRAM_ACCOUNT_ID,
+        time: 1786500000,
+        messaging: [
+          {
+            sender: { id: "17841400000000001" },
+            timestamp: 1786500000000,
+            message: { mid: "m_1.abc", text: "Anything qualifies" }
+          }
+        ]
+      }
+    ]
+  };
+  const service = createMetaCommunityService({
+    birdieOSPost: async (request) => {
+      calls.push(request);
+      return exactBirdieOsResponse(request.event);
+    },
+    appSecret: "test-secret",
+    verifyToken: "verify",
+    instagramAccountId: INSTAGRAM_ACCOUNT_ID
+  });
+  const raw = JSON.stringify(payload);
+  const result = await service.ingestWebhook(raw, signature(raw));
+
+  assert.equal(result.eventCount, 1);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].event.actionCode, "IG_DM_WELCOME");
+  assert.equal(result.events[0].birdieOS.readback.socialCoinEvent.points, 1);
 });
 
 test("public webhook router preserves raw bytes and signature header", async () => {

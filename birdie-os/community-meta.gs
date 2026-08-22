@@ -12,7 +12,8 @@
  * - exact replay is a no-op; missing exact rows are repaired
  * - duplicate or mismatching rows fail closed
  *
- * DM_RECEIVED remains queue-only and never creates Coin or identity work.
+ * IG_DM_WELCOME creates one governed +1 entitlement per Instagram-scoped sender ID.
+ * The first signed inbound DM wins; later messages are exact no-ops for Coin eligibility.
  */
 
 var BIRDIE_META_SYNC_QUEUE_ = "COMMUNITY SYNC QUEUE";
@@ -80,8 +81,12 @@ var BIRDIE_META_SOCIAL_HEADERS_ = [
 
 var BIRDIE_META_COMMENT_NOTE_ =
   "Signed Meta comment webhook ingested. Identity and Coin writes remain pending governed processing.";
-var BIRDIE_META_DM_NOTE_ =
-  "Signed Meta DM webhook ingested queue-only; no Coin event is created.";
+var BIRDIE_META_DM_WELCOME_NOTE_ =
+  "Signed inbound Instagram DM establishes the once-per-account welcome Coin entitlement; identity and ledger write remain governed.";
+var BIRDIE_META_DM_WELCOME_WORK_NOTE_ =
+  "First inbound DM verified by signed Meta webhook; awaiting canonical profile link.";
+var BIRDIE_META_DM_WELCOME_SOCIAL_NOTE_ =
+  "Reserved welcome entitlement for the Instagram-scoped sender ID; no ledger Coin written yet.";
 var BIRDIE_META_WORK_NOTE_ =
   "Awaiting canonical exact ACTIVE profile link or Founder review.";
 var BIRDIE_META_SOCIAL_NOTE_ =
@@ -105,8 +110,8 @@ function birdieMetaAppendCommunityEvent_(request) {
     if (String(event.eventType || "") === "IG_COMMENT") {
       return birdieMetaAppendInstagramComment_(event);
     }
-    if (String(event.eventType || "") === "DM_RECEIVED") {
-      return birdieMetaAppendInstagramDm_(event);
+    if (String(event.eventType || "") === "IG_DM_WELCOME") {
+      return birdieMetaAppendInstagramDmWelcome_(event);
     }
     throw new Error("UNSUPPORTED_META_COMMUNITY_EVENT");
   } finally {
@@ -307,33 +312,38 @@ function birdieMetaAppendInstagramComment_(event) {
   };
 }
 
-function birdieMetaAppendInstagramDm_(event) {
-  var sourceReference = birdieMetaMessageReference_(event.sourceReference);
+function birdieMetaAppendInstagramDmWelcome_(event) {
   var senderId = birdieMetaMessageReference_(event.externalUserId);
-  var syncEventId = "SCE-IG-DM-" + sourceReference;
-  var idempotencyKey = "ig:dm:" + senderId + ":" + sourceReference;
+  var sourceReference = senderId;
+  var syncEventId = "SCE-IG-DM-WELCOME-" + senderId;
+  var workItemId = "WORK-IG-DM-WELCOME-" + senderId;
+  var sourceSnapshotKey = "SSK-IG-DM-WELCOME-" + senderId;
+  var idempotencyKey = "ig:ig_dm_welcome:" + senderId;
   var sourceAccount = birdieMetaHandle_(event.sourceAccount, "sourceAccount");
   var detectedAt = birdieMetaIsoTimestamp_(event.detectedAt);
   var payloadSummary = birdieMetaBounded_(event.payloadSummary, "payloadSummary", 500);
 
   birdieMetaExact_(event.syncEventId, syncEventId, "syncEventId");
+  birdieMetaExact_(event.workItemId, workItemId, "workItemId");
+  birdieMetaExact_(event.sourceSnapshotKey, sourceSnapshotKey, "sourceSnapshotKey");
+  birdieMetaExact_(event.sourceReference, sourceReference, "sourceReference");
   birdieMetaExact_(event.sourceType, "INSTAGRAM", "sourceType");
-  birdieMetaExact_(event.eventType, "DM_RECEIVED", "eventType");
-  birdieMetaExact_(event.actionCode, "INSTAGRAM_DM", "actionCode");
+  birdieMetaExact_(event.eventType, "IG_DM_WELCOME", "eventType");
+  birdieMetaExact_(event.actionCode, "IG_DM_WELCOME", "actionCode");
   birdieMetaExact_(event.idempotencyKey, idempotencyKey, "idempotencyKey");
   if (event.syncStatus !== undefined) {
     birdieMetaExact_(event.syncStatus, "PENDING", "syncStatus");
   }
 
-  var expected = {
+  var expectedSync = {
     syncEventId: syncEventId,
     sourceType: "INSTAGRAM",
     sourceAccount: sourceAccount,
     sourceReference: sourceReference,
     externalUserId: senderId,
     birdieId: "",
-    eventType: "DM_RECEIVED",
-    actionCode: "INSTAGRAM_DM",
+    eventType: "IG_DM_WELCOME",
+    actionCode: "IG_DM_WELCOME",
     payloadSummary: payloadSummary,
     detectedAt: detectedAt,
     syncStatus: "PENDING",
@@ -341,47 +351,161 @@ function birdieMetaAppendInstagramDm_(event) {
     processedAt: "",
     processedBy: "",
     idempotencyKey: idempotencyKey,
-    notes: BIRDIE_META_DM_NOTE_
+    notes: BIRDIE_META_DM_WELCOME_NOTE_
   };
-  var sheet = birdieMetaSheet_(BIRDIE_META_SYNC_QUEUE_);
-  birdieMetaValidateHeaders_(sheet, BIRDIE_META_SYNC_HEADERS_);
-  var found = birdieMetaInspectExact_(
-    sheet,
+  var expectedWork = {
+    workItemId: workItemId,
+    syncEventId: syncEventId,
+    sourceType: "INSTAGRAM",
+    externalUserId: senderId,
+    eventType: "IG_DM_WELCOME",
+    actionCode: "IG_DM_WELCOME",
+    sourceReference: sourceReference,
+    payloadSummary: payloadSummary,
+    detectedAt: detectedAt,
+    resolutionStatus: "IDENTITY_PENDING",
+    matchedBirdieId: "",
+    decision: "",
+    agentNotes: BIRDIE_META_DM_WELCOME_WORK_NOTE_,
+    processedBy: "",
+    processedAt: "",
+    sourceSnapshotKey: sourceSnapshotKey,
+    identityConfidence: 100,
+    identityReason: "Signed Meta sender-scoped account ID is exact; canonical Birdie profile link remains pending.",
+    identityConflict: false,
+    identityDecisionMode: "META_SCOPED_ACCOUNT_EXACT"
+  };
+  var expectedSocial = {
+    eventId: syncEventId,
+    platform: "Instagram",
+    eventType: "IG_DM_WELCOME",
+    instagramHandle: senderId,
+    birdieId: "",
+    points: 1,
+    sourceReference: sourceReference,
+    verificationStatus: "IDENTITY_PENDING",
+    coinWriteStatus: "NOT_WRITTEN",
+    createdAt: detectedAt,
+    verifiedAt: "",
+    processedAt: "",
+    idempotencyKey: idempotencyKey,
+    note: BIRDIE_META_DM_WELCOME_SOCIAL_NOTE_
+  };
+
+  var syncSheet = birdieMetaSheet_(BIRDIE_META_SYNC_QUEUE_);
+  var workSheet = birdieMetaSheet_(BIRDIE_META_WORK_QUEUE_);
+  var socialSheet = birdieMetaSheet_(BIRDIE_META_SOCIAL_EVENTS_);
+  birdieMetaValidateHeaders_(syncSheet, BIRDIE_META_SYNC_HEADERS_);
+  birdieMetaValidateHeaders_(workSheet, BIRDIE_META_WORK_HEADERS_);
+  birdieMetaValidateHeaders_(socialSheet, BIRDIE_META_SOCIAL_HEADERS_);
+
+  var syncComparison = [
+    "syncEventId", "sourceType", "sourceAccount", "sourceReference",
+    "externalUserId", "eventType", "actionCode", "idempotencyKey", "notes"
+  ];
+  var workComparison = [
+    "workItemId", "syncEventId", "sourceType", "externalUserId",
+    "eventType", "actionCode", "sourceReference", "sourceSnapshotKey"
+  ];
+  var socialComparison = [
+    "eventId", "platform", "eventType", "instagramHandle", "points",
+    "sourceReference", "idempotencyKey", "note"
+  ];
+
+  var syncFound = birdieMetaInspectExact_(
+    syncSheet,
     BIRDIE_META_SYNC_HEADERS_,
-    expected,
-    ["syncEventId", "idempotencyKey"],
-    "META_DM_SYNC_DUPLICATE",
-    "META_DM_SYNC_MISMATCH",
-    [
-      "syncEventId", "sourceType", "sourceAccount", "sourceReference",
-      "externalUserId", "eventType", "actionCode", "payloadSummary",
-      "detectedAt", "idempotencyKey", "notes"
-    ]
+    expectedSync,
+    ["syncEventId", "idempotencyKey", "externalUserId"],
+    "META_DM_WELCOME_SYNC_DUPLICATE",
+    "META_DM_WELCOME_SYNC_MISMATCH",
+    syncComparison
   );
-  if (!found) birdieMetaAppendObject_(sheet, BIRDIE_META_SYNC_HEADERS_, expected);
+  var workFound = birdieMetaInspectExact_(
+    workSheet,
+    BIRDIE_META_WORK_HEADERS_,
+    expectedWork,
+    ["workItemId", "syncEventId", "sourceReference", "sourceSnapshotKey"],
+    "META_DM_WELCOME_WORK_DUPLICATE",
+    "META_DM_WELCOME_WORK_MISMATCH",
+    workComparison
+  );
+  var socialFound = birdieMetaInspectExact_(
+    socialSheet,
+    BIRDIE_META_SOCIAL_HEADERS_,
+    expectedSocial,
+    ["eventId", "sourceReference", "idempotencyKey", "instagramHandle"],
+    "META_DM_WELCOME_SOCIAL_DUPLICATE",
+    "META_DM_WELCOME_SOCIAL_MISMATCH",
+    socialComparison
+  );
+
+  var existingCount = (syncFound ? 1 : 0) + (workFound ? 1 : 0) + (socialFound ? 1 : 0);
+  if (existingCount > 0 && existingCount < 3) {
+    throw new Error("META_DM_WELCOME_PARTIAL_STATE");
+  }
+
+  var created = [];
+  if (existingCount === 0) {
+    birdieMetaAppendObject_(syncSheet, BIRDIE_META_SYNC_HEADERS_, expectedSync);
+    birdieMetaAppendObject_(workSheet, BIRDIE_META_WORK_HEADERS_, expectedWork);
+    birdieMetaAppendObject_(socialSheet, BIRDIE_META_SOCIAL_HEADERS_, expectedSocial);
+    created = [
+      BIRDIE_META_SYNC_QUEUE_,
+      BIRDIE_META_WORK_QUEUE_,
+      BIRDIE_META_SOCIAL_EVENTS_
+    ];
+  }
+
   if (typeof SpreadsheetApp.flush === "function") SpreadsheetApp.flush();
-  var readback = birdieMetaRequireReadback_(
-    sheet,
+
+  var syncReadback = birdieMetaRequireReadback_(
+    syncSheet,
     BIRDIE_META_SYNC_HEADERS_,
-    expected,
-    ["syncEventId", "idempotencyKey"],
-    "META_DM_SYNC_READBACK_FAILED",
-    [
-      "syncEventId", "sourceType", "sourceAccount", "sourceReference",
-      "externalUserId", "eventType", "actionCode", "payloadSummary",
-      "detectedAt", "idempotencyKey", "notes"
-    ]
+    expectedSync,
+    ["syncEventId", "idempotencyKey", "externalUserId"],
+    "META_DM_WELCOME_SYNC_READBACK_FAILED",
+    syncComparison
+  );
+  var workReadback = birdieMetaRequireReadback_(
+    workSheet,
+    BIRDIE_META_WORK_HEADERS_,
+    expectedWork,
+    ["workItemId", "syncEventId", "sourceReference", "sourceSnapshotKey"],
+    "META_DM_WELCOME_WORK_READBACK_FAILED",
+    workComparison
+  );
+  var socialReadback = birdieMetaRequireReadback_(
+    socialSheet,
+    BIRDIE_META_SOCIAL_HEADERS_,
+    expectedSocial,
+    ["eventId", "sourceReference", "idempotencyKey", "instagramHandle"],
+    "META_DM_WELCOME_SOCIAL_READBACK_FAILED",
+    socialComparison
   );
 
   return {
     success: true,
     data: {
       syncEventId: syncEventId,
+      workItemId: workItemId,
+      socialEventId: syncEventId,
+      sourceReference: sourceReference,
       idempotencyKey: idempotencyKey,
-      queueOnly: true,
-      idempotent: !!found,
-      rowNumbers: { communitySync: readback.row },
-      readback: { communitySync: readback.object }
+      idempotent: existingCount === 3,
+      reservationCreated: created.length === 3,
+      receiptRequired: created.length === 3,
+      createdSheets: created,
+      rowNumbers: {
+        communitySync: syncReadback.row,
+        communityWork: workReadback.row,
+        socialCoinEvent: socialReadback.row
+      },
+      readback: {
+        communitySync: syncReadback.object,
+        communityWork: workReadback.object,
+        socialCoinEvent: socialReadback.object
+      }
     }
   };
 }

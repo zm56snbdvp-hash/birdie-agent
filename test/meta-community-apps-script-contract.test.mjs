@@ -51,6 +51,29 @@ function commentEvent(overrides = {}) {
   };
 }
 
+function dmWelcomeEvent(overrides = {}) {
+  const senderId = "17841400000000001";
+  return {
+    syncEventId: `SCE-IG-DM-WELCOME-${senderId}`,
+    workItemId: `WORK-IG-DM-WELCOME-${senderId}`,
+    sourceSnapshotKey: `SSK-IG-DM-WELCOME-${senderId}`,
+    sourceType: "INSTAGRAM",
+    sourceAccount: "birdieandbreakfast",
+    sourceReference: senderId,
+    externalUserId: senderId,
+    eventType: "IG_DM_WELCOME",
+    actionCode: "IG_DM_WELCOME",
+    payloadSummary:
+      `firstMessageId=m_1.abc | senderScopedId=${senderId} | text=Hi`,
+    detectedAt: "2026-08-12T04:00:00.000Z",
+    syncStatus: "PENDING",
+    idempotencyKey: `ig:ig_dm_welcome:${senderId}`,
+    notes:
+      "Signed inbound Instagram DM establishes the once-per-account welcome Coin entitlement; identity and ledger write remain governed.",
+    ...overrides
+  };
+}
+
 function makeSheet(headers, initialRows = []) {
   const rows = structuredClone(initialRows);
   return {
@@ -293,36 +316,61 @@ test("non-numeric comment sourceReference is rejected with no writes", () => {
   assert.equal(harness.sheets.SOCIAL_COIN_EVENTS.rows.length, 0);
 });
 
-test("DM append is queue-only and never touches work or social Coin sheets", () => {
+test("first DM creates one +1 welcome entitlement and replay is a no-op", () => {
   const harness = contextFor();
-  const event = {
-    syncEventId: "SCE-IG-DM-m_1.abc",
-    sourceType: "INSTAGRAM",
-    sourceAccount: "birdieandbreakfast",
-    sourceReference: "m_1.abc",
-    externalUserId: "17841400000000001",
-    eventType: "DM_RECEIVED",
-    actionCode: "INSTAGRAM_DM",
-    payloadSummary: "messageId=m_1.abc | senderScopedId=17841400000000001 | text=Hi",
-    detectedAt: "2026-08-12T04:00:00.000Z",
-    syncStatus: "PENDING",
-    idempotencyKey: "ig:dm:17841400000000001:m_1.abc",
-    notes: "Signed Meta DM webhook ingested queue-only; no Coin event is created."
-  };
-
   const first = harness.context.handleMetaCommunityAction_({
     action: "appendCommunitySyncEvent",
-    event
+    event: dmWelcomeEvent()
   });
   const replay = harness.context.handleMetaCommunityAction_({
     action: "appendCommunitySyncEvent",
-    event
+    event: dmWelcomeEvent({
+      payloadSummary:
+        "firstMessageId=m_2.abc | senderScopedId=17841400000000001 | text=Again",
+      detectedAt: "2026-08-12T05:00:00.000Z"
+    })
   });
 
-  assert.equal(first.data.queueOnly, true);
   assert.equal(first.data.idempotent, false);
+  assert.equal(first.data.reservationCreated, true);
+  assert.equal(first.data.receiptRequired, true);
   assert.equal(replay.data.idempotent, true);
+  assert.equal(replay.data.reservationCreated, false);
+  assert.equal(replay.data.receiptRequired, false);
+  assert.equal(harness.sheets["COMMUNITY SYNC QUEUE"].rows.length, 1);
+  assert.equal(harness.sheets["COMMUNITY WORK QUEUE"].rows.length, 1);
+  assert.equal(harness.sheets.SOCIAL_COIN_EVENTS.rows.length, 1);
+
+  const work = objectAt(harness.sheets["COMMUNITY WORK QUEUE"], WORK_HEADERS);
+  const social = objectAt(harness.sheets.SOCIAL_COIN_EVENTS, SOCIAL_HEADERS);
+  assert.equal(work.actionCode, "IG_DM_WELCOME");
+  assert.equal(work.identityConfidence, 100);
+  assert.equal(work.identityDecisionMode, "META_SCOPED_ACCOUNT_EXACT");
+  assert.equal(social.eventType, "IG_DM_WELCOME");
+  assert.equal(social.instagramHandle, "17841400000000001");
+  assert.equal(social.points, 1);
+  assert.equal(social.verificationStatus, "IDENTITY_PENDING");
+  assert.equal(social.coinWriteStatus, "NOT_WRITTEN");
+});
+
+test("partial DM welcome state fails closed without further writes", () => {
+  const seed = contextFor();
+  seed.context.handleMetaCommunityAction_({
+    action: "appendCommunitySyncEvent",
+    event: dmWelcomeEvent()
+  });
+  const exactSync = structuredClone(seed.sheets["COMMUNITY SYNC QUEUE"].rows[0]);
+  const harness = contextFor({ sync: [exactSync] });
+
+  assert.throws(
+    () => harness.context.handleMetaCommunityAction_({
+      action: "appendCommunitySyncEvent",
+      event: dmWelcomeEvent()
+    }),
+    /META_DM_WELCOME_PARTIAL_STATE/
+  );
   assert.equal(harness.sheets["COMMUNITY SYNC QUEUE"].rows.length, 1);
   assert.equal(harness.sheets["COMMUNITY WORK QUEUE"].rows.length, 0);
   assert.equal(harness.sheets.SOCIAL_COIN_EVENTS.rows.length, 0);
 });
+
