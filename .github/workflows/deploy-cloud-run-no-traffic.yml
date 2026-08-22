@@ -31,10 +31,10 @@ env:
   EXPECTED_DEPLOYER_SERVICE_ACCOUNT: birdie-github-deployer@gen-lang-client-0251788487.iam.gserviceaccount.com
   EXPECTED_RUNTIME_SERVICE_ACCOUNT: 893591677320-compute@developer.gserviceaccount.com
   EXPECTED_ARTIFACT_REPOSITORY: birdie-agent-releases
-  BIRDIE_APP_OAUTH_ISSUER: https://dev-dfveukr86fg3e8fr.eu.auth0.com/
-  BIRDIE_APP_OAUTH_AUDIENCE: https://birdie-agent-893591677320.europe-west3.run.app
-  BIRDIE_APP_BIRDIE_ID_CLAIM: https://birdieandbreakfast.de/birdie_id
-  BIRDIE_APP_OAUTH_JWKS_URL: https://dev-dfveukr86fg3e8fr.eu.auth0.com/.well-known/jwks.json
+  EXPECTED_BIRDIE_APP_OAUTH_ISSUER: https://dev-dfveukr86fg3e8fr.eu.auth0.com/
+  EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE: https://birdie-agent-893591677320.europe-west3.run.app
+  EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM: https://birdieandbreakfast.de/birdie_id
+  EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL: https://dev-dfveukr86fg3e8fr.eu.auth0.com/.well-known/jwks.json
 
 jobs:
   validate:
@@ -88,7 +88,7 @@ jobs:
           npm ci
           npm test
           node --check auth0/actions/birdie-supporter-claims.js
-          curl --fail --silent --show-error --retry 3 "$BIRDIE_APP_OAUTH_JWKS_URL" \
+          curl --fail --silent --show-error --retry 3 "$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL" \
             | jq -e '.keys | length > 0 and all(.[]; .kty == "RSA")' > /dev/null
 
       - name: Build credential-free image
@@ -235,7 +235,7 @@ jobs:
             --revision-suffix "$revision_suffix" \
             --tag "$candidate_tag" \
             --no-traffic \
-            --update-env-vars "BIRDIE_APP_OAUTH_ISSUER=$BIRDIE_APP_OAUTH_ISSUER,BIRDIE_APP_OAUTH_AUDIENCE=$BIRDIE_APP_OAUTH_AUDIENCE,BIRDIE_APP_BIRDIE_ID_CLAIM=$BIRDIE_APP_BIRDIE_ID_CLAIM,BIRDIE_APP_OAUTH_JWKS_URL=$BIRDIE_APP_OAUTH_JWKS_URL" \
+            --update-env-vars "BIRDIE_APP_OAUTH_ISSUER=$EXPECTED_BIRDIE_APP_OAUTH_ISSUER,BIRDIE_APP_OAUTH_AUDIENCE=$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE,BIRDIE_APP_BIRDIE_ID_CLAIM=$EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM,BIRDIE_APP_OAUTH_JWKS_URL=$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL" \
             --quiet
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
@@ -261,10 +261,10 @@ jobs:
             > "$RUNNER_TEMP/revision-candidate.json"
           jq -e --arg sa "$RUNTIME_SERVICE_ACCOUNT" '(.spec.serviceAccountName // .spec.template.spec.serviceAccountName // .template.serviceAccount) == $sa' "$RUNNER_TEMP/revision-candidate.json" > /dev/null
           for pair in \
-            "BIRDIE_APP_OAUTH_ISSUER=$BIRDIE_APP_OAUTH_ISSUER" \
-            "BIRDIE_APP_OAUTH_AUDIENCE=$BIRDIE_APP_OAUTH_AUDIENCE" \
-            "BIRDIE_APP_BIRDIE_ID_CLAIM=$BIRDIE_APP_BIRDIE_ID_CLAIM" \
-            "BIRDIE_APP_OAUTH_JWKS_URL=$BIRDIE_APP_OAUTH_JWKS_URL"; do
+            "BIRDIE_APP_OAUTH_ISSUER=$EXPECTED_BIRDIE_APP_OAUTH_ISSUER" \
+            "BIRDIE_APP_OAUTH_AUDIENCE=$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE" \
+            "BIRDIE_APP_BIRDIE_ID_CLAIM=$EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM" \
+            "BIRDIE_APP_OAUTH_JWKS_URL=$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL"; do
             name="${pair%%=*}"
             expected="${pair#*=}"
             actual="$(jq -r --arg name "$name" '[.spec.containers[0].env[]? | select(.name == $name)][0].value // empty' "$RUNNER_TEMP/revision-candidate.json")"
@@ -351,7 +351,7 @@ jobs:
             --arg service "$CLOUD_RUN_SERVICE" \
             --arg revision "$REVISION" \
             --arg imageDigest "$IMAGE_DIGEST" \
-            --arg audience "$BIRDIE_APP_OAUTH_AUDIENCE" \
+            --arg audience "$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE" \
             --arg workflowRun "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg verifiedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
             '{schemaVersion:$schemaVersion,status:"LIVE",repository:$repository,releaseSha:$releaseSha,version:$version,project:$project,region:$region,service:$service,revision:$revision,imageDigest:$imageDigest,trafficPercent:100,audience:$audience,issuer:"https://dev-dfveukr86fg3e8fr.eu.auth0.com/",birdieIdClaim:"https://birdieandbreakfast.de/birdie_id",checks:["full-tests","auth0-jwks","runtime-auth-config","candidate-root","supporter-unauthenticated-fails-closed","founder-admin-fails-closed","iam-unchanged","exact-revision-100-percent","live-root"],workflowRun:$workflowRun,verifiedAt:$verifiedAt}' \
