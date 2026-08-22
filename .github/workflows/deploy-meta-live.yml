@@ -1,18 +1,19 @@
 name: Deploy Birdie Agent Meta live
+run-name: Meta production ${{ inputs.release_sha }} by @${{ github.actor }}
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/meta/**'
-      - 'birdie-os/community-meta.gs'
-      - 'birdie-os/social-outreach-events.gs'
-      - 'server.mjs'
-      - '.github/workflows/deploy-meta-live.yml'
+  workflow_dispatch:
+    inputs:
+      release_sha:
+        description: "Exact current protected main SHA"
+        required: true
+        type: string
+      confirmation:
+        description: "Type DEPLOY_BIRDIE_META_PRODUCTION"
+        required: true
+        type: string
 
-permissions:
-  contents: read
-  id-token: write
+permissions: {}
 
 concurrency:
   group: birdie-agent-meta-live
@@ -28,6 +29,9 @@ env:
   META_INSTAGRAM_ACCOUNT_ID: '17841440257520993'
   META_INSTAGRAM_USERNAME: birdieandbreakfast
   META_API_VERSION: v24.0
+  EXPECTED_REPOSITORY: zm56snbdvp-hash/birdie-agent
+  EXPECTED_REPOSITORY_ID: "1329217661"
+  EXPECTED_OWNER_ID: "315131667"
 
 jobs:
   deploy:
@@ -35,15 +39,52 @@ jobs:
     timeout-minutes: 25
     environment:
       name: birdie-cloud-run-no-traffic
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Checkout protected main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
           persist-credentials: false
 
-      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+      - name: Validate immutable production invocation
+        env:
+          RELEASE_SHA: ${{ inputs.release_sha }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          ACTUAL_REPOSITORY_ID: ${{ github.repository_id }}
+          ACTUAL_OWNER_ID: ${{ github.repository_owner_id }}
+          REF_PROTECTED: ${{ github.ref_protected }}
+          CONFIGURED_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          CONFIGURED_DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          ENVIRONMENT_GUARD: ${{ vars.BIRDIE_NO_TRAFFIC_ENVIRONMENT_GUARD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$ACTUAL_REPOSITORY_ID" = "$EXPECTED_REPOSITORY_ID"
+          test "$ACTUAL_OWNER_ID" = "$EXPECTED_OWNER_ID"
+          test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$REF_PROTECTED" = "true"
+          [[ "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$RELEASE_SHA" = "$GITHUB_SHA"
+          test "$CONFIRMATION" = "DEPLOY_BIRDIE_META_PRODUCTION"
+          test "$CONFIGURED_WIF_PROVIDER" = "$WIF_PROVIDER"
+          test "$CONFIGURED_DEPLOYER_SERVICE_ACCOUNT" = "$DEPLOYER_SERVICE_ACCOUNT"
+          test "$ENVIRONMENT_GUARD" = "BIRDIE_NO_TRAFFIC_PROTECTED_V1"
+          test "$(git rev-parse HEAD)" = "$RELEASE_SHA"
+          git diff --exit-code
+          git diff --cached --exit-code
+
+      - name: Authenticate to Google Cloud with protected OIDC
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
         with:
-          workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
           token_format: access_token
           access_token_scopes: https://www.googleapis.com/auth/cloud-platform
           create_credentials_file: true
