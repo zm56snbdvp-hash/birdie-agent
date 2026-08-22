@@ -11,6 +11,13 @@ on:
       - 'clients/apple/project.yml'
       - 'clients/apple/fastlane/Fastfile'
       - 'clients/apple/Gemfile*'
+  pull_request:
+    paths:
+      - '.github/workflows/birdie-pov-testflight.yml'
+      - 'clients/apple/BirdiePOV/**'
+      - 'clients/apple/project.yml'
+      - 'clients/apple/fastlane/Fastfile'
+      - 'clients/apple/Gemfile*'
 
 permissions:
   contents: read
