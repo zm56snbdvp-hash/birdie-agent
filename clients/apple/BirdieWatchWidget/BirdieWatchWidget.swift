@@ -1,6 +1,27 @@
 import SwiftUI
 import WidgetKit
 
+private enum BirdieWidgetPalette {
+    static let green = Color(red: 0.035, green: 0.245, blue: 0.155)
+    static let gold = Color(red: 0.84, green: 0.69, blue: 0.31)
+}
+
+private struct BirdieWidgetMark: View {
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(BirdieWidgetPalette.green)
+            Circle()
+                .stroke(BirdieWidgetPalette.gold, lineWidth: 1.5)
+                .padding(3)
+            Text("B")
+                .font(.system(.headline, design: .serif, weight: .semibold))
+                .foregroundStyle(BirdieWidgetPalette.gold)
+        }
+        .accessibilityHidden(true)
+    }
+}
+
 struct BirdieEntry: TimelineEntry {
     let date: Date
 }
@@ -27,14 +48,13 @@ struct BirdieComplicationView: View {
         case .accessoryCircular:
             ZStack {
                 AccessoryWidgetBackground()
-                Text("🐦")
-                    .font(.title2)
-                    .widgetAccentable()
+                BirdieWidgetMark()
+                    .widgetAccentable(false)
             }
         case .accessoryRectangular:
             HStack(spacing: 6) {
-                Text("🐦")
-                    .font(.title3)
+                BirdieWidgetMark()
+                    .frame(width: 28, height: 28)
                 VStack(alignment: .leading, spacing: 1) {
                     Text("Birdie")
                         .font(.headline)
@@ -44,9 +64,9 @@ struct BirdieComplicationView: View {
                 }
             }
         case .accessoryInline:
-            Text("🐦 Birdie")
+            Text("Birdie · Sprechen")
         default:
-            Text("🐦")
+            Text("Birdie")
         }
     }
 }
