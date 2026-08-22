@@ -55,11 +55,19 @@ test("provider coordinates and user auth values are exact", () => {
   assert.match(workflow, /BIRDIE_APP_OAUTH_AUDIENCE: https:\/\/birdie-agent-893591677320\.europe-west3\.run\.app/);
   assert.match(workflow, /BIRDIE_APP_BIRDIE_ID_CLAIM: https:\/\/birdieandbreakfast\.de\/birdie_id/);
   assert.match(workflow, /BIRDIE_APP_OAUTH_JWKS_URL: https:\/\/dev-dfveukr86fg3e8fr\.eu\.auth0\.com\/\.well-known\/jwks\.json/);
+  assert.match(workflow, /EXPECTED_META_INSTAGRAM_ACCOUNT_ID: "17841440257520993"/);
+  assert.match(workflow, /EXPECTED_META_INSTAGRAM_USERNAME: birdieandbreakfast/);
+  assert.match(workflow, /EXPECTED_META_API_VERSION: v24\.0/);
 });
 
 test("candidate is zero traffic until security smoke and exact promotion", () => {
   assert.match(workflow, /--no-traffic/);
   assert.match(workflow, /--update-env-vars "BIRDIE_APP_OAUTH_ISSUER=/);
+  assert.match(workflow, /META_INSTAGRAM_ACCOUNT_ID=\$EXPECTED_META_INSTAGRAM_ACCOUNT_ID/);
+  assert.match(workflow, /--update-secrets "META_APP_SECRET=META_APP_SECRET:latest,META_WEBHOOK_VERIFY_TOKEN=META_WEBHOOK_VERIFY_TOKEN:latest,META_INSTAGRAM_ACCESS_TOKEN=META_INSTAGRAM_ACCESS_TOKEN:latest"/);
+  assert.match(workflow, /meta-wrong-token\.txt/);
+  assert.match(workflow, /live-meta-wrong-token\.txt/);
+  assert.match(workflow, /test "\$meta_status" = "403"/);
   assert.match(workflow, /AUTHENTICATED_LEDGER_PROJECTION/);
   assert.match(workflow, /BIRDIE_APP_UNAUTHENTICATED/);
   assert.match(workflow, /birdieId=ATTACKER/);

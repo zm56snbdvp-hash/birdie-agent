@@ -35,6 +35,9 @@ env:
   EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE: https://birdie-agent-893591677320.europe-west3.run.app
   EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM: https://birdieandbreakfast.de/birdie_id
   EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL: https://dev-dfveukr86fg3e8fr.eu.auth0.com/.well-known/jwks.json
+  EXPECTED_META_INSTAGRAM_ACCOUNT_ID: "17841440257520993"
+  EXPECTED_META_INSTAGRAM_USERNAME: birdieandbreakfast
+  EXPECTED_META_API_VERSION: v24.0
 
 jobs:
   validate:
@@ -179,6 +182,14 @@ jobs:
           version: "577.0.0"
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      - name: Verify required Meta secrets exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          for secret in META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN META_INSTAGRAM_ACCESS_TOKEN; do
+            gcloud secrets describe "$secret" --project "$GCP_PROJECT_ID" --format='value(name)' >/dev/null
+          done
+
       - name: Capture protected production state
         id: before
         env:
@@ -235,7 +246,8 @@ jobs:
             --revision-suffix "$revision_suffix" \
             --tag "$candidate_tag" \
             --no-traffic \
-            --update-env-vars "BIRDIE_APP_OAUTH_ISSUER=$EXPECTED_BIRDIE_APP_OAUTH_ISSUER,BIRDIE_APP_OAUTH_AUDIENCE=$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE,BIRDIE_APP_BIRDIE_ID_CLAIM=$EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM,BIRDIE_APP_OAUTH_JWKS_URL=$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL" \
+            --update-env-vars "BIRDIE_APP_OAUTH_ISSUER=$EXPECTED_BIRDIE_APP_OAUTH_ISSUER,BIRDIE_APP_OAUTH_AUDIENCE=$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE,BIRDIE_APP_BIRDIE_ID_CLAIM=$EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM,BIRDIE_APP_OAUTH_JWKS_URL=$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL,META_INSTAGRAM_ACCOUNT_ID=$EXPECTED_META_INSTAGRAM_ACCOUNT_ID,META_INSTAGRAM_USERNAME=$EXPECTED_META_INSTAGRAM_USERNAME,META_API_VERSION=$EXPECTED_META_API_VERSION" \
+            --update-secrets "META_APP_SECRET=META_APP_SECRET:latest,META_WEBHOOK_VERIFY_TOKEN=META_WEBHOOK_VERIFY_TOKEN:latest,META_INSTAGRAM_ACCESS_TOKEN=META_INSTAGRAM_ACCESS_TOKEN:latest" \
             --quiet
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
@@ -264,14 +276,27 @@ jobs:
             "BIRDIE_APP_OAUTH_ISSUER=$EXPECTED_BIRDIE_APP_OAUTH_ISSUER" \
             "BIRDIE_APP_OAUTH_AUDIENCE=$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE" \
             "BIRDIE_APP_BIRDIE_ID_CLAIM=$EXPECTED_BIRDIE_APP_BIRDIE_ID_CLAIM" \
-            "BIRDIE_APP_OAUTH_JWKS_URL=$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL"; do
+            "BIRDIE_APP_OAUTH_JWKS_URL=$EXPECTED_BIRDIE_APP_OAUTH_JWKS_URL" \
+            "META_INSTAGRAM_ACCOUNT_ID=$EXPECTED_META_INSTAGRAM_ACCOUNT_ID" \
+            "META_INSTAGRAM_USERNAME=$EXPECTED_META_INSTAGRAM_USERNAME" \
+            "META_API_VERSION=$EXPECTED_META_API_VERSION"; do
             name="${pair%%=*}"
             expected="${pair#*=}"
             actual="$(jq -r --arg name "$name" '[.spec.containers[0].env[]? | select(.name == $name)][0].value // empty' "$RUNNER_TEMP/revision-candidate.json")"
             test "$actual" = "$expected"
           done
+          for secret in META_APP_SECRET META_WEBHOOK_VERIFY_TOKEN META_INSTAGRAM_ACCESS_TOKEN; do
+            jq -e --arg name "$secret" '
+              [.spec.containers[0].env[]? | select(.name == $name)][0].valueFrom.secretKeyRef as $ref
+              | (($ref.name // $ref.secret // "") == $name)
+                and (($ref.key // $ref.version // "") == "latest")
+            ' "$RUNNER_TEMP/revision-candidate.json" > /dev/null
+          done
           curl --fail --silent --show-error --retry 4 "$CANDIDATE_URL/" \
             | jq -e --arg version "$EXPECTED_VERSION" '.success == true and .version == $version and .birdieWorld == "AUTHENTICATED_LEDGER_PROJECTION"' > /dev/null
+          meta_status="$(curl --silent --show-error --output "$RUNNER_TEMP/meta-wrong-token.txt" --write-out '%{http_code}' "$CANDIDATE_URL/meta/webhook?hub.mode=subscribe&hub.verify_token=definitely-not-birdie&hub.challenge=ping")"
+          test "$meta_status" = "403"
+          grep -Fx "Forbidden" "$RUNNER_TEMP/meta-wrong-token.txt" > /dev/null
           status="$(curl --silent --show-error --output "$RUNNER_TEMP/supporter-unauthorized.json" --write-out '%{http_code}' "$CANDIDATE_URL/birdie-app/v1/coin/profile?birdieId=ATTACKER")"
           test "$status" = "401"
           jq -e '.success == false and .error == "BIRDIE_APP_UNAUTHENTICATED"' "$RUNNER_TEMP/supporter-unauthorized.json" > /dev/null
@@ -318,6 +343,9 @@ jobs:
           status="$(curl --silent --show-error --output "$RUNNER_TEMP/live-unauthorized.json" --write-out '%{http_code}' "$service_url/birdie-app/v1/coin/profile")"
           test "$status" = "401"
           jq -e '.success == false and .error == "BIRDIE_APP_UNAUTHENTICATED"' "$RUNNER_TEMP/live-unauthorized.json" > /dev/null
+          meta_status="$(curl --silent --show-error --output "$RUNNER_TEMP/live-meta-wrong-token.txt" --write-out '%{http_code}' "$service_url/meta/webhook?hub.mode=subscribe&hub.verify_token=definitely-not-birdie&hub.challenge=ping")"
+          test "$meta_status" = "403"
+          grep -Fx "Forbidden" "$RUNNER_TEMP/live-meta-wrong-token.txt" > /dev/null
 
       - name: Roll back traffic if live verification fails
         if: failure() && steps.promote.outcome == 'success'
@@ -354,7 +382,7 @@ jobs:
             --arg audience "$EXPECTED_BIRDIE_APP_OAUTH_AUDIENCE" \
             --arg workflowRun "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
             --arg verifiedAt "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
-            '{schemaVersion:$schemaVersion,status:"LIVE",repository:$repository,releaseSha:$releaseSha,version:$version,project:$project,region:$region,service:$service,revision:$revision,imageDigest:$imageDigest,trafficPercent:100,audience:$audience,issuer:"https://dev-dfveukr86fg3e8fr.eu.auth0.com/",birdieIdClaim:"https://birdieandbreakfast.de/birdie_id",checks:["full-tests","auth0-jwks","runtime-auth-config","candidate-root","supporter-unauthenticated-fails-closed","founder-admin-fails-closed","iam-unchanged","exact-revision-100-percent","live-root"],workflowRun:$workflowRun,verifiedAt:$verifiedAt}' \
+            '{schemaVersion:$schemaVersion,status:"LIVE",repository:$repository,releaseSha:$releaseSha,version:$version,project:$project,region:$region,service:$service,revision:$revision,imageDigest:$imageDigest,trafficPercent:100,audience:$audience,issuer:"https://dev-dfveukr86fg3e8fr.eu.auth0.com/",birdieIdClaim:"https://birdieandbreakfast.de/birdie_id",checks:["full-tests","auth0-jwks","runtime-auth-config","meta-secret-bindings","meta-wrong-token-fails-closed","candidate-root","supporter-unauthenticated-fails-closed","founder-admin-fails-closed","iam-unchanged","exact-revision-100-percent","live-root"],workflowRun:$workflowRun,verifiedAt:$verifiedAt}' \
             > release-receipt/coin-supporter-production.json
 
       - name: Upload sanitized production receipt
