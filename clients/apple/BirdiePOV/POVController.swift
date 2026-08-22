@@ -11,6 +11,7 @@ final class POVController: ObservableObject {
     @Published private(set) var cameraStatus = "Glasses not streaming"
     @Published private(set) var currentFrame: UIImage?
     @Published private(set) var isGlassesStreaming = false
+    @Published private(set) var isPreviewTransitioning = false
     @Published var errorMessage: String?
 
     let twitch = TwitchBroadcaster()
@@ -26,11 +27,11 @@ final class POVController: ObservableObject {
     private var streamStateToken: AnyListenerToken?
     private var streamFrameToken: AnyListenerToken?
     private var streamErrorToken: AnyListenerToken?
+    private var restartPreviewAfterStop = false
 
     init() {
         registrationState = Wearables.shared.registrationState
         deviceSelector = AutoDeviceSelector(wearables: Wearables.shared)
-        twitch.configureAudioSession()
 
         registrationTask = Task { [weak self] in
             guard let self else { return }
@@ -47,6 +48,19 @@ final class POVController: ObservableObject {
 
     var registrationText: String {
         String(describing: registrationState)
+    }
+
+    var previewButtonTitle: String {
+        if isGlassesStreaming {
+            return "POV Camera Running"
+        }
+        if isPreviewTransitioning {
+            return "POV Camera Starting…"
+        }
+        if deviceSession != nil {
+            return "Retry POV Camera"
+        }
+        return "Start POV Camera"
     }
 
     func connectGlasses() {
@@ -71,10 +85,27 @@ final class POVController: ObservableObject {
     }
 
     func startGlassesPreview() {
-        guard deviceSession == nil else { return }
+        guard !isGlassesStreaming, !isPreviewTransitioning else { return }
+
+        if let session = deviceSession {
+            if session.state == .started, camera == nil {
+                isPreviewTransitioning = true
+                beginCamera(on: session)
+            } else {
+                restartPreviewSession(session)
+            }
+            return
+        }
+
+        beginPreviewSession()
+    }
+
+    private func beginPreviewSession() {
+        isPreviewTransitioning = true
         cameraStatus = "Checking camera permission…"
 
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             do {
                 let permission = try await wearables.checkPermissionStatus(.camera)
                 if permission != .granted {
@@ -82,6 +113,7 @@ final class POVController: ObservableObject {
                     guard requested == .granted else {
                         errorMessage = "Camera permission was not granted in Meta AI."
                         cameraStatus = "Camera permission required"
+                        isPreviewTransitioning = false
                         return
                     }
                 }
@@ -93,26 +125,52 @@ final class POVController: ObservableObject {
                 try session.start()
             } catch {
                 errorMessage = "Could not start glasses session: \(error.localizedDescription)"
+                cameraStatus = "Session failed — tap to retry"
+                isPreviewTransitioning = false
                 cleanupSession()
             }
         }
     }
 
+    private func restartPreviewSession(_ session: DeviceSession) {
+        restartPreviewAfterStop = true
+        isPreviewTransitioning = true
+        cameraStatus = "Restarting glasses session…"
+        camera?.stop()
+
+        if session.state == .stopped {
+            handleStoppedSession()
+        } else {
+            session.stop()
+        }
+    }
+
     func startTwitch(streamKey: String) {
+        guard isGlassesStreaming else {
+            errorMessage = "Start and verify the POV camera before connecting to Twitch."
+            return
+        }
+
         Task {
             await twitch.start(streamKey: streamKey)
         }
     }
 
     func stopEverything() async {
+        restartPreviewAfterStop = false
+        isPreviewTransitioning = deviceSession != nil
         cameraStatus = "Stopping…"
         camera?.stop()
-        camera = nil
         deviceSession?.stop()
         await twitch.stop()
         isGlassesStreaming = false
         currentFrame = nil
-        cameraStatus = "Glasses not streaming"
+
+        if deviceSession == nil {
+            cleanupCamera()
+            isPreviewTransitioning = false
+            cameraStatus = "Glasses not streaming"
+        }
     }
 
     private func observeSession(_ session: DeviceSession) {
@@ -121,19 +179,26 @@ final class POVController: ObservableObject {
                 guard let self, let session else { return }
                 switch state {
                 case .started:
+                    self.isPreviewTransitioning = true
                     self.cameraStatus = "Glasses connected"
                     self.beginCamera(on: session)
                 case .starting:
+                    self.isPreviewTransitioning = true
                     self.cameraStatus = "Connecting to glasses…"
                 case .paused:
-                    self.cameraStatus = "Glasses session paused"
-                case .stopping:
-                    self.cameraStatus = "Stopping glasses session…"
-                case .stopped, .idle:
                     self.isGlassesStreaming = false
-                    self.currentFrame = nil
-                    self.cleanupCamera()
-                    self.cleanupSession()
+                    self.isPreviewTransitioning = false
+                    self.cameraStatus = "Glasses session paused — tap to retry"
+                    self.stopTwitchAfterVideoLoss()
+                case .stopping:
+                    self.isGlassesStreaming = false
+                    self.isPreviewTransitioning = true
+                    self.cameraStatus = "Stopping glasses session…"
+                case .stopped:
+                    self.handleStoppedSession()
+                case .idle:
+                    // A newly-created session begins idle before start().
+                    self.isPreviewTransitioning = true
                 }
             }
         }
@@ -141,12 +206,35 @@ final class POVController: ObservableObject {
         sessionErrorToken = session.errorPublisher.listen { [weak self] error in
             Task { @MainActor in
                 self?.errorMessage = "Glasses session error: \(error.localizedDescription)"
+                self?.cameraStatus = "Session error — tap to retry"
+                self?.isGlassesStreaming = false
+                self?.isPreviewTransitioning = false
+                self?.stopTwitchAfterVideoLoss()
             }
         }
     }
 
+    private func handleStoppedSession() {
+        let shouldRestart = restartPreviewAfterStop
+        restartPreviewAfterStop = false
+        isGlassesStreaming = false
+        isPreviewTransitioning = false
+        currentFrame = nil
+        cleanupCamera()
+        cleanupSession()
+        cameraStatus = "Glasses not streaming"
+        stopTwitchAfterVideoLoss()
+
+        if shouldRestart {
+            startGlassesPreview()
+        }
+    }
+
     private func beginCamera(on session: DeviceSession) {
-        guard camera == nil else { return }
+        guard camera == nil else {
+            isPreviewTransitioning = false
+            return
+        }
 
         let config = StreamConfiguration(
             videoCodec: .raw,
@@ -157,6 +245,8 @@ final class POVController: ObservableObject {
         do {
             guard let camera = try session.addCamera(config: config) else {
                 errorMessage = "Meta DAT could not create a camera stream."
+                cameraStatus = "Camera unavailable — tap to retry"
+                isPreviewTransitioning = false
                 return
             }
             self.camera = camera
@@ -165,6 +255,8 @@ final class POVController: ObservableObject {
             camera.stream.start()
         } catch {
             errorMessage = "Could not start POV camera: \(error.localizedDescription)"
+            cameraStatus = "Camera failed — tap to retry"
+            isPreviewTransitioning = false
             cleanupCamera()
         }
     }
@@ -176,20 +268,34 @@ final class POVController: ObservableObject {
                 switch state {
                 case .streaming:
                     self.isGlassesStreaming = true
+                    self.isPreviewTransitioning = false
                     self.cameraStatus = "POV camera live"
                 case .paused:
                     self.isGlassesStreaming = false
-                    self.cameraStatus = "POV camera paused"
+                    self.isPreviewTransitioning = false
+                    self.cameraStatus = "POV camera paused — tap to retry"
+                    self.stopTwitchAfterVideoLoss()
                 case .waitingForDevice:
-                    self.cameraStatus = "Waiting for glasses…"
+                    self.isGlassesStreaming = false
+                    self.isPreviewTransitioning = false
+                    self.cameraStatus = "Waiting for glasses — tap to retry"
+                    self.stopTwitchAfterVideoLoss()
                 case .starting:
+                    self.isGlassesStreaming = false
+                    self.isPreviewTransitioning = true
                     self.cameraStatus = "Starting POV camera…"
                 case .stopping:
+                    self.isGlassesStreaming = false
+                    self.isPreviewTransitioning = true
                     self.cameraStatus = "Stopping POV camera…"
+                    self.stopTwitchAfterVideoLoss()
                 case .stopped:
                     self.isGlassesStreaming = false
+                    self.isPreviewTransitioning = false
                     self.currentFrame = nil
                     self.cleanupCamera()
+                    self.cameraStatus = "Camera stopped — tap to retry"
+                    self.stopTwitchAfterVideoLoss()
                 }
             }
         }
@@ -211,7 +317,18 @@ final class POVController: ObservableObject {
         streamErrorToken = stream.errorPublisher.listen { [weak self] error in
             Task { @MainActor in
                 self?.errorMessage = "POV stream error: \(error.localizedDescription)"
+                self?.cameraStatus = "POV stream error — tap to retry"
+                self?.isGlassesStreaming = false
+                self?.isPreviewTransitioning = false
+                self?.stopTwitchAfterVideoLoss()
             }
+        }
+    }
+
+    private func stopTwitchAfterVideoLoss() {
+        Task { [weak self] in
+            guard let self, self.twitch.isLive else { return }
+            await self.twitch.stop()
         }
     }
 

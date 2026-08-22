@@ -4,21 +4,40 @@ Prototype iOS broadcaster for **Ray-Ban Meta → iPhone → Twitch**.
 
 ## What is implemented
 
-- Meta Wearables Device Access Toolkit (`MWDATCore`, `MWDATCamera`)
+- Meta Wearables Device Access Toolkit 0.9.0 (`MWDATCore`, `MWDATCamera`)
 - registration handoff through the Meta AI app
 - camera permission flow
 - `DeviceSession` + `Camera` lifecycle
 - 720×1280 RAW camera frames at 24 fps
 - live on-device preview
-- H.264 RTMP publishing through HaishinKit
+- H.264 RTMP publishing through HaishinKit 2.2.5
 - Twitch stream key is runtime-only and is not persisted
+
+Both Swift package requirements are exact pins in `clients/apple/project.yml`.
+XcodeGen also binds the Wi-Fi information and hotspot entitlements required by
+the Meta device-access sample configuration.
+
+## Local Meta configuration
+
+The checked-in `Config/Meta.xcconfig` uses the safe Meta AI Developer Mode
+defaults (`MetaAppID` 0 and an empty client token). For a registered Wearables
+Developer project, create a local override without changing tracked files:
+
+```bash
+cd clients/apple/BirdiePOV/Config
+cp Meta.local.xcconfig.example Meta.local.xcconfig
+```
+
+Replace only the placeholders in `Meta.local.xcconfig`. That file is ignored by
+Git. Never place a Meta client token in `Info.plist`, `project.yml`, source code,
+or a commit.
 
 ## First device test
 
 1. Install/update the Meta AI app on the iPhone.
 2. Pair the Ray-Ban Meta glasses normally in Meta AI.
 3. In Meta AI, enable **Developer Mode** for the glasses.
-4. Open `clients/apple/project.yml` and set the Apple `DEVELOPMENT_TEAM` locally if needed. Do not commit signing secrets.
+4. Set the Apple Personal Team locally in Xcode if needed. Do not commit signing material.
 5. From `clients/apple`, run `xcodegen generate`.
 6. Open `Birdie.xcodeproj` in Xcode.
 7. Select the **BirdiePOV** scheme and the physical iPhone.
@@ -39,14 +58,31 @@ Before testing Twitch, verify these layers independently:
 5. Twitch RTMP connects
 6. Twitch receives correctly oriented 720×1280 video
 
+The app labels a successful RTMP publish call as **SENDING** rather than
+claiming the channel is live. Twitch reception must still be verified on the
+channel before marking step 6 successful.
+
 ## Audio
 
-The current prototype deliberately treats video as the first acceptance gate. The AVAudioSession is configured for Bluetooth compatibility, but the production audio source still needs device validation before being wired into the RTMP stream. Preferred order for testing is:
+The current prototype deliberately treats video as the first acceptance gate.
+It does not configure an audio session during app/controller initialization.
+The AVAudioSession route is prepared only when the user starts Twitch after the
+Meta camera reaches `.streaming`, but audio samples are not yet attached to the
+RTMP stream. The production audio source still needs device validation before
+that wiring is added. Preferred order for testing is:
 
 1. Ray-Ban microphone if iOS exposes it as a stable HFP input while DAT video is active
 2. iPhone microphone as the guaranteed fallback
 
 This avoids shipping an audio path that destabilizes the glasses video session.
+
+## Verified scope
+
+- Linux contract tests can validate dependency pins, generated-project inputs,
+  secret ignores, manual-only TestFlight triggering, and retry/error code paths.
+- Xcode project generation, package resolution, signing, iPhone installation,
+  glasses preview, RTMP delivery, and Twitch reception require a Mac and real
+  devices and are not proven by those contract tests.
 
 ## Security
 

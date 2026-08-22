@@ -12,13 +12,14 @@ final class TwitchBroadcaster: ObservableObject {
 
     private let connection = RTMPConnection()
     private lazy var stream = RTMPStream(connection: connection)
+    private var hasAcceptedVideoFrame = false
 
     /// Birdie POV audio policy:
     /// - Prefer the Ray-Ban Meta HFP microphone as input.
     /// - Never intentionally use the glasses as playback output.
     /// - Default playback to the phone speaker; the user can select external speakers
     ///   through the normal iOS route picker when available.
-    func configureAudioSession() {
+    private func configureAudioSession() {
         let audioSession = AVAudioSession.sharedInstance()
         do {
             try audioSession.setCategory(
@@ -28,8 +29,8 @@ final class TwitchBroadcaster: ObservableObject {
             )
             try audioSession.setActive(true)
 
-            preferRayBanMicrophone(on: audioSession)
-            keepPlaybackOffGlasses(on: audioSession)
+            try preferRayBanMicrophone(on: audioSession)
+            try keepPlaybackOffGlasses(on: audioSession)
             updateAudioRouteStatus(audioSession)
         } catch {
             status = "Audio setup failed: \(error.localizedDescription)"
@@ -37,7 +38,7 @@ final class TwitchBroadcaster: ObservableObject {
         }
     }
 
-    private func preferRayBanMicrophone(on audioSession: AVAudioSession) {
+    private func preferRayBanMicrophone(on audioSession: AVAudioSession) throws {
         guard let inputs = audioSession.availableInputs else { return }
 
         let preferred = inputs.first { input in
@@ -47,10 +48,10 @@ final class TwitchBroadcaster: ObservableObject {
         } ?? inputs.first(where: { $0.portType == .bluetoothHFP })
 
         guard let preferred else { return }
-        try? audioSession.setPreferredInput(preferred)
+        try audioSession.setPreferredInput(preferred)
     }
 
-    private func keepPlaybackOffGlasses(on audioSession: AVAudioSession) {
+    private func keepPlaybackOffGlasses(on audioSession: AVAudioSession) throws {
         let outputs = audioSession.currentRoute.outputs
         let glassesAreOutput = outputs.contains { output in
             let name = output.portName.lowercased()
@@ -62,7 +63,7 @@ final class TwitchBroadcaster: ObservableObject {
             // Keep the glasses as microphone input while moving playback away from them.
             // iOS may re-negotiate the route depending on connected hardware, so the
             // route is re-checked whenever configureAudioSession() is called.
-            try? audioSession.overrideOutputAudioPort(.speaker)
+            try audioSession.overrideOutputAudioPort(.speaker)
         }
     }
 
@@ -79,10 +80,12 @@ final class TwitchBroadcaster: ObservableObject {
             return
         }
 
-        // Re-assert the preferred microphone/output route immediately before going live.
+        // The controller only enters this method after the glasses video gate passed.
+        // Audio samples are not published yet; this only prepares the future route.
         configureAudioSession()
 
         status = "Connecting to Twitch…"
+        hasAcceptedVideoFrame = false
         do {
             let settings = VideoCodecSettings(
                 videoSize: .init(width: 720, height: 1280),
@@ -96,27 +99,56 @@ final class TwitchBroadcaster: ObservableObject {
             try await connection.connect("rtmp://live.twitch.tv/app")
             try await stream.publish(key)
             isLive = true
-            status = "LIVE on Twitch"
+            status = "Publishing to Twitch — verify channel reception"
         } catch {
+            let publishError = error.localizedDescription
             isLive = false
-            status = "Twitch error: \(error.localizedDescription)"
+            hasAcceptedVideoFrame = false
+            do {
+                try await connection.close()
+                status = "Twitch publish error: \(publishError)"
+            } catch {
+                status = "Twitch publish error: \(publishError) · cleanup error: \(error.localizedDescription)"
+            }
         }
     }
 
     func stop() async {
+        isLive = false
+        hasAcceptedVideoFrame = false
         do {
             try await connection.close()
+            status = "Twitch disconnected"
         } catch {
-            // Connection may already be closed; converge local state either way.
+            status = "Twitch stop error: \(error.localizedDescription)"
         }
-        isLive = false
-        status = "Twitch disconnected"
     }
 
     nonisolated func appendVideo(_ sampleBuffer: CMSampleBuffer) {
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            try? await self.stream.append(sampleBuffer)
+            guard let self, self.isLive else { return }
+            do {
+                try await self.stream.append(sampleBuffer)
+                if !self.hasAcceptedVideoFrame {
+                    self.hasAcceptedVideoFrame = true
+                    self.status = "Video publishing — verify Twitch channel reception"
+                }
+            } catch {
+                await self.handleVideoAppendFailure(error)
+            }
+        }
+    }
+
+    private func handleVideoAppendFailure(_ appendError: Error) async {
+        let message = appendError.localizedDescription
+        isLive = false
+        hasAcceptedVideoFrame = false
+
+        do {
+            try await connection.close()
+            status = "Twitch video error: \(message)"
+        } catch {
+            status = "Twitch video error: \(message) · cleanup error: \(error.localizedDescription)"
         }
     }
 }

@@ -4,3 +4,18 @@ node_modules/
 !.env.example
 npm-debug.log*
 gha-creds-*.json
+
+# Apple signing material and generated local build products
+*.cer
+*.ipa
+*.mobileprovision
+*.p12
+*.p8
+*.pem
+*.provisionprofile
+**/DerivedData/
+**/*.xcuserdatad/
+clients/apple/Birdie.xcodeproj/
+
+# Local Meta Wearables registration values (never commit)
+clients/apple/BirdiePOV/Config/Meta.local.xcconfig

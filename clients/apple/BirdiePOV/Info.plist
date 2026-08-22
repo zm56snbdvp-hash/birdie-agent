@@ -40,7 +40,9 @@
     <key>AppLinkURLScheme</key>
     <string>birdiepov://</string>
     <key>MetaAppID</key>
-    <string>0</string>
+    <string>$(BIRDIE_META_APP_ID)</string>
+    <key>ClientToken</key>
+    <string>$(BIRDIE_META_CLIENT_TOKEN)</string>
     <key>TeamID</key>
     <string>$(DEVELOPMENT_TEAM)</string>
   </dict>

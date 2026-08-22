@@ -61,7 +61,7 @@ struct POVView: View {
             VStack {
                 HStack {
                     if controller.twitch.isLive {
-                        Label("LIVE", systemImage: "circle.fill")
+                        Label("SENDING", systemImage: "circle.fill")
                             .font(.caption.bold())
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
@@ -101,11 +101,11 @@ struct POVView: View {
                 .buttonStyle(.bordered)
             }
 
-            Button(controller.isGlassesStreaming ? "POV Camera Running" : "Start POV Camera") {
+            Button(controller.previewButtonTitle) {
                 controller.startGlassesPreview()
             }
             .buttonStyle(.borderedProminent)
-            .disabled(controller.isGlassesStreaming)
+            .disabled(controller.isGlassesStreaming || controller.isPreviewTransitioning)
             .frame(maxWidth: .infinity)
         }
         .frame(maxWidth: .infinity)
