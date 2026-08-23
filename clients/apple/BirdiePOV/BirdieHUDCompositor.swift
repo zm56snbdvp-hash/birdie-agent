@@ -63,7 +63,7 @@ final class BirdieHUDCompositor: @unchecked Sendable {
         let input = SampleBufferBox(value: sampleBuffer)
         let result: SampleBufferBox = await withCheckedContinuation { continuation in
             renderQueue.async { [self, input, descriptor, elapsed] in
-                let rendered = autoreleasepool {
+                let rendered: CMSampleBuffer? = autoreleasepool { () -> CMSampleBuffer? in
                     guard let sampleBuffer = input.value else { return nil }
                     return render(
                         sampleBuffer,
