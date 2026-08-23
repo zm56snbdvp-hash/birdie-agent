@@ -35,51 +35,37 @@ struct POVView: View {
     }
 
     private var preview: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(Color(red: 0.01, green: 0.10, blue: 0.07))
+        ZStack {
+            RoundedRectangle(cornerRadius: 24)
+                .fill(Color.white.opacity(0.06))
 
-                if let image = controller.currentFrame {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .blur(radius: 18)
-                        .saturation(0.72)
-                        .brightness(-0.19)
-                        .overlay(Color(red: 0.01, green: 0.12, blue: 0.08).opacity(0.42))
-
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: proxy.size.height * 9.0 / 16.0)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    VStack(spacing: 10) {
-                        Image(systemName: "eyeglasses")
-                            .font(.system(size: 40, weight: .light))
-                        Text("Meta POV Preview")
-                            .font(.headline)
-                        Text("Start the glasses camera to see the 16:9 Twitch composition.")
-                            .font(.caption)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 24)
-                    }
-                }
-
-                if controller.isHUDEnabled {
-                    BirdieHUDPreview(
-                        game: controller.hudGame,
-                        mission: controller.hudMission,
-                        isLive: controller.twitch.isLive
-                    )
+            if let image = controller.currentFrame {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                VStack(spacing: 10) {
+                    Image(systemName: "eyeglasses")
+                        .font(.system(size: 40, weight: .light))
+                    Text("Meta POV Preview")
+                        .font(.headline)
+                    Text("Start the glasses camera to see exactly what the stream receives.")
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 24)
                 }
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .clipped()
+
+            if controller.isHUDEnabled {
+                BirdieHUDPreview(
+                    game: controller.hudGame,
+                    mission: controller.hudMission,
+                    isLive: controller.twitch.isLive
+                )
+            }
         }
-        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .aspectRatio(9.0 / 16.0, contentMode: .fit)
         .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
@@ -133,7 +119,7 @@ struct POVView: View {
                 .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
 
                 HStack {
-                    Label("1920 × 1080", systemImage: "rectangle")
+                    Label("1080 × 1920", systemImage: "rectangle.portrait")
                     Spacer()
                     Label("6,000 kbit/s", systemImage: "waveform.path.ecg")
                 }
@@ -211,96 +197,108 @@ private struct BirdieHUDPreview: View {
     private let gold = Color(red: 0.87, green: 0.71, blue: 0.28)
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        LinearGradient(
-                            colors: [green.opacity(0.9), gold.opacity(0.8), green.opacity(0.55)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
+        ZStack {
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(
+                    LinearGradient(
+                        colors: [green.opacity(0.9), gold.opacity(0.8), green.opacity(0.55)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
 
-                HStack(spacing: 0) {
-                    leftPanel
-                        .frame(width: proxy.size.width * 0.29)
-                    Spacer(minLength: proxy.size.width * 0.38)
-                    rightPanel
-                        .frame(width: proxy.size.width * 0.29)
-                }
-                .padding(proxy.size.width * 0.02)
-
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(gold.opacity(0.82), lineWidth: 1.5)
-                    .frame(width: proxy.size.height * 9.0 / 16.0)
-                    .padding(.vertical, 4)
+            HStack {
+                rail
+                Spacer()
+                rail
             }
+            .padding(.vertical, 76)
+            .padding(.horizontal, 7)
+
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BIRDIE & BREAKFAST")
+                            .font(.caption2.weight(.black))
+                            .tracking(1.2)
+                            .foregroundStyle(.white)
+                        Text("FOUNDER POV")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(1.4)
+                            .foregroundStyle(gold)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(isLive ? Color.red : gold)
+                            .frame(width: 6, height: 6)
+                        Text(isLive ? "LIVE" : "HUD PREVIEW")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .tracking(0.8)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.72), in: Capsule())
+                }
+                .padding(12)
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.86), Color.black.opacity(0.38)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    in: RoundedRectangle(cornerRadius: 16)
+                )
+
+                Spacer()
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    Rectangle()
+                        .fill(gold)
+                        .frame(width: 3, height: 40)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(game.isEmpty ? "LIVE POV" : game.uppercased())
+                            .font(.system(size: 10, weight: .black, design: .rounded))
+                            .lineLimit(1)
+                        Text(mission.isEmpty ? "BIRDIE & BREAKFAST" : mission.uppercased())
+                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(green)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 2)
+
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text("1080P · 6K")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(gold)
+                        Text("@BIRDIEANDBREAKFAST")
+                            .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                .padding(12)
+                .foregroundStyle(.white)
+                .background(Color.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 16))
+            }
+            .padding(10)
         }
         .allowsHitTesting(false)
     }
 
-    private var leftPanel: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("BIRDIE & BREAKFAST")
-                .font(.system(size: 8, weight: .black))
-                .foregroundStyle(.white)
-                .lineLimit(1)
-            Text("FOUNDER POV")
-                .font(.system(size: 6, weight: .bold, design: .monospaced))
-                .tracking(0.8)
-                .foregroundStyle(gold)
-            Spacer()
-            Text(game.isEmpty ? "LIVE POV" : game.uppercased())
-                .font(.system(size: 7, weight: .bold, design: .monospaced))
-                .foregroundStyle(gold)
-                .lineLimit(1)
-            Text(mission.isEmpty ? "BIRDIE & BREAKFAST" : mission.uppercased())
-                .font(.system(size: 9, weight: .black))
-                .foregroundStyle(.white)
-                .lineLimit(2)
-            Spacer()
-            Text("@BIRDIEANDBREAKFAST")
-                .font(.system(size: 5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.72))
-                .lineLimit(1)
-        }
-        .padding(8)
-        .background(Color(red: 0.01, green: 0.13, blue: 0.09).opacity(0.88), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(gold.opacity(0.55), lineWidth: 1))
-    }
-
-    private var rightPanel: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 4) {
-                Circle()
-                    .fill(isLive ? Color.red : green)
-                    .frame(width: 6, height: 6)
-                Text(isLive ? "LIVE" : "PREVIEW")
-                    .font(.system(size: 7, weight: .black, design: .monospaced))
-            }
-            .foregroundStyle(.white)
-            Text("00:00:00")
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundStyle(gold)
-            Spacer()
-            Text("META GLASSES")
-                .font(.system(size: 6, weight: .bold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.68))
-            Text("VERTICAL POV")
-                .font(.system(size: 9, weight: .black))
-                .foregroundStyle(.white)
-            Text("1080P · 6 MBPS")
-                .font(.system(size: 7, weight: .bold, design: .monospaced))
-                .foregroundStyle(gold)
-            Spacer()
-            Text("UNCROPPED POV\nTWITCH 16:9 CANVAS")
-                .font(.system(size: 5, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.72))
-        }
-        .padding(8)
-        .background(Color(red: 0.01, green: 0.13, blue: 0.09).opacity(0.88), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(gold.opacity(0.55), lineWidth: 1))
+    private var rail: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color.clear, green, gold, Color.clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 2)
     }
 }

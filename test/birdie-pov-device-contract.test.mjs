@@ -96,7 +96,7 @@ test("RTMP publishing and frame append errors are surfaced", () => {
   assert.doesNotMatch(broadcaster, /status = "LIVE on Twitch"/);
 });
 
-test("Twitch video output uses the approved landscape Full HD profile", () => {
+test("Twitch video output uses the approved portrait Full HD profile", () => {
   const settingsStart = broadcaster.indexOf("VideoCodecSettings(");
   const settingsEnd = broadcaster.indexOf(
     "stream.setVideoSettings",
@@ -108,7 +108,7 @@ test("Twitch video output uses the approved landscape Full HD profile", () => {
   const settings = broadcaster.slice(settingsStart, settingsEnd);
   assert.match(
     settings,
-    /videoSize:\s*\.init\(\s*width:\s*1920,\s*height:\s*1080\s*\)/s
+    /videoSize:\s*\.init\(\s*width:\s*1080,\s*height:\s*1920\s*\)/s
   );
   assert.match(settings, /bitRate:\s*6_000_000\b/);
   assert.match(
@@ -121,7 +121,7 @@ test("Twitch video output uses the approved landscape Full HD profile", () => {
   assert.doesNotMatch(settings, /width:\s*720|height:\s*1280/);
   assert.doesNotMatch(
     settings,
-    /videoSize:\s*\.init\(\s*width:\s*1080,\s*height:\s*1920\s*\)/s
+    /videoSize:\s*\.init\(\s*width:\s*1920,\s*height:\s*1080\s*\)/s
   );
   assert.doesNotMatch(settings, /bitRate:\s*2_500_000\b/);
   assert.doesNotMatch(settings, /kVTProfileLevel_H264_High_3_1/);
@@ -140,14 +140,12 @@ test("Birdie HUD is natively composited into the outgoing frame and defaults on"
     birdiePOVSources,
     /func\s+composite\(\s*_\s+\w+:\s*CMSampleBuffer,\s*descriptor:\s*BirdieHUDDescriptor,\s*elapsed:\s*TimeInterval\s*\)\s*async\s*->\s*CMSampleBuffer\?/s
   );
-  assert.match(compositor, /outputWidth\s*=\s*1_920\b/);
-  assert.match(compositor, /outputHeight\s*=\s*1_080\b/);
-  assert.match(compositor, /portraitBounds\s*=\s*CGRect\(/);
-  assert.match(compositor, /CIGaussianBlur/);
-  assert.match(view, /aspectRatio\(16\.0\s*\/\s*9\.0/);
+  assert.match(compositor, /outputWidth\s*=\s*1_080\b/);
+  assert.match(compositor, /outputHeight\s*=\s*1_920\b/);
+  assert.match(view, /aspectRatio\(9\.0\s*\/\s*16\.0/);
   assert.match(
     view,
-    /Label\("1920 × 1080",\s*systemImage:\s*"rectangle"\)/
+    /Label\("1080 × 1920",\s*systemImage:\s*"rectangle\.portrait"\)/
   );
 
   assert.match(

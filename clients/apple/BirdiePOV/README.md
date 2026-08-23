@@ -10,7 +10,7 @@ Prototype iOS broadcaster for **Ray-Ban Meta → iPhone → Twitch**.
 - `DeviceSession` + `Camera` lifecycle
 - 720×1280 RAW glasses-camera frames at 24 fps
 - live on-device preview
-- Twitch-native Full HD (1920×1080) H.264 RTMP output through HaishinKit 2.2.5
+- portrait Full HD (1080×1920) H.264 RTMP output through HaishinKit 2.2.5
 - 6,000,000 bps video bitrate with the H.264 High 4.1 profile
 - native frame-composited Birdie HUD that is burned into the outgoing video
 - an in-app **Birdie HUD** toggle that is on by default
@@ -62,7 +62,7 @@ Before testing Twitch, verify these layers independently:
 4. frames and the default-on Birdie HUD appear in the local preview
 5. the HUD toggle changes both the preview and the frame sent to Twitch
 6. Twitch RTMP connects
-7. Twitch receives a correctly oriented 1920×1080 canvas at the 6,000,000 bps target
+7. Twitch receives correctly oriented 1080×1920 video at the 6,000,000 bps target
 
 The app labels a successful RTMP publish call as **SENDING** rather than
 claiming the channel is live. Twitch reception must still be verified on the
@@ -71,14 +71,12 @@ channel before marking step 7 successful.
 ## Video and HUD contract
 
 The glasses still provide the highest available 9:16 RAW camera feed at 24 fps.
-Before publishing, Birdie POV places that portrait feed uncropped in the center
-of a 1920×1080 Twitch canvas. A softened, dark-green copy fills the background;
-green-and-gold information panels use the side space that Twitch otherwise shows
-as black bars. The stream is configured for 6,000,000 bps, H.264 High 4.1, and a
-two-second maximum keyframe interval. The HUD is part of the encoded frame rather
-than a SwiftUI-only overlay, so viewers receive it on Twitch. The in-app toggle
-starts enabled and controls only the text/panel overlay; the 16:9 canvas remains
-active so the portrait source never falls back to a pillarboxed Twitch stream.
+Before publishing, Birdie POV composites the Birdie HUD into each native video
+frame and sends a portrait Full HD 1080×1920 H.264 stream configured for
+6,000,000 bps, H.264 High 4.1, and a two-second maximum keyframe interval. The
+HUD is part of the encoded frame rather than a SwiftUI-only overlay, so viewers
+receive it on Twitch. The in-app toggle starts enabled and controls whether the
+compositor adds the HUD.
 
 The Twitch stream key exists only in the view's in-memory state for the current
 app process. Birdie POV does not write it to `UserDefaults`, Keychain, files, or

@@ -106,7 +106,7 @@ final class TwitchBroadcaster: ObservableObject {
         didReportCompositorFallback = false
         do {
             let settings = VideoCodecSettings(
-                videoSize: .init(width: 1920, height: 1080),
+                videoSize: .init(width: 1080, height: 1920),
                 bitRate: 6_000_000,
                 profileLevel: kVTProfileLevel_H264_High_4_1 as String,
                 scalingMode: .trim,
@@ -118,7 +118,7 @@ final class TwitchBroadcaster: ObservableObject {
             try await stream.publish(key)
             isLive = true
             liveStartedAt = Date()
-            status = "Publishing 1920 × 1080 at 6,000 kbit/s — verify Twitch reception"
+            status = "Publishing 1080 × 1920 at 6,000 kbit/s — verify Twitch reception"
         } catch {
             let publishError = error.localizedDescription
             isLive = false
@@ -181,7 +181,7 @@ final class TwitchBroadcaster: ObservableObject {
                     if descriptor.isEnabled, hasBurnedInHUD {
                         self.status = "Video + Birdie HUD publishing — verify Twitch reception"
                     } else if self.didReportCompositorFallback {
-                        self.status = "Video publishing without 16:9 layout — compositor fallback"
+                        self.status = "Video publishing without native HUD — compositor fallback"
                     } else {
                         self.status = "Video publishing — Birdie HUD is off"
                     }

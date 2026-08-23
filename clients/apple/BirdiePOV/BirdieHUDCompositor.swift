@@ -14,27 +14,18 @@ struct BirdieHUDDescriptor: Hashable, Sendable {
     let handle: String
 }
 
-/// Renders the portrait Meta glasses feed into a Twitch-native landscape frame.
-/// The POV stays uncropped in the center while a softened, brand-graded copy
-/// fills the 16:9 canvas behind the native Birdie HUD.
+/// Renders the Meta glasses feed and Birdie HUD into a portrait Full HD frame.
 /// Rendering is serialized off the caller's actor, while the Core Image
 /// context, pixel-buffer pool and once-per-second text overlay are reused.
 final class BirdieHUDCompositor: @unchecked Sendable {
-    static let outputWidth = 1_920
-    static let outputHeight = 1_080
+    static let outputWidth = 1_080
+    static let outputHeight = 1_920
 
     private static let outputSize = CGSize(
         width: CGFloat(outputWidth),
         height: CGFloat(outputHeight)
     )
     private static let outputBounds = CGRect(origin: .zero, size: outputSize)
-    private static let backgroundRenderBounds = CGRect(
-        x: 0,
-        y: 0,
-        width: outputWidth / 2,
-        height: outputHeight / 2
-    )
-    private static let portraitBounds = CGRect(x: 656, y: 0, width: 608, height: 1_080)
     private static let renderColorSpace = CGColorSpace(name: CGColorSpace.sRGB)
         ?? CGColorSpaceCreateDeviceRGB()
 
@@ -116,7 +107,7 @@ final class BirdieHUDCompositor: @unchecked Sendable {
             return nil
         }
 
-        var outputImage = landscapeComposition(sourceImage)
+        var outputImage = aspectFill(sourceImage, into: Self.outputBounds)
         if descriptor.isEnabled {
             guard let overlay = overlayImage(
                 descriptor: descriptor,
@@ -139,33 +130,6 @@ final class BirdieHUDCompositor: @unchecked Sendable {
             from: sampleBuffer,
             imageBuffer: outputPixelBuffer
         )
-    }
-
-    private func landscapeComposition(_ image: CIImage) -> CIImage {
-        let background = aspectFill(image, into: Self.backgroundRenderBounds)
-            .clampedToExtent()
-            .applyingFilter(
-                "CIGaussianBlur",
-                parameters: [kCIInputRadiusKey: 22]
-            )
-            .applyingFilter(
-                "CIColorControls",
-                parameters: [
-                    kCIInputSaturationKey: 0.72,
-                    kCIInputBrightnessKey: -0.19,
-                    kCIInputContrastKey: 0.96
-                ]
-            )
-            .cropped(to: Self.backgroundRenderBounds)
-            .transformed(by: CGAffineTransform(scaleX: 2, y: 2))
-            .cropped(to: Self.outputBounds)
-
-        let greenGrade = CIImage(
-            color: CIColor(red: 0.008, green: 0.105, blue: 0.070, alpha: 0.42)
-        ).cropped(to: Self.outputBounds)
-        let gradedBackground = greenGrade.composited(over: background)
-        let portraitPOV = aspectFill(image, into: Self.portraitBounds)
-        return portraitPOV.composited(over: gradedBackground)
     }
 
     private func aspectFill(_ image: CIImage, into bounds: CGRect) -> CIImage {
@@ -241,120 +205,93 @@ final class BirdieHUDCompositor: @unchecked Sendable {
                 color: UIColor.black.withAlphaComponent(0.42).cgColor
             )
             drawCard(
-                CGRect(x: 54, y: 54, width: 540, height: 972),
-                radius: 34,
+                CGRect(x: 42, y: 42, width: 996, height: 126),
+                radius: 30,
                 fill: deepGreen,
                 stroke: gold
             )
             drawCard(
-                CGRect(x: 1_326, y: 54, width: 540, height: 972),
+                CGRect(x: 42, y: 1_642, width: 996, height: 236),
                 radius: 34,
                 fill: deepGreen,
                 stroke: gold
             )
             context.restoreGState()
 
-            let outerFrame = UIBezierPath(
-                roundedRect: CGRect(x: 22, y: 22, width: 1_876, height: 1_036),
+            let frame = UIBezierPath(
+                roundedRect: CGRect(x: 22, y: 22, width: 1_036, height: 1_876),
                 cornerRadius: 42
             )
-            gold.withAlphaComponent(0.70).setStroke()
-            outerFrame.lineWidth = 3
-            outerFrame.stroke()
+            gold.withAlphaComponent(0.72).setStroke()
+            frame.lineWidth = 3
+            frame.stroke()
 
-            let povFrame = UIBezierPath(
-                roundedRect: CGRect(x: 640, y: 18, width: 640, height: 1_044),
-                cornerRadius: 26
-            )
-            gold.withAlphaComponent(0.86).setStroke()
-            povFrame.lineWidth = 4
-            povFrame.stroke()
-
-            gold.setFill()
-            UIBezierPath(
-                roundedRect: CGRect(x: 86, y: 90, width: 10, height: 118),
+            let accent = UIBezierPath(
+                roundedRect: CGRect(x: 42, y: 42, width: 10, height: 126),
                 cornerRadius: 5
-            ).fill()
+            )
+            gold.setFill()
+            accent.fill()
 
             drawText(
-                "BIRDIE & BREAKFAST",
-                in: CGRect(x: 126, y: 96, width: 420, height: 38),
-                font: .systemFont(ofSize: 29, weight: .black),
-                color: white,
-                letterSpacing: 1.5
-            )
-            drawText(
-                "FOUNDER POV",
-                in: CGRect(x: 126, y: 146, width: 360, height: 28),
-                font: .systemFont(ofSize: 19, weight: .bold),
+                "BIRDIE POV",
+                in: CGRect(x: 78, y: 66, width: 240, height: 28),
+                font: .systemFont(ofSize: 20, weight: .black),
                 color: gold,
-                letterSpacing: 3.0
+                letterSpacing: 2.2
             )
             drawText(
-                clipped(descriptor.game, limit: 32, fallback: "LIVE POV").uppercased(),
-                in: CGRect(x: 88, y: 510, width: 458, height: 30),
-                font: .systemFont(ofSize: 20, weight: .bold),
-                color: gold,
-                letterSpacing: 1.7
-            )
-            drawText(
-                clipped(descriptor.mission, limit: 58, fallback: "BIRDIE & BREAKFAST").uppercased(),
-                in: CGRect(x: 88, y: 558, width: 458, height: 110),
+                clipped(descriptor.title, limit: 48, fallback: "BIRDIE & BREAKFAST"),
+                in: CGRect(x: 78, y: 98, width: 610, height: 46),
                 font: .systemFont(ofSize: 34, weight: .semibold),
                 color: white
             )
             drawText(
                 clipped(descriptor.handle, limit: 36, fallback: ""),
-                in: CGRect(x: 88, y: 938, width: 458, height: 30),
-                font: .systemFont(ofSize: 20, weight: .medium),
-                color: secondary
+                in: CGRect(x: 690, y: 88, width: 310, height: 34),
+                font: .systemFont(ofSize: 21, weight: .medium),
+                color: secondary,
+                alignment: .right
             )
 
             drawCard(
-                CGRect(x: 1_374, y: 96, width: 180, height: 54),
-                radius: 27,
+                CGRect(x: 76, y: 1_676, width: 138, height: 46),
+                radius: 23,
                 fill: UIColor.black.withAlphaComponent(0.34),
                 stroke: gold
             )
             brightGreen.setFill()
-            UIBezierPath(ovalIn: CGRect(x: 1_398, y: 114, width: 16, height: 16)).fill()
+            UIBezierPath(ovalIn: CGRect(x: 94, y: 1_692, width: 14, height: 14)).fill()
             drawText(
                 "LIVE",
-                in: CGRect(x: 1_432, y: 107, width: 92, height: 34),
-                font: .systemFont(ofSize: 23, weight: .bold),
+                in: CGRect(x: 119, y: 1_683, width: 72, height: 30),
+                font: .systemFont(ofSize: 20, weight: .bold),
                 color: white,
-                letterSpacing: 1.6
+                letterSpacing: 1.3
             )
             drawText(
                 formatElapsed(elapsedSecond),
-                in: CGRect(x: 1_374, y: 188, width: 444, height: 58),
-                font: .monospacedDigitSystemFont(ofSize: 46, weight: .semibold),
-                color: gold
+                in: CGRect(x: 760, y: 1_681, width: 240, height: 35),
+                font: .monospacedDigitSystemFont(ofSize: 26, weight: .semibold),
+                color: gold,
+                alignment: .right
             )
             drawText(
-                "META GLASSES",
-                in: CGRect(x: 1_374, y: 486, width: 444, height: 32),
-                font: .systemFont(ofSize: 21, weight: .bold),
-                color: secondary,
-                letterSpacing: 2.1
+                clipped(descriptor.game, limit: 36, fallback: "LIVE POV").uppercased(),
+                in: CGRect(x: 76, y: 1_744, width: 904, height: 28),
+                font: .systemFont(ofSize: 20, weight: .bold),
+                color: gold,
+                letterSpacing: 1.8
             )
             drawText(
-                "VERTICAL POV",
-                in: CGRect(x: 1_374, y: 534, width: 444, height: 50),
-                font: .systemFont(ofSize: 34, weight: .black),
+                clipped(
+                    descriptor.mission,
+                    limit: 72,
+                    fallback: "BIRDIE & BREAKFAST — FOUNDER LIVE"
+                ).uppercased(),
+                in: CGRect(x: 76, y: 1_782, width: 904, height: 56),
+                font: .systemFont(ofSize: 30, weight: .semibold),
                 color: white
-            )
-            drawText(
-                "1080P  ·  6 MBPS",
-                in: CGRect(x: 1_374, y: 614, width: 444, height: 38),
-                font: .monospacedSystemFont(ofSize: 24, weight: .bold),
-                color: gold
-            )
-            drawText(
-                "UNCROPPED POV\nTWITCH 16:9 CANVAS",
-                in: CGRect(x: 1_374, y: 884, width: 444, height: 70),
-                font: .systemFont(ofSize: 21, weight: .semibold),
-                color: secondary
             )
 
             context.setStrokeColor(gold.cgColor)
@@ -373,10 +310,10 @@ final class BirdieHUDCompositor: @unchecked Sendable {
     }
 
     private static let cornerSegments: [(CGPoint, CGPoint, CGPoint)] = [
-        (CGPoint(x: 626, y: 46), CGPoint(x: 626, y: 112), CGPoint(x: 692, y: 46)),
-        (CGPoint(x: 1_294, y: 46), CGPoint(x: 1_294, y: 112), CGPoint(x: 1_228, y: 46)),
-        (CGPoint(x: 626, y: 1_034), CGPoint(x: 626, y: 968), CGPoint(x: 692, y: 1_034)),
-        (CGPoint(x: 1_294, y: 1_034), CGPoint(x: 1_294, y: 968), CGPoint(x: 1_228, y: 1_034))
+        (CGPoint(x: 38, y: 220), CGPoint(x: 38, y: 286), CGPoint(x: 104, y: 220)),
+        (CGPoint(x: 1_042, y: 220), CGPoint(x: 1_042, y: 286), CGPoint(x: 976, y: 220)),
+        (CGPoint(x: 38, y: 1_566), CGPoint(x: 38, y: 1_500), CGPoint(x: 104, y: 1_566)),
+        (CGPoint(x: 1_042, y: 1_566), CGPoint(x: 1_042, y: 1_500), CGPoint(x: 976, y: 1_566))
     ]
 
     private static func drawCard(
