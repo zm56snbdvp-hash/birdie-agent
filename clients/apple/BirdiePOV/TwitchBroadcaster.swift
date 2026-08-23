@@ -12,7 +12,22 @@ final class TwitchBroadcaster: ObservableObject {
 
     private let connection = RTMPConnection()
     private lazy var stream = RTMPStream(connection: connection)
+    private let hudCompositor = BirdieHUDCompositor()
+    private var hudDescriptor = BirdieHUDDescriptor(
+        isEnabled: true,
+        title: "BIRDIE & BREAKFAST",
+        game: "WORLD OF WARCRAFT",
+        mission: "TEE BUILDER // LIVE BUILD",
+        handle: "@BIRDIEANDBREAKFAST"
+    )
     private var hasAcceptedVideoFrame = false
+    private var isProcessingVideoFrame = false
+    private var liveStartedAt: Date?
+    private var didReportCompositorFallback = false
+
+    func updateHUD(_ descriptor: BirdieHUDDescriptor) {
+        hudDescriptor = descriptor
+    }
 
     /// Birdie POV audio policy:
     /// - Prefer the Ray-Ban Meta HFP microphone as input.
@@ -86,11 +101,14 @@ final class TwitchBroadcaster: ObservableObject {
 
         status = "Connecting to Twitch…"
         hasAcceptedVideoFrame = false
+        isProcessingVideoFrame = false
+        liveStartedAt = nil
+        didReportCompositorFallback = false
         do {
             let settings = VideoCodecSettings(
-                videoSize: .init(width: 720, height: 1280),
-                bitRate: 2_500_000,
-                profileLevel: kVTProfileLevel_H264_High_3_1 as String,
+                videoSize: .init(width: 1080, height: 1920),
+                bitRate: 6_000_000,
+                profileLevel: kVTProfileLevel_H264_High_4_1 as String,
                 scalingMode: .trim,
                 maxKeyFrameIntervalDuration: 2,
                 expectedFrameRate: 24
@@ -99,11 +117,14 @@ final class TwitchBroadcaster: ObservableObject {
             try await connection.connect("rtmp://live.twitch.tv/app")
             try await stream.publish(key)
             isLive = true
-            status = "Publishing to Twitch — verify channel reception"
+            liveStartedAt = Date()
+            status = "Publishing 1080 × 1920 at 6,000 kbit/s — verify Twitch reception"
         } catch {
             let publishError = error.localizedDescription
             isLive = false
             hasAcceptedVideoFrame = false
+            isProcessingVideoFrame = false
+            liveStartedAt = nil
             do {
                 try await connection.close()
                 status = "Twitch publish error: \(publishError)"
@@ -116,6 +137,8 @@ final class TwitchBroadcaster: ObservableObject {
     func stop() async {
         isLive = false
         hasAcceptedVideoFrame = false
+        isProcessingVideoFrame = false
+        liveStartedAt = nil
         do {
             try await connection.close()
             status = "Twitch disconnected"
@@ -126,12 +149,42 @@ final class TwitchBroadcaster: ObservableObject {
 
     nonisolated func appendVideo(_ sampleBuffer: CMSampleBuffer) {
         Task { @MainActor [weak self] in
-            guard let self, self.isLive else { return }
+            guard let self, self.isLive, !self.isProcessingVideoFrame else { return }
+            self.isProcessingVideoFrame = true
+            defer { self.isProcessingVideoFrame = false }
+
+            let descriptor = self.hudDescriptor
+            let elapsed = self.liveStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+            let outgoingBuffer: CMSampleBuffer
+            let hasBurnedInHUD: Bool
+
+            if let composited = await self.hudCompositor.composite(
+                   sampleBuffer,
+                   descriptor: descriptor,
+                   elapsed: elapsed
+               ) {
+                outgoingBuffer = composited
+                hasBurnedInHUD = descriptor.isEnabled
+            } else {
+                // Never sacrifice the camera feed because of a compositor failure.
+                // The broadcaster falls back to the original sample and makes the
+                // degraded state visible in-app on the first accepted frame.
+                outgoingBuffer = sampleBuffer
+                hasBurnedInHUD = false
+                self.didReportCompositorFallback = true
+            }
+
             do {
-                try await self.stream.append(sampleBuffer)
+                try await self.stream.append(outgoingBuffer)
                 if !self.hasAcceptedVideoFrame {
                     self.hasAcceptedVideoFrame = true
-                    self.status = "Video publishing — verify Twitch channel reception"
+                    if descriptor.isEnabled, hasBurnedInHUD {
+                        self.status = "Video + Birdie HUD publishing — verify Twitch reception"
+                    } else if self.didReportCompositorFallback {
+                        self.status = "Video publishing without native HUD — compositor fallback"
+                    } else {
+                        self.status = "Video publishing — Birdie HUD is off"
+                    }
                 }
             } catch {
                 await self.handleVideoAppendFailure(error)
@@ -143,6 +196,8 @@ final class TwitchBroadcaster: ObservableObject {
         let message = appendError.localizedDescription
         isLive = false
         hasAcceptedVideoFrame = false
+        isProcessingVideoFrame = false
+        liveStartedAt = nil
 
         do {
             try await connection.close()

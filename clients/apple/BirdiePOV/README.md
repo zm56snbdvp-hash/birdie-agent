@@ -8,10 +8,13 @@ Prototype iOS broadcaster for **Ray-Ban Meta → iPhone → Twitch**.
 - registration handoff through the Meta AI app
 - camera permission flow
 - `DeviceSession` + `Camera` lifecycle
-- 720×1280 RAW camera frames at 24 fps
+- 720×1280 RAW glasses-camera frames at 24 fps
 - live on-device preview
-- H.264 RTMP publishing through HaishinKit 2.2.5
-- Twitch stream key is runtime-only and is not persisted
+- portrait Full HD (1080×1920) H.264 RTMP output through HaishinKit 2.2.5
+- 6,000,000 bps video bitrate with the H.264 High 4.1 profile
+- native frame-composited Birdie HUD that is burned into the outgoing video
+- an in-app **Birdie HUD** toggle that is on by default
+- Twitch stream key is runtime-only and is never persisted
 
 Both Swift package requirements are exact pins in `clients/apple/project.yml`.
 XcodeGen also binds the Wi-Fi information and hotspot entitlements required by
@@ -45,7 +48,9 @@ or a commit.
 9. Tap **Connect Meta** and complete the Meta AI registration handoff.
 10. Tap **Start POV Camera** and grant camera access when Meta AI asks.
 11. Verify that the glasses preview is visible in Birdie POV.
-12. Enter a Twitch stream key and tap **Go Live on Twitch**.
+12. Leave **Birdie HUD** enabled for the first test and confirm the HUD appears in the preview.
+13. Enter a Twitch stream key and tap **Go Live on Twitch**.
+14. Confirm the same HUD is visible in Twitch, then switch the in-app toggle off and on to verify both paths.
 
 ## Validation order
 
@@ -54,13 +59,28 @@ Before testing Twitch, verify these layers independently:
 1. glasses registration succeeds
 2. a `DeviceSession` reaches `.started`
 3. the camera stream reaches `.streaming`
-4. frames appear in the local preview
-5. Twitch RTMP connects
-6. Twitch receives correctly oriented 720×1280 video
+4. frames and the default-on Birdie HUD appear in the local preview
+5. the HUD toggle changes both the preview and the frame sent to Twitch
+6. Twitch RTMP connects
+7. Twitch receives correctly oriented 1080×1920 video at the 6,000,000 bps target
 
 The app labels a successful RTMP publish call as **SENDING** rather than
 claiming the channel is live. Twitch reception must still be verified on the
-channel before marking step 6 successful.
+channel before marking step 7 successful.
+
+## Video and HUD contract
+
+The glasses still provide the highest available 9:16 RAW camera feed at 24 fps.
+Before publishing, Birdie POV composites the Birdie HUD into each native video
+frame and sends a portrait Full HD 1080×1920 H.264 stream configured for
+6,000,000 bps, H.264 High 4.1, and a two-second maximum keyframe interval. The
+HUD is part of the encoded frame rather than a SwiftUI-only overlay, so viewers
+receive it on Twitch. The in-app toggle starts enabled and controls whether the
+compositor adds the HUD.
+
+The Twitch stream key exists only in the view's in-memory state for the current
+app process. Birdie POV does not write it to `UserDefaults`, Keychain, files, or
+any other persistence layer.
 
 ## Audio
 

@@ -12,6 +12,15 @@ final class POVController: ObservableObject {
     @Published private(set) var currentFrame: UIImage?
     @Published private(set) var isGlassesStreaming = false
     @Published private(set) var isPreviewTransitioning = false
+    @Published var isHUDEnabled = true {
+        didSet { syncHUDDescriptor() }
+    }
+    @Published var hudGame = "WORLD OF WARCRAFT" {
+        didSet { syncHUDDescriptor() }
+    }
+    @Published var hudMission = "TEE BUILDER // LIVE BUILD" {
+        didSet { syncHUDDescriptor() }
+    }
     @Published var errorMessage: String?
 
     let twitch = TwitchBroadcaster()
@@ -21,6 +30,7 @@ final class POVController: ObservableObject {
     private var deviceSession: DeviceSession?
     private var camera: MWDATCamera.Camera?
 
+    private var twitchStateToken: AnyCancellable?
     private var registrationTask: Task<Void, Never>?
     private var sessionStateToken: AnyListenerToken?
     private var sessionErrorToken: AnyListenerToken?
@@ -32,6 +42,11 @@ final class POVController: ObservableObject {
     init() {
         registrationState = Wearables.shared.registrationState
         deviceSelector = AutoDeviceSelector(wearables: Wearables.shared)
+
+        twitchStateToken = twitch.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
+        syncHUDDescriptor()
 
         registrationTask = Task { [weak self] in
             guard let self else { return }
@@ -61,6 +76,20 @@ final class POVController: ObservableObject {
             return "Retry POV Camera"
         }
         return "Start POV Camera"
+    }
+
+    private var hudDescriptor: BirdieHUDDescriptor {
+        BirdieHUDDescriptor(
+            isEnabled: isHUDEnabled,
+            title: "BIRDIE & BREAKFAST",
+            game: hudGame.trimmingCharacters(in: .whitespacesAndNewlines),
+            mission: hudMission.trimmingCharacters(in: .whitespacesAndNewlines),
+            handle: "@BIRDIEANDBREAKFAST"
+        )
+    }
+
+    private func syncHUDDescriptor() {
+        twitch.updateHUD(hudDescriptor)
     }
 
     func connectGlasses() {
@@ -303,8 +332,8 @@ final class POVController: ObservableObject {
         streamFrameToken = stream.videoFramePublisher.listen { [weak self] frame in
             guard let self else { return }
 
-            // Feed the raw glasses frame into HaishinKit. HaishinKit performs
-            // the H.264 encoding required by Twitch RTMP.
+            // Burn the native HUD into the outgoing glasses frame before
+            // HaishinKit performs the H.264 encoding required by Twitch RTMP.
             self.twitch.appendVideo(frame.sampleBuffer)
 
             if let image = frame.makeUIImage() {

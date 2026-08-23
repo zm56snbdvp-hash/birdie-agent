@@ -43,7 +43,6 @@ struct POVView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: 24))
             } else {
                 VStack(spacing: 10) {
                     Image(systemName: "eyeglasses")
@@ -58,22 +57,16 @@ struct POVView: View {
                 }
             }
 
-            VStack {
-                HStack {
-                    if controller.twitch.isLive {
-                        Label("SENDING", systemImage: "circle.fill")
-                            .font(.caption.bold())
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .background(.ultraThinMaterial, in: Capsule())
-                    }
-                    Spacer()
-                }
-                Spacer()
+            if controller.isHUDEnabled {
+                BirdieHUDPreview(
+                    game: controller.hudGame,
+                    mission: controller.hudMission,
+                    isLive: controller.twitch.isLive
+                )
             }
-            .padding(14)
         }
         .aspectRatio(9.0 / 16.0, contentMode: .fit)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
     }
 
     private var statusCard: some View {
@@ -81,6 +74,7 @@ struct POVView: View {
             statusRow("Meta", controller.registrationText)
             statusRow("Camera", controller.cameraStatus)
             statusRow("Twitch", controller.twitch.status)
+            statusRow("HUD", controller.isHUDEnabled ? "Burned into stream" : "Off")
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -90,15 +84,10 @@ struct POVView: View {
     private var metaControls: some View {
         VStack(spacing: 12) {
             HStack {
-                Button("Connect Meta") {
-                    controller.connectGlasses()
-                }
-                .buttonStyle(.borderedProminent)
-
-                Button("Disconnect") {
-                    controller.disconnectGlasses()
-                }
-                .buttonStyle(.bordered)
+                Button("Connect Meta") { controller.connectGlasses() }
+                    .buttonStyle(.borderedProminent)
+                Button("Disconnect") { controller.disconnectGlasses() }
+                    .buttonStyle(.bordered)
             }
 
             Button(controller.previewButtonTitle) {
@@ -115,6 +104,32 @@ struct POVView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Twitch")
                 .font(.headline)
+
+            Toggle("Burn Birdie HUD into stream", isOn: $controller.isHUDEnabled)
+                .tint(Color(red: 0.20, green: 0.78, blue: 0.48))
+
+            if controller.isHUDEnabled {
+                VStack(spacing: 10) {
+                    TextField("Game", text: $controller.hudGame)
+                    TextField("Mission / format", text: $controller.hudMission)
+                }
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .padding(12)
+                .background(Color.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 12))
+
+                HStack {
+                    Label("1080 × 1920", systemImage: "rectangle.portrait")
+                    Spacer()
+                    Label("6,000 kbit/s", systemImage: "waveform.path.ecg")
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color(red: 0.86, green: 0.72, blue: 0.31))
+
+                Text("The preview mirrors the layout. The native compositor burns it into every outgoing RTMP video frame.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
 
             HStack {
                 Group {
@@ -170,5 +185,120 @@ struct POVView: View {
             Spacer()
         }
         .font(.subheadline)
+    }
+}
+
+private struct BirdieHUDPreview: View {
+    let game: String
+    let mission: String
+    let isLive: Bool
+
+    private let green = Color(red: 0.16, green: 0.75, blue: 0.45)
+    private let gold = Color(red: 0.87, green: 0.71, blue: 0.28)
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(
+                    LinearGradient(
+                        colors: [green.opacity(0.9), gold.opacity(0.8), green.opacity(0.55)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.5
+                )
+
+            HStack {
+                rail
+                Spacer()
+                rail
+            }
+            .padding(.vertical, 76)
+            .padding(.horizontal, 7)
+
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("BIRDIE & BREAKFAST")
+                            .font(.caption2.weight(.black))
+                            .tracking(1.2)
+                            .foregroundStyle(.white)
+                        Text("FOUNDER POV")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .tracking(1.4)
+                            .foregroundStyle(gold)
+                    }
+
+                    Spacer(minLength: 4)
+
+                    HStack(spacing: 5) {
+                        Circle()
+                            .fill(isLive ? Color.red : gold)
+                            .frame(width: 6, height: 6)
+                        Text(isLive ? "LIVE" : "HUD PREVIEW")
+                            .font(.system(size: 8, weight: .black, design: .monospaced))
+                            .tracking(0.8)
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(Color.black.opacity(0.72), in: Capsule())
+                }
+                .padding(12)
+                .background(
+                    LinearGradient(
+                        colors: [Color.black.opacity(0.86), Color.black.opacity(0.38)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    in: RoundedRectangle(cornerRadius: 16)
+                )
+
+                Spacer()
+
+                HStack(alignment: .bottom, spacing: 10) {
+                    Rectangle()
+                        .fill(gold)
+                        .frame(width: 3, height: 40)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(game.isEmpty ? "LIVE POV" : game.uppercased())
+                            .font(.system(size: 10, weight: .black, design: .rounded))
+                            .lineLimit(1)
+                        Text(mission.isEmpty ? "BIRDIE & BREAKFAST" : mission.uppercased())
+                            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(green)
+                            .lineLimit(1)
+                    }
+
+                    Spacer(minLength: 2)
+
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text("1080P · 6K")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundStyle(gold)
+                        Text("@BIRDIEANDBREAKFAST")
+                            .font(.system(size: 7, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(.white.opacity(0.8))
+                    }
+                }
+                .padding(12)
+                .foregroundStyle(.white)
+                .background(Color.black.opacity(0.82), in: RoundedRectangle(cornerRadius: 16))
+            }
+            .padding(10)
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var rail: some View {
+        Capsule()
+            .fill(
+                LinearGradient(
+                    colors: [Color.clear, green, gold, Color.clear],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(width: 2)
     }
 }
