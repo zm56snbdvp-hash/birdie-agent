@@ -1,0 +1,3 @@
+// Copy to Meta.local.xcconfig and replace locally. Never commit the copied file.
+BIRDIE_META_APP_ID = YOUR_META_APP_ID
+BIRDIE_META_CLIENT_TOKEN = YOUR_META_CLIENT_TOKEN
