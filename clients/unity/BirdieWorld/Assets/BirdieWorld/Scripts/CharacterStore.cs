@@ -9,13 +9,26 @@ namespace BirdieWorld
         public CharacterProfile LoadOrCreate()
         {
             var raw = PlayerPrefs.GetString(PlayerPrefsKey, string.Empty);
-            var existing = CharacterProfile.FromJson(raw);
-            return existing ?? CharacterProfile.CreateDefault();
+            try
+            {
+                var existing = CharacterProfile.FromJson(raw);
+                return existing ?? CharacterProfile.CreateDefault();
+            }
+            catch (System.Exception)
+            {
+                Clear();
+                return CharacterProfile.CreateDefault();
+            }
         }
 
         public void Save(CharacterProfile profile)
         {
             profile.Touch();
+            Persist(profile);
+        }
+
+        private static void Persist(CharacterProfile profile)
+        {
             PlayerPrefs.SetString(PlayerPrefsKey, profile.ToJson());
             PlayerPrefs.Save();
         }

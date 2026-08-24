@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07130f">
+  <title>{{{ PRODUCT_NAME }}}</title>
+  <style>
+    :root { color-scheme: dark; background: #07130f; }
+    * { box-sizing: border-box; }
+    html, body, #birdieworld { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body { background: radial-gradient(circle at 50% 30%, #123525, #07130f 62%); }
+    #unity-canvas { width: 100%; height: 100%; display: block; background: #07130f; }
+    #loading {
+      position: fixed; inset: 0; display: grid; place-content: center; gap: 16px;
+      color: #efe7d4; font: 600 14px/1.4 system-ui, sans-serif; letter-spacing: .16em;
+      text-align: center; background: #07130f; transition: opacity .35s ease;
+    }
+    #loading strong { color: #d39b40; font-size: 20px; }
+    #progress { width: min(340px, 72vw); height: 3px; background: #17392b; overflow: hidden; }
+    #progress > span { display: block; width: 0; height: 100%; background: #d39b40; transition: width .12s linear; }
+    #loading.ready { opacity: 0; pointer-events: none; }
+    #loading.error { color: #ffcfbd; letter-spacing: normal; }
+  </style>
+</head>
+<body>
+  <main id="birdieworld">
+    <canvas id="unity-canvas" tabindex="-1" aria-label="BirdieWorld"></canvas>
+    <div id="loading" role="status" aria-live="polite">
+      <strong>BIRDIEWORLD</strong>
+      <span id="loading-label">DER BIRDIE EXPRESS WIRD VORBEREITET</span>
+      <span id="progress" aria-hidden="true"><span></span></span>
+    </div>
+  </main>
+  <script>
+    (() => {
+      "use strict";
+      const buildUrl = "Build";
+      const loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      const canvas = document.querySelector("#unity-canvas");
+      const loading = document.querySelector("#loading");
+      const loadingLabel = document.querySelector("#loading-label");
+      const progress = document.querySelector("#progress > span");
+      const config = {
+        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
+        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "{{{ COMPANY_NAME }}}",
+        productName: "{{{ PRODUCT_NAME }}}",
+        productVersion: "{{{ PRODUCT_VERSION }}}"
+      };
+
+      let unityInstance = null;
+      let pendingSession = null;
+      let sessionRevision = 0;
+      const birdieIdClaim = "https://birdieandbreakfast.de/birdie_id";
+      const birdieIdPattern = /^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$/;
+
+      function jwtAccountIdentity(bearerToken) {
+        try {
+          const parts = bearerToken.split(".");
+          if (parts.length !== 3) return null;
+          const encoded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+          const padded = encoded + "=".repeat((4 - encoded.length % 4) % 4);
+          const bytes = Uint8Array.from(atob(padded), (character) => character.charCodeAt(0));
+          const payload = JSON.parse(new TextDecoder().decode(bytes));
+          const subject = typeof payload.sub === "string" ? payload.sub : "";
+          const birdieId = typeof payload[birdieIdClaim] === "string" ? payload[birdieIdClaim] : "";
+          const issuer = typeof payload.iss === "string" ? new URL(payload.iss) : null;
+          if (
+            subject.length < 3 ||
+            subject.length > 512 ||
+            /[\u0000-\u001f\u007f]/.test(subject) ||
+            !birdieIdPattern.test(birdieId) ||
+            !issuer ||
+            issuer.protocol !== "https:" ||
+            issuer.username ||
+            issuer.password ||
+            issuer.search ||
+            issuer.hash
+          ) return null;
+          return JSON.stringify([issuer.toString(), subject, birdieId]);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function accountSessionKey(bearerToken) {
+        try {
+          const identity = jwtAccountIdentity(bearerToken);
+          if (!identity || !window.crypto || !window.crypto.subtle) return null;
+          const digest = await window.crypto.subtle.digest("SHA-256", new TextEncoder().encode(identity));
+          return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+        } catch (_) {
+          return null;
+        }
+      }
+
+      async function normalizedSession(value) {
+        if (!value || typeof value !== "object") return null;
+        if (typeof value.bearerToken !== "string" || value.bearerToken.length < 16) return null;
+        const sessionKey = await accountSessionKey(value.bearerToken);
+        if (!sessionKey) return null;
+        return {
+          apiBaseUrl: typeof value.apiBaseUrl === "string" ? value.apiBaseUrl : "",
+          bearerToken: value.bearerToken,
+          sessionKey
+        };
+      }
+
+      function rejectSessionUpdate() {
+        pendingSession = null;
+        if (unityInstance) {
+          unityInstance.SendMessage("BirdieWorld Auth Session", "ApplyJson", "{}");
+        }
+      }
+
+      async function applySession(value) {
+        const revision = ++sessionRevision;
+        const session = await normalizedSession(value);
+        if (revision !== sessionRevision) return;
+        if (!session) {
+          rejectSessionUpdate();
+          return;
+        }
+        if (!unityInstance) {
+          pendingSession = session;
+          return;
+        }
+        unityInstance.SendMessage(
+          "BirdieWorld Auth Session",
+          "ApplyJson",
+          JSON.stringify(session)
+        );
+        pendingSession = null;
+      }
+
+      function clearSession() {
+        sessionRevision++;
+        pendingSession = null;
+        if (unityInstance) unityInstance.SendMessage("BirdieWorld Auth Session", "Clear");
+      }
+
+      window.addEventListener("birdieworld:session", (event) => applySession(event.detail));
+      window.addEventListener("birdieworld:session-clear", clearSession);
+      window.addEventListener("message", (event) => {
+        if (event.origin !== window.location.origin || !event.data) return;
+        if (event.data.type === "birdieworld:session") applySession(event.data.session);
+        if (event.data.type === "birdieworld:session-clear") clearSession();
+      });
+
+      const script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (value) => {
+          progress.style.width = `${Math.round(value * 100)}%`;
+        }).then((instance) => {
+          unityInstance = instance;
+          if (pendingSession) void applySession(pendingSession);
+          loading.classList.add("ready");
+          window.dispatchEvent(new CustomEvent("birdieworld:ready"));
+        }).catch(() => {
+          loading.classList.add("error");
+          loadingLabel.textContent = "BIRDIEWORLD KONNTE NICHT GELADEN WERDEN";
+        });
+      };
+      script.onerror = () => {
+        loading.classList.add("error");
+        loadingLabel.textContent = "DER BIRDIE EXPRESS IST GERADE NICHT ERREICHBAR";
+      };
+      document.body.appendChild(script);
+    })();
+  </script>
+</body>
+</html>

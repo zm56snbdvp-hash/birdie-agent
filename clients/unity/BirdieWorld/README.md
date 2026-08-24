@@ -1,6 +1,6 @@
 # BirdieWorld Unity Beta
 
-First public vertical slice for BirdieWorld.
+Current private-review vertical slice for BirdieWorld.
 
 ## Product lock
 
@@ -34,7 +34,7 @@ Current fields:
 - color
 - createdAt / updatedAt
 
-The current scaffold persists locally with Unity `PlayerPrefs`, which maps to browser-local persistence in Web builds. Server-authoritative persistence is the next gate before a broad public beta.
+Signed-out drafts use local `PlayerPrefs`. Once the authenticated web shell supplies an in-memory Birdie session, the profile is isolated to that account and synchronizes through the account-scoped endpoint; account-bound state is never reused as another account's local fallback. BirdieOS is authoritative for authenticated accounts.
 
 ## Unity
 
@@ -52,6 +52,14 @@ or build WebGL directly:
 
 `BirdieWorld -> Build WebGL Beta`
 
+On the Acer/Windows machine, close the Unity Editor and run from PowerShell:
+
+```powershell
+.\build-webgl.ps1
+```
+
+The script pins Unity `6000.0.76f1`, fails on the wrong project version, verifies the generated WebGL entrypoint and confirms that the in-memory auth bridge is present. It never deploys.
+
 The build is written to:
 
 `clients/unity/BirdieWorld/Builds/WebGL`
@@ -60,7 +68,7 @@ The WebGL build intentionally has Unity compression disabled for Beta 01 so it c
 
 ## Art implementation
 
-`BirdieWorldBetaBootstrap` currently establishes the exact layout/state flow without committing placeholder fantasy lore. The approved cinematic train artwork should be imported as the background/preview asset layer, followed by a proper 3D human avatar prefab.
+`BirdieWorldBetaBootstrap` now wires the cinematic opener, start menu, character form, authenticated persistence and completion screen without committing placeholder fantasy lore. The approved cinematic train artwork should be imported as the background/preview asset layer, followed by a proper 3D human avatar prefab.
 
 Target opener composition:
 
@@ -76,8 +84,8 @@ Target creation composition:
 - character shown inside the Birdie Express
 - three-step progress: Charakter / Anpassen / Bestätigen
 - name, story, look, color
-- later: real-time avatar parts and account-backed save
+- account-backed save is wired; later: real-time avatar parts
 
-## Public beta deployment gate
+## Private review and later public-beta gate
 
-Before calling this a durable public beta, replace browser-only persistence with the authenticated BirdieWorld character endpoint so a player keeps the same Birdie across browsers/devices. The existing BirdieWorld backend already scopes users by authenticated `birdieId`; the character endpoint should inherit that identity rather than accept a client-supplied Birdie ID.
+The source is not externally invite-ready until a current Unity WebGL build passes Acer and iPhone review, the authenticated shell injects the session in memory, BirdieOS dispatches the character actions, create → save → reload returns the same server-owned `characterId`, and the exact Founder production confirmation plus fresh project/artifact-bound invite-only receipt are present. The client never accepts or sends a caller-supplied Birdie identity.

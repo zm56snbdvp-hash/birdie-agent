@@ -25,6 +25,7 @@ namespace BirdieWorld.Editor
             );
             PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
             PlayerSettings.WebGL.decompressionFallback = true;
+            PlayerSettings.WebGL.template = "PROJECT:BirdieWorldBeta";
 
             Directory.CreateDirectory(OutputPath);
             var options = new BuildPlayerOptions

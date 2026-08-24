@@ -1,45 +1,79 @@
-name: BirdieWorld WebGL Deploy
+name: BirdieWorld WebGL Build and Controlled Release
 
 on:
   workflow_dispatch:
+    inputs:
+      release_mode:
+        description: Build a review artifact or release a previously accepted artifact
+        required: true
+        default: build-only
+        type: choice
+        options:
+          - build-only
+          - production
+      production_confirmation:
+        description: Exact Founder confirmation required only for production
+        required: false
+        type: string
+      accepted_run_id:
+        description: Successful build-only workflow run containing the reviewed artifact
+        required: false
+        type: string
+      accepted_sha:
+        description: Exact reviewed 40-character source commit
+        required: false
+        type: string
+      accepted_manifest_sha256:
+        description: Exact reviewed SHA-256 of birdieworld-files.sha256
+        required: false
+        type: string
+      invite_gate_checked_at:
+        description: UTC timestamp of the live invite-only protection check (production only)
+        required: false
+        type: string
+      invite_gate_receipt:
+        description: Project- and artifact-bound HMAC receipt for that protection check
+        required: false
+        type: string
 
 concurrency:
-  group: birdieworld-webgl-production
-  cancel-in-progress: true
+  group: birdieworld-webgl-${{ inputs.release_mode }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
 
 jobs:
-  build-and-deploy:
+  build-review-artifact:
+    name: build-review-artifact
+    if: inputs.release_mode == 'build-only'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
-      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
       - name: Require Unity CI credentials
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         run: |
           test -n "$UNITY_LICENSE" || { echo 'UNITY_LICENSE is not configured'; exit 2; }
           test -n "$UNITY_EMAIL" || { echo 'UNITY_EMAIL is not configured'; exit 2; }
           test -n "$UNITY_PASSWORD" || { echo 'UNITY_PASSWORD is not configured'; exit 2; }
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - name: Cache Unity Library
-        uses: actions/cache@v4
-        with:
-          path: clients/unity/BirdieWorld/Library
-          key: birdieworld-library-${{ runner.os }}-webgl-${{ hashFiles('clients/unity/BirdieWorld/Packages/manifest.json', 'clients/unity/BirdieWorld/ProjectSettings/ProjectVersion.txt') }}
-          restore-keys: |
-            birdieworld-library-${{ runner.os }}-webgl-
+      - name: Verify clean source checkout
+        run: |
+          test "$(git rev-parse --verify HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
 
       - name: Build BirdieWorld WebGL
-        uses: game-ci/unity-builder@v5
+        uses: game-ci/unity-builder@d829bfc901f2347c8fe18898f06712b66916ef42 # v5.0.0
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           projectPath: clients/unity/BirdieWorld
           unityVersion: 6000.0.76f1
@@ -47,8 +81,17 @@ jobs:
           buildMethod: BirdieWorld.Editor.BirdieWorldWebBuild.BuildWebGL
           buildsPath: clients/unity/BirdieWorld/Builds
 
-      - name: Verify WebGL output
-        run: test -f clients/unity/BirdieWorld/Builds/WebGL/index.html
+      - name: Verify WebGL output and unchanged tracked source
+        run: |
+          test -f clients/unity/BirdieWorld/Builds/WebGL/index.html
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+      - name: Record build provenance
+        working-directory: clients/unity/BirdieWorld/Builds/WebGL
+        run: |
+          BUILD_AT="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          printf '{\n  "sourceSha": "%s",\n  "sourceDirty": false,\n  "unityVersion": "6000.0.76f1",\n  "builtAt": "%s",\n  "githubRunId": "%s"\n}\n' \
+            "$GITHUB_SHA" "$BUILD_AT" "$GITHUB_RUN_ID" > birdieworld-build.json
 
       - name: Add Vercel headers
         run: |
@@ -69,23 +112,281 @@ jobs:
           }
           JSON
 
-      - name: Upload WebGL artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: birdieworld-webgl
-          path: clients/unity/BirdieWorld/Builds/WebGL
-          if-no-files-found: error
-
-      - name: Deploy production to Vercel
-        if: env.VERCEL_TOKEN != '' && env.VERCEL_ORG_ID != '' && env.VERCEL_PROJECT_ID != ''
+      - name: Seal review artifact
+        id: seal
         working-directory: clients/unity/BirdieWorld/Builds/WebGL
         run: |
-          mkdir -p .vercel
-          printf '{"orgId":"%s","projectId":"%s"}\n' "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID" > .vercel/project.json
-          npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
+          find . -type f ! -path './birdieworld-files.sha256' -print0 \
+            | LC_ALL=C sort -z \
+            | xargs -0 sha256sum > birdieworld-files.sha256
+          MANIFEST_SHA256="$(sha256sum birdieworld-files.sha256 | cut -d' ' -f1)"
+          echo "manifest_sha256=$MANIFEST_SHA256" >> "$GITHUB_OUTPUT"
+          {
+            echo '### BirdieWorld review artifact'
+            echo "- Run ID: \`$GITHUB_RUN_ID\`"
+            echo "- Source SHA: \`$GITHUB_SHA\`"
+            echo "- Manifest SHA-256: \`$MANIFEST_SHA256\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Explain missing Vercel secrets
-        if: env.VERCEL_TOKEN == '' || env.VERCEL_ORG_ID == '' || env.VERCEL_PROJECT_ID == ''
+      - name: Upload immutable WebGL artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: birdieworld-webgl-${{ github.sha }}
+          path: clients/unity/BirdieWorld/Builds/WebGL
+          if-no-files-found: error
+          retention-days: 14
+
+  release-accepted-artifact:
+    name: release-accepted-artifact
+    if: inputs.release_mode == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: birdieworld-production
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Validate immutable release inputs
+        env:
+          PRODUCTION_CONFIRMATION_INPUT: ${{ inputs.production_confirmation }}
+          ACCEPTED_RUN_ID: ${{ inputs.accepted_run_id }}
+          ACCEPTED_SHA: ${{ inputs.accepted_sha }}
+          ACCEPTED_MANIFEST_SHA256: ${{ inputs.accepted_manifest_sha256 }}
         run: |
-          echo 'WebGL build succeeded, but production deploy was skipped.'
-          echo 'Add VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID as GitHub Actions secrets.'
+          test "$GITHUB_REF" = 'refs/heads/main' || {
+            echo 'Production release blocked: dispatch must run from main.'
+            exit 4
+          }
+          test "$PRODUCTION_CONFIRMATION_INPUT" = 'GO_BIRDIEWORLD_CHARACTER_BETA_01' || {
+            echo 'Production release blocked: exact Founder confirmation is missing.'
+            exit 5
+          }
+          [[ "$ACCEPTED_RUN_ID" =~ ^[1-9][0-9]{0,18}$ ]] || {
+            echo 'Production release blocked: accepted build run ID is invalid.'
+            exit 6
+          }
+          [[ "$ACCEPTED_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo 'Production release blocked: accepted source SHA is invalid.'
+            exit 7
+          }
+          [[ "$ACCEPTED_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]] || {
+            echo 'Production release blocked: accepted manifest digest is invalid.'
+            exit 8
+          }
+
+      - name: Verify protected production environment
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          FOUNDER_REVIEWER_LOGIN: ${{ vars.BIRDIEWORLD_FOUNDER_REVIEWER_LOGIN }}
+        run: |
+          curl --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/birdieworld-production" \
+            > "$RUNNER_TEMP/birdieworld-environment.json"
+          curl --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/environments/birdieworld-production/deployment-branch-policies?per_page=100" \
+            > "$RUNNER_TEMP/birdieworld-branch-policies.json"
+          node - "$RUNNER_TEMP/birdieworld-environment.json" "$RUNNER_TEMP/birdieworld-branch-policies.json" "$FOUNDER_REVIEWER_LOGIN" <<'NODE'
+          const fs = require('node:fs');
+          const environment = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const branchPoliciesResponse = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
+          const founderLogin = String(process.argv[4] || '').trim().toLowerCase();
+          const rule = (environment.protection_rules || []).find((item) => item.type === 'required_reviewers');
+          const branchPolicy = environment.deployment_branch_policy;
+          const branchPolicies = branchPoliciesResponse.branch_policies || [];
+          const founderIsSoleReviewer = /^[a-z0-9](?:[a-z0-9-]{0,37}[a-z0-9])?$/.test(founderLogin) &&
+            Array.isArray(rule?.reviewers) &&
+            rule.reviewers.length === 1 &&
+            rule.reviewers.some(({ type, reviewer }) => type === 'User' && String(reviewer?.login || '').toLowerCase() === founderLogin);
+          const branchPolicyIsMainOnly = branchPolicy?.protected_branches === false &&
+            branchPolicy.custom_branch_policies === true &&
+            branchPoliciesResponse.total_count === 1 &&
+            branchPolicies.length === 1 &&
+            branchPolicies[0].name === 'main' &&
+            branchPolicies[0].type === 'branch';
+          if (
+            !rule ||
+            rule.prevent_self_review !== true ||
+            !founderIsSoleReviewer ||
+            environment.can_admins_bypass !== false ||
+            !branchPolicyIsMainOnly
+          ) {
+            console.error('Production release blocked: environment must name the configured Founder reviewer, prevent self-review and admin bypass, and allow only the main branch.');
+            process.exit(9);
+          }
+          NODE
+
+      - name: Verify accepted build run
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ACCEPTED_RUN_ID: ${{ inputs.accepted_run_id }}
+          ACCEPTED_SHA: ${{ inputs.accepted_sha }}
+        run: |
+          curl --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$ACCEPTED_RUN_ID" \
+            > "$RUNNER_TEMP/birdieworld-build-run.json"
+          curl --fail --silent --show-error \
+            -H 'Accept: application/vnd.github+json' \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$ACCEPTED_RUN_ID/jobs?filter=latest&per_page=100" \
+            > "$RUNNER_TEMP/birdieworld-build-jobs.json"
+          node - "$RUNNER_TEMP/birdieworld-build-run.json" "$RUNNER_TEMP/birdieworld-build-jobs.json" "$ACCEPTED_SHA" <<'NODE'
+          const fs = require('node:fs');
+          const run = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+          const jobs = JSON.parse(fs.readFileSync(process.argv[3], 'utf8')).jobs || [];
+          const acceptedSha = process.argv[4];
+          const buildJobs = jobs.filter((job) => job.name === 'build-review-artifact');
+          const releaseJobs = jobs.filter((job) => job.name === 'release-accepted-artifact');
+          if (
+            run.event !== 'workflow_dispatch' ||
+            run.conclusion !== 'success' ||
+            run.head_branch !== 'main' ||
+            run.head_sha !== acceptedSha ||
+            run.path !== '.github/workflows/birdieworld-webgl-deploy.yml' ||
+            buildJobs.length !== 1 ||
+            buildJobs[0].conclusion !== 'success' ||
+            releaseJobs.some((job) => job.conclusion !== 'skipped')
+          ) {
+            console.error('Production release blocked: accepted run is not a successful build-only run of this workflow on main for the accepted SHA.');
+            process.exit(10);
+          }
+          NODE
+
+      - name: Download accepted immutable artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: birdieworld-webgl-${{ inputs.accepted_sha }}
+          path: accepted-webgl
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ inputs.accepted_run_id }}
+
+      - name: Verify accepted artifact contents
+        working-directory: accepted-webgl
+        env:
+          ACCEPTED_RUN_ID: ${{ inputs.accepted_run_id }}
+          ACCEPTED_SHA: ${{ inputs.accepted_sha }}
+          ACCEPTED_MANIFEST_SHA256: ${{ inputs.accepted_manifest_sha256 }}
+        run: |
+          test -f index.html
+          test -f birdieworld-build.json
+          test -f birdieworld-files.sha256
+          test -f vercel.json
+          test "$(sha256sum birdieworld-files.sha256 | cut -d' ' -f1)" = "$ACCEPTED_MANIFEST_SHA256"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const fail = (message) => {
+            console.error(`Production release blocked: ${message}`);
+            process.exit(11);
+          };
+          if (!fs.lstatSync('birdieworld-files.sha256').isFile()) fail('manifest is not a regular file.');
+          const lines = fs.readFileSync('birdieworld-files.sha256', 'utf8').trimEnd().split('\n');
+          const paths = new Set();
+          for (const line of lines) {
+            const match = line.match(/^[0-9a-f]{64}  (\.\/.+)$/);
+            const relativePath = match && match[1];
+            const parts = relativePath ? relativePath.slice(2).split('/') : [];
+            if (
+              !relativePath ||
+              parts.some((part) => !part || part === '.' || part === '..' || part.startsWith('.')) ||
+              paths.has(relativePath) ||
+              relativePath === './birdieworld-files.sha256'
+            ) fail('unsafe, hidden or duplicate manifest path.');
+            paths.add(relativePath);
+          }
+          const requiredPaths = ['./index.html', './birdieworld-build.json', './vercel.json'];
+          if (requiredPaths.some((requiredPath) => !paths.has(requiredPath))) fail('a required release file is not sealed by the manifest.');
+          const actualPaths = new Set();
+          const walk = (directory, prefix = '.') => {
+            for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+              const relativePath = `${prefix}/${entry.name}`;
+              if (entry.name.startsWith('.')) fail('artifact contains an unsealed hidden path.');
+              if (entry.isSymbolicLink()) fail('artifact contains a symbolic link.');
+              if (entry.isDirectory()) walk(path.join(directory, entry.name), relativePath);
+              else if (entry.isFile()) actualPaths.add(relativePath);
+              else fail('artifact contains a non-regular filesystem entry.');
+            }
+          };
+          walk('.');
+          actualPaths.delete('./birdieworld-files.sha256');
+          if (
+            actualPaths.size !== paths.size ||
+            [...actualPaths].some((relativePath) => !paths.has(relativePath))
+          ) fail('artifact contains missing or unmanifested files.');
+          NODE
+          sha256sum --strict -c birdieworld-files.sha256
+          node - "$ACCEPTED_SHA" "$ACCEPTED_RUN_ID" <<'NODE'
+          const fs = require('node:fs');
+          const provenance = JSON.parse(fs.readFileSync('birdieworld-build.json', 'utf8'));
+          if (provenance.sourceSha !== process.argv[2] || provenance.githubRunId !== process.argv[3] || provenance.sourceDirty !== false || provenance.unityVersion !== '6000.0.76f1') {
+            console.error('Production release blocked: artifact provenance does not match the accepted build.');
+            process.exit(12);
+          }
+          NODE
+          grep -q 'birdieworld:session' index.html
+          grep -q 'BirdieWorld Auth Session' index.html
+
+      - name: Verify fresh invite-only receipt
+        env:
+          INVITE_GATE_HMAC_KEY: ${{ secrets.BIRDIEWORLD_INVITE_GATE_HMAC_KEY }}
+          INVITE_GATE_CHECKED_AT: ${{ inputs.invite_gate_checked_at }}
+          INVITE_GATE_RECEIPT: ${{ inputs.invite_gate_receipt }}
+          ACCEPTED_MANIFEST_SHA256: ${{ inputs.accepted_manifest_sha256 }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          node <<'NODE'
+          const crypto = require('node:crypto');
+          const key = String(process.env.INVITE_GATE_HMAC_KEY || '');
+          const checkedAt = String(process.env.INVITE_GATE_CHECKED_AT || '');
+          const receipt = String(process.env.INVITE_GATE_RECEIPT || '');
+          const orgId = String(process.env.VERCEL_ORG_ID || '');
+          const projectId = String(process.env.VERCEL_PROJECT_ID || '');
+          const digest = String(process.env.ACCEPTED_MANIFEST_SHA256 || '');
+          const checkedAtMs = Date.parse(checkedAt);
+          const ageMs = Date.now() - checkedAtMs;
+          const payload = ['birdieworld-invite-v1', orgId, projectId, digest, checkedAt].join('\n');
+          const expected = crypto.createHmac('sha256', key).update(payload).digest('hex');
+          const receiptIsValid = /^[0-9a-f]{64}$/.test(receipt) &&
+            crypto.timingSafeEqual(Buffer.from(receipt, 'hex'), Buffer.from(expected, 'hex'));
+          if (
+            Buffer.byteLength(key, 'utf8') < 32 ||
+            !orgId ||
+            !projectId ||
+            !Number.isFinite(checkedAtMs) ||
+            checkedAt !== new Date(checkedAtMs).toISOString() ||
+            ageMs < 0 ||
+            ageMs > 30 * 60 * 1000 ||
+            !receiptIsValid
+          ) {
+            console.error('Production release blocked: invite-only receipt is missing, stale or does not bind this Vercel project and accepted artifact.');
+            process.exit(13);
+          }
+          NODE
+
+      - name: Deploy accepted artifact to Vercel production
+        working-directory: accepted-webgl
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          test -n "$VERCEL_TOKEN" && test -n "$VERCEL_ORG_ID" && test -n "$VERCEL_PROJECT_ID" || {
+            echo 'Production release blocked: Vercel environment binding is incomplete.'
+            exit 14
+          }
+          mkdir -p .vercel
+          node -e 'const fs=require("node:fs"); fs.writeFileSync(".vercel/project.json", JSON.stringify({orgId:process.argv[1], projectId:process.argv[2]}) + "\n")' \
+            "$VERCEL_ORG_ID" "$VERCEL_PROJECT_ID"
+          npx --yes vercel@59.5.0 deploy --prod --yes --token "$VERCEL_TOKEN"

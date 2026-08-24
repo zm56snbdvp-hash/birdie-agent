@@ -6,6 +6,7 @@ namespace BirdieWorld
 {
     public sealed class BirdieWorldCinematicOpener : MonoBehaviour
     {
+        private GameObject overlayRoot;
         private CanvasGroup group;
         private RectTransform train;
         private Text chapter;
@@ -14,7 +15,8 @@ namespace BirdieWorld
 
         public void Build(Transform parent, System.Action onBoard)
         {
-            var root = new GameObject("CinematicOpener", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+            overlayRoot = new GameObject("CinematicOpener", typeof(RectTransform), typeof(CanvasGroup), typeof(Image));
+            var root = overlayRoot;
             root.transform.SetParent(parent, false);
             var rt = (RectTransform)root.transform;
             rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = rt.offsetMax = Vector2.zero;
@@ -47,7 +49,20 @@ namespace BirdieWorld
         }
 
         private IEnumerator RoutePulse(){float t=0;while(!leaving){t+=Time.unscaledDeltaTime;float p=(Mathf.Sin(t*.8f)+1f)*.5f;train.anchorMin=new Vector2(Mathf.Lerp(.15f,.55f,p),Mathf.Lerp(.68f,.24f,p));train.anchorMax=train.anchorMin+new Vector2(.23f,.07f);altitude.text=p<.5f?"DESCENDING  •  VALLEY":"CLIMBING  •  THE NEST";yield return null;}}
-        private IEnumerator Leave(System.Action done){leaving=true;chapter.text="LENI HAT EINEN PLATZ FÜR DICH FREIGEHALTEN.";for(float t=0;t<1;t+=Time.unscaledDeltaTime/1.15f){group.alpha=1-t;yield return null;}gameObject.SetActive(false);done?.Invoke();}
+        private IEnumerator Leave(System.Action done)
+        {
+            leaving = true;
+            group.interactable = false;
+            chapter.text = "LENI HAT EINEN PLATZ FÜR DICH FREIGEHALTEN.";
+            for (float t = 0; t < 1; t += Time.unscaledDeltaTime / 1.15f)
+            {
+                group.alpha = 1 - t;
+                yield return null;
+            }
+            group.blocksRaycasts = false;
+            if (overlayRoot != null) overlayRoot.SetActive(false);
+            done?.Invoke();
+        }
         private Text MakeText(Transform p,string s,int size,Vector2 min,Vector2 max,Color c,TextAnchor a){var g=new GameObject("Text",typeof(RectTransform),typeof(Text));g.transform.SetParent(p,false);var r=(RectTransform)g.transform;r.anchorMin=min;r.anchorMax=max;r.offsetMin=r.offsetMax=Vector2.zero;var x=g.GetComponent<Text>();x.font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");x.text=s;x.fontSize=size;x.color=c;x.alignment=a;x.resizeTextForBestFit=true;x.resizeTextMinSize=10;x.resizeTextMaxSize=size;return x;}
     }
 }

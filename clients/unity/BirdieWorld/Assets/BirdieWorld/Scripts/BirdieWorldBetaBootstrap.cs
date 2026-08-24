@@ -17,10 +17,21 @@ namespace BirdieWorld
         private Canvas canvas;
         private GameObject startScreen;
         private GameObject creatorScreen;
+        private GameObject readyScreen;
         private InputField nameField;
         private Text statusText;
+        private Text readyNameText;
+        private Text readyStatusText;
+        private UnityEngine.UI.Button saveButton;
+        private CanvasGroup creatorInteraction;
         private CharacterProfile profile;
         private CharacterStore store;
+        private BirdieWorldCharacterPersistence persistence;
+        private BirdieWorldAuthSession authSession;
+        private CharacterProfile pendingUnboundDraft;
+        private bool profileIsAccountScoped;
+        private bool accountProfileReady;
+        private int profileRevision;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureBootstrap()
@@ -35,11 +46,38 @@ namespace BirdieWorld
             store = new CharacterStore();
             profile = store.LoadOrCreate();
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            BuildServices();
             BuildEventSystem();
             BuildCanvas();
             BuildStartScreen();
             BuildCreatorScreen();
+            BuildReadyScreen();
             Show(startScreen);
+            BuildCinematicOpener();
+        }
+
+        private void OnDestroy()
+        {
+            if (authSession == null) return;
+            authSession.Configured -= HandleAuthenticatedSession;
+            authSession.Refreshed -= HandleSessionRefreshed;
+            authSession.ConfigurationFailed -= HandleSessionFailure;
+            authSession.Cleared -= HandleSessionCleared;
+        }
+
+        private void BuildServices()
+        {
+            var services = new GameObject("BirdieWorld Auth Session");
+            services.transform.SetParent(transform, false);
+            var characterApi = services.AddComponent<BirdieWorldCharacterApi>();
+            persistence = services.AddComponent<BirdieWorldCharacterPersistence>();
+            persistence.Initialize(characterApi);
+            authSession = services.AddComponent<BirdieWorldAuthSession>();
+            authSession.Initialize(characterApi);
+            authSession.Configured += HandleAuthenticatedSession;
+            authSession.Refreshed += HandleSessionRefreshed;
+            authSession.ConfigurationFailed += HandleSessionFailure;
+            authSession.Cleared += HandleSessionCleared;
         }
 
         private void BuildEventSystem()
@@ -59,6 +97,12 @@ namespace BirdieWorld
             scaler.referenceResolution = new Vector2(1600, 900);
             scaler.matchWidthOrHeight = 0.5f;
             DontDestroyOnLoad(go);
+        }
+
+        private void BuildCinematicOpener()
+        {
+            gameObject.AddComponent<BirdieWorldCinematicOpener>()
+                .Build(canvas.transform, () => Show(startScreen));
         }
 
         private void BuildStartScreen()
@@ -84,6 +128,7 @@ namespace BirdieWorld
         private void BuildCreatorScreen()
         {
             creatorScreen = Fullscreen("Creator", ink);
+            creatorInteraction = creatorScreen.AddComponent<CanvasGroup>();
             var preview = Panel(creatorScreen.transform, "Preview", Vector2.zero, new Vector2(0.48f, 1f), forest);
             Label(preview.transform, "BIRDIE EXPRESS · CHARACTER CABIN", 18, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.84f), new Vector2(0.92f, 0.92f));
             Label(preview.transform, "DEIN BIRDIE", 48, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.66f), new Vector2(0.92f, 0.82f));
@@ -95,7 +140,13 @@ namespace BirdieWorld
             Label(form.transform, "WER BIST DU?", 29, gold, TextAnchor.MiddleLeft, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.80f));
 
             nameField = Input(form.transform, new Vector2(0.08f, 0.64f), new Vector2(0.92f, 0.72f), "Dein Name...");
+            nameField.characterLimit = 40;
             nameField.text = profile.displayName ?? string.Empty;
+            nameField.onValueChanged.AddListener(value =>
+            {
+                profile.displayName = value;
+                profileRevision++;
+            });
 
             Label(form.transform, "WÄHLE DEINE STORY", 17, gold, TextAnchor.MiddleLeft, new Vector2(0.08f, 0.57f), new Vector2(0.92f, 0.63f));
             Choice(form.transform, "DIE ENTDECKER:IN", "explorer", new Vector2(0.08f, 0.49f), new Vector2(0.92f, 0.57f));
@@ -108,33 +159,221 @@ namespace BirdieWorld
             ColorChoice(form.transform, "SAND", "sand", new Color(0.55f, 0.42f, 0.28f), 0.50f);
             ColorChoice(form.transform, "BURGUNDY", "burgundy", new Color(0.30f, 0.06f, 0.07f), 0.71f);
 
-            Button(form.transform, "WEITER", "Charakter speichern", new Vector2(0.52f, 0.06f), new Vector2(0.92f, 0.16f), SaveProfile);
-            Button(form.transform, "ZURÜCK", "", new Vector2(0.08f, 0.06f), new Vector2(0.34f, 0.16f), () => Show(startScreen));
+            saveButton = Button(form.transform, "WEITER", "Charakter speichern", new Vector2(0.52f, 0.06f), new Vector2(0.92f, 0.16f), SaveProfile).GetComponent<UnityEngine.UI.Button>();
+            Button(form.transform, "ZURÜCK", string.Empty, new Vector2(0.08f, 0.06f), new Vector2(0.34f, 0.16f), () => Show(startScreen));
             statusText = Label(form.transform, string.Empty, 15, ivory, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.005f), new Vector2(0.92f, 0.055f));
+        }
+
+        private void BuildReadyScreen()
+        {
+            readyScreen = Fullscreen("Ready", ink);
+            var card = Panel(readyScreen.transform, "ReadyCard", new Vector2(0.18f, 0.13f), new Vector2(0.82f, 0.87f), panel);
+            card.AddComponent<Outline>().effectColor = gold;
+            Label(card.transform, "BIRDIE EXPRESS · ANKUNFT", 18, gold, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.82f), new Vector2(0.90f, 0.90f));
+            Label(card.transform, "DEIN BIRDIE IST BEREIT.", 44, ivory, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.62f), new Vector2(0.90f, 0.80f));
+            readyNameText = Label(card.transform, string.Empty, 30, gold, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.48f), new Vector2(0.88f, 0.60f));
+            readyStatusText = Label(card.transform, string.Empty, 19, ivory, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.31f), new Vector2(0.88f, 0.46f));
+            Button(card.transform, "BIRDIE ANPASSEN", string.Empty, new Vector2(0.10f, 0.12f), new Vector2(0.44f, 0.23f), () => Show(creatorScreen));
+            Button(card.transform, "ZURÜCK ZUM START", string.Empty, new Vector2(0.56f, 0.12f), new Vector2(0.90f, 0.23f), () => Show(startScreen));
+        }
+
+        private void HandleAuthenticatedSession()
+        {
+            persistence.CancelPendingRequests();
+            if (!profileIsAccountScoped && pendingUnboundDraft == null)
+                pendingUnboundDraft = profile;
+            else if (profileIsAccountScoped && pendingUnboundDraft == null)
+                store.Clear();
+
+            profile = CharacterProfile.CreateDefault();
+            profileIsAccountScoped = true;
+            accountProfileReady = false;
+            nameField.SetTextWithoutNotify(string.Empty);
+            profileRevision++;
+            Show(startScreen);
+
+            var sessionGeneration = authSession.Generation;
+            var revisionAtLoad = profileRevision;
+            SetBusy(true, "Birdie-Konto verbunden · Profil wird geladen …");
+            persistence.LoadServerProfile(
+                serverProfile =>
+                {
+                    if (sessionGeneration != authSession.Generation) return;
+                    accountProfileReady = true;
+                    pendingUnboundDraft = null;
+                    store.Clear();
+                    if (serverProfile != null && revisionAtLoad == profileRevision)
+                    {
+                        BirdieWorldCharacterMapper.ApplyServerProfile(profile, serverProfile);
+                        nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                        profileRevision++;
+                        statusText.text = "✓ Dein Konto-Birdie wurde geladen.";
+                    }
+                    else if (serverProfile == null && revisionAtLoad == profileRevision)
+                    {
+                        nameField.SetTextWithoutNotify(string.Empty);
+                        profileRevision++;
+                        statusText.text = "Konto verbunden · für dieses Konto erstellst du jetzt ein neues Birdie.";
+                    }
+                    else
+                    {
+                        statusText.text = "Konto verbunden · deine aktuelle Auswahl bleibt erhalten.";
+                    }
+                    SetBusy(false);
+                },
+                _ =>
+                {
+                    if (sessionGeneration != authSession.Generation) return;
+                    accountProfileReady = false;
+                    if (pendingUnboundDraft != null)
+                    {
+                        profile = pendingUnboundDraft;
+                        pendingUnboundDraft = null;
+                        profileIsAccountScoped = false;
+                        nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                        profileRevision++;
+                        SetBusy(false, "Kontosynchronisierung nicht erreichbar · dein unangemeldeter Entwurf bleibt lokal.");
+                    }
+                    else
+                    {
+                        SetBusy(false, "Kontosynchronisierung nicht erreichbar · Kontodaten bleiben bis zur Bestätigung verborgen.");
+                    }
+                });
+        }
+
+        private void HandleSessionRefreshed()
+        {
+            if (!accountProfileReady)
+            {
+                HandleAuthenticatedSession();
+                return;
+            }
+            if (statusText != null) statusText.text = "✓ Birdie-Sitzung sicher erneuert.";
+        }
+
+        private void HandleSessionFailure(string _)
+        {
+            persistence.CancelPendingRequests();
+            accountProfileReady = false;
+            if (profileIsAccountScoped)
+            {
+                if (pendingUnboundDraft != null)
+                {
+                    profile = pendingUnboundDraft;
+                    pendingUnboundDraft = null;
+                    profileIsAccountScoped = false;
+                    nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                }
+                else
+                {
+                    store.Clear();
+                    profile = CharacterProfile.CreateDefault();
+                    nameField.SetTextWithoutNotify(string.Empty);
+                }
+                profileRevision++;
+                Show(startScreen);
+            }
+            SetBusy(false, "Anmeldung konnte nicht übernommen werden · lokaler Modus bleibt aktiv.");
+        }
+
+        private void HandleSessionCleared()
+        {
+            persistence.CancelPendingRequests();
+            pendingUnboundDraft = null;
+            profileIsAccountScoped = false;
+            accountProfileReady = false;
+            store.Clear();
+            profile = CharacterProfile.CreateDefault();
+            nameField.SetTextWithoutNotify(string.Empty);
+            profileRevision++;
+            SetBusy(false, "Birdie-Konto getrennt · lokaler Modus ist aktiv.");
+            Show(startScreen);
         }
 
         private void SaveProfile()
         {
             var name = nameField.text.Trim();
-            if (name.Length < 2)
+            if (name.Length < 2 || name.Length > 40)
             {
-                statusText.text = "Bitte gib deinem Birdie einen Namen.";
+                statusText.text = "Bitte gib deinem Birdie einen Namen mit 2 bis 40 Zeichen.";
                 return;
             }
+
             profile.displayName = name;
-            store.Save(profile);
-            statusText.text = "✓ Dein Birdie ist bereit. Willkommen an Bord.";
+            profileRevision++;
+            if (!profileIsAccountScoped) store.Save(profile);
+            var revisionAtSave = profileRevision;
+
+            if (!profileIsAccountScoped || !persistence.IsServerConfigured || !accountProfileReady)
+            {
+                ShowReady(profileIsAccountScoped
+                    ? "Im aktuellen Fenster erhalten. Konto-Sync folgt erst nach bestätigter Kontoverbindung."
+                    : "Auf diesem Gerät gespeichert. Mit deiner Birdie-Anmeldung folgt der Geräte-Sync.");
+                return;
+            }
+
+            SetBusy(true, "Dein Birdie wird sicher mit deinem Konto synchronisiert …");
+            var sessionGeneration = authSession.Generation;
+            persistence.SaveServerProfile(
+                BirdieWorldCharacterMapper.ToServerWrite(profile),
+                serverProfile =>
+                {
+                    if (sessionGeneration != authSession.Generation) return;
+                    if (revisionAtSave != profileRevision)
+                    {
+                        SetBusy(false, "Deine neuere Auswahl bleibt erhalten · bitte speichere sie noch einmal.");
+                        return;
+                    }
+                    BirdieWorldCharacterMapper.ApplyServerProfile(profile, serverProfile);
+                    profileIsAccountScoped = true;
+                    accountProfileReady = true;
+                    store.Clear();
+                    nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                    profileRevision++;
+                    SetBusy(false);
+                    ShowReady("Mit deinem Birdie-Konto synchronisiert und auf deinen Geräten verfügbar.");
+                },
+                _ =>
+                {
+                    if (sessionGeneration != authSession.Generation) return;
+                    SetBusy(false);
+                    ShowReady("Im aktuellen Fenster erhalten. Der Konto-Sync wird wieder möglich, sobald die Verbindung steht.");
+                });
+        }
+
+        private void ShowReady(string synchronizationStatus)
+        {
+            readyNameText.text = (profile.displayName ?? "DEIN BIRDIE").ToUpperInvariant();
+            readyStatusText.text = synchronizationStatus;
+            Show(readyScreen);
+        }
+
+        private void SetBusy(bool busy, string message = null)
+        {
+            if (saveButton != null) saveButton.interactable = !busy;
+            if (creatorInteraction != null) creatorInteraction.interactable = !busy;
+            if (!string.IsNullOrWhiteSpace(message) && statusText != null) statusText.text = message;
         }
 
         private void Choice(Transform parent, string title, string value, Vector2 min, Vector2 max)
         {
-            Button(parent, title, string.Empty, min, max, () => { profile.story = value; statusText.text = $"Story gewählt: {title}"; });
+            Button(parent, title, string.Empty, min, max, () =>
+            {
+                profile.story = value;
+                profileRevision++;
+                statusText.text = $"Story gewählt: {title}";
+            });
         }
 
         private void ColorChoice(Transform parent, string title, string value, Color color, float x)
         {
-            var b = Button(parent, title, string.Empty, new Vector2(x, 0.17f), new Vector2(x + 0.18f, 0.235f), () => { profile.color = value; statusText.text = $"Farbe gewählt: {title}"; });
-            b.GetComponent<Image>().color = Color.Lerp(color, panel, 0.25f);
+            var choice = Button(parent, title, string.Empty, new Vector2(x, 0.17f), new Vector2(x + 0.18f, 0.235f), () =>
+            {
+                profile.color = value;
+                profileRevision++;
+                statusText.text = $"Farbe gewählt: {title}";
+            });
+            choice.GetComponent<Image>().color = Color.Lerp(color, panel, 0.25f);
         }
 
         private GameObject Fullscreen(string name, Color color)
@@ -167,6 +406,7 @@ namespace BirdieWorld
             text.color = color;
             text.alignment = anchor;
             text.resizeTextForBestFit = true;
+            text.supportRichText = false;
             text.resizeTextMinSize = 10;
             text.resizeTextMaxSize = size;
             return text;
@@ -174,11 +414,11 @@ namespace BirdieWorld
 
         private GameObject Button(Transform parent, string title, string subtitle, Vector2 min, Vector2 max, Action action)
         {
-            var go = new GameObject(title, typeof(RectTransform), typeof(Image), typeof(Button));
+            var go = new GameObject(title, typeof(RectTransform), typeof(Image), typeof(UnityEngine.UI.Button));
             go.transform.SetParent(parent, false);
             Stretch(go.GetComponent<RectTransform>(), min, max);
             go.GetComponent<Image>().color = new Color(0.04f, 0.12f, 0.09f, 1f);
-            var button = go.GetComponent<Button>();
+            var button = go.GetComponent<UnityEngine.UI.Button>();
             button.onClick.AddListener(() => action());
             Label(go.transform, string.IsNullOrEmpty(subtitle) ? title : $"{title}\n{subtitle}", 22, gold, TextAnchor.MiddleCenter, new Vector2(0.03f, 0.05f), new Vector2(0.97f, 0.95f));
             return go;
@@ -210,6 +450,7 @@ namespace BirdieWorld
         {
             if (startScreen != null) startScreen.SetActive(target == startScreen);
             if (creatorScreen != null) creatorScreen.SetActive(target == creatorScreen);
+            if (readyScreen != null) readyScreen.SetActive(target == readyScreen);
         }
     }
 }
