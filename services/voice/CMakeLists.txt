@@ -28,6 +28,9 @@ target_link_libraries(birdie-voice-host PRIVATE birdie_voice)
 if(WIN32)
   target_sources(birdie-voice-host PRIVATE src/windows/wasapi_capture.cpp)
   target_link_libraries(birdie-voice-host PRIVATE ole32 uuid)
+
+  add_executable(birdie-voice-core-smoke tests/core_ipc_smoke.cpp)
+  target_link_libraries(birdie-voice-core-smoke PRIVATE birdie_voice)
 endif()
 
 enable_testing()
