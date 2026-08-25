@@ -19,6 +19,7 @@ const expectedStates = [
 ];
 
 const expectedRoles = ["desktop", "voice", "observer"];
+const transportLevelNames = new Set(["error"]);
 const actualStates = Object.values(PresenceState);
 const actualRoles = Object.values(IpcRole);
 
@@ -42,10 +43,14 @@ for (const [group, values] of [
     throw new Error(`Duplicate ${group} name detected`);
   }
   for (const name of values) {
-    if (!name.includes(".")) {
+    if (!name.includes(".") && !transportLevelNames.has(name)) {
       throw new Error(`Invalid ${group} name: ${name}`);
     }
   }
+}
+
+if (IpcMessageType.ERROR !== "error") {
+  throw new Error(`Canonical IPC error message drifted: ${IpcMessageType.ERROR}`);
 }
 
 console.log(
