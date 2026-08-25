@@ -1,32 +1,29 @@
 #include "birdie/voice/voice_host.hpp"
 
-#include <utility>
+#include <string>
 
 namespace birdie::voice {
 
-void VoiceHost::resolve_addressability(
+bool VoiceHost::resolve_addressability(
     const AddressabilityResult& result,
     const ActivationMode accepted_mode) {
-  if (phase_ != VoicePhase::SpeechCandidate &&
-      phase_ != VoicePhase::BargeInCandidate) {
-    return;
+  if (muted_ || phase_ != VoicePhase::SpeechCandidate) {
+    return false;
   }
 
   switch (result.decision) {
     case AddressabilityDecision::Accept:
-      accept_activation(accepted_mode, result.score);
-      return;
+      return accept_activation(accepted_mode, result.score);
 
     case AddressabilityDecision::Reject:
-      reject_activation(result.reason);
-      return;
+      return reject_activation(result.reason);
 
     case AddressabilityDecision::Abstain:
-      sink_.emit({
+      emit(
           "voice.activation.abstained",
           last_frame_ms_,
-          std::nullopt,
           {
+              {"activity_id", activity_id_},
               {"reason", result.reason},
               {"score", result.score},
               {"confidence_band",
@@ -35,28 +32,13 @@ void VoiceHost::resolve_addressability(
               {"positive_evidence_families",
                static_cast<std::uint64_t>(
                    result.positive_evidence_families)},
-          },
-      });
-      sink_.emit({
-          "voice.activity.ended",
-          last_frame_ms_,
-          std::nullopt,
-          {
-              {"activity_id", activity_id_},
-              {"reason", std::string("addressability_abstained")},
-          },
-      });
-
-      phase_ = VoicePhase::Dormant;
-      active_samples_.clear();
-      consecutive_speech_frames_ = 0;
-      consecutive_silence_frames_ = 0;
-      speech_frames_ = 0;
-      activity_id_.clear();
-      utterance_id_.clear();
-      pending_turn_id_.clear();
-      return;
+          });
+      finish_activity(last_frame_ms_, "addressability_abstained");
+      reset_interaction(true);
+      return true;
   }
+
+  return false;
 }
 
 }  // namespace birdie::voice
