@@ -8,6 +8,7 @@
 #include <windows.h>
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <ctime>
@@ -27,6 +28,7 @@ namespace birdie::voice {
 namespace {
 
 using namespace std::chrono_literals;
+constexpr std::size_t kMaximumIncomingBuffer = 256 * 1024;
 
 std::string escape_json(const std::string_view input) {
   std::ostringstream out;
@@ -128,6 +130,73 @@ std::string serialize_publish_request(const VoiceEvent& event,
   return out.str();
 }
 
+std::optional<std::size_t> json_value_start(const std::string_view json,
+                                            const std::string_view key) {
+  const std::string needle = "\"" + std::string(key) + "\"";
+  const auto key_position = json.find(needle);
+  if (key_position == std::string_view::npos) return std::nullopt;
+  auto position = json.find(':', key_position + needle.size());
+  if (position == std::string_view::npos) return std::nullopt;
+  ++position;
+  while (position < json.size() &&
+         std::isspace(static_cast<unsigned char>(json[position])) != 0) {
+    ++position;
+  }
+  return position < json.size() ? std::optional<std::size_t>(position)
+                                : std::nullopt;
+}
+
+std::optional<std::string> json_string(const std::string_view json,
+                                       const std::string_view key) {
+  auto position = json_value_start(json, key);
+  if (!position || json[*position] != '"') return std::nullopt;
+  ++*position;
+
+  std::string result;
+  bool escaped = false;
+  for (; *position < json.size(); ++*position) {
+    const char current = json[*position];
+    if (escaped) {
+      switch (current) {
+        case '"': result.push_back('"'); break;
+        case '\\': result.push_back('\\'); break;
+        case 'n': result.push_back('\n'); break;
+        case 'r': result.push_back('\r'); break;
+        case 't': result.push_back('\t'); break;
+        default: result.push_back(current); break;
+      }
+      escaped = false;
+    } else if (current == '\\') {
+      escaped = true;
+    } else if (current == '"') {
+      return result;
+    } else {
+      result.push_back(current);
+    }
+  }
+  return std::nullopt;
+}
+
+std::optional<bool> json_bool(const std::string_view json,
+                              const std::string_view key) {
+  const auto position = json_value_start(json, key);
+  if (!position) return std::nullopt;
+  if (json.substr(*position, 4) == "true") return true;
+  if (json.substr(*position, 5) == "false") return false;
+  return std::nullopt;
+}
+
+std::optional<CoreCommand> parse_core_command(const std::string_view line) {
+  if (json_string(line, "type") != std::optional<std::string>{"voice.command"}) {
+    return std::nullopt;
+  }
+  const auto name = json_string(line, "name");
+  const auto enabled = json_bool(line, "enabled");
+  if (!name || !enabled) return std::nullopt;
+  return CoreCommand{
+      json_string(line, "requestId").value_or(std::string{}), *name, *enabled};
+}
+
 }  // namespace
 
 class CoreIpcEventSink::Impl {
@@ -186,6 +255,14 @@ class CoreIpcEventSink::Impl {
 
   [[nodiscard]] std::uint64_t dropped_best_effort() const noexcept {
     return dropped_best_effort_.load(std::memory_order_relaxed);
+  }
+
+  [[nodiscard]] std::optional<CoreCommand> try_pop_command() {
+    std::scoped_lock lock(command_mutex_);
+    if (command_queue_.empty()) return std::nullopt;
+    CoreCommand command = std::move(command_queue_.front());
+    command_queue_.pop_front();
+    return command;
   }
 
  private:
@@ -301,11 +378,31 @@ class CoreIpcEventSink::Impl {
         return;
       }
       if (read == 0) return;
+      incoming_buffer_.append(buffer, read);
+      if (incoming_buffer_.size() > kMaximumIncomingBuffer) {
+        incoming_buffer_.clear();
+        continue;
+      }
+      process_incoming_lines();
+    }
+  }
+
+  void process_incoming_lines() {
+    for (;;) {
+      const auto newline = incoming_buffer_.find('\n');
+      if (newline == std::string::npos) return;
+      const std::string line = incoming_buffer_.substr(0, newline);
+      incoming_buffer_.erase(0, newline + 1);
+      if (auto command = parse_core_command(line)) {
+        std::scoped_lock lock(command_mutex_);
+        command_queue_.push_back(std::move(*command));
+      }
     }
   }
 
   void disconnect() noexcept {
     connected_.store(false, std::memory_order_release);
+    incoming_buffer_.clear();
     if (pipe_ != INVALID_HANDLE_VALUE) {
       CloseHandle(pipe_);
       pipe_ = INVALID_HANDLE_VALUE;
@@ -326,6 +423,11 @@ class CoreIpcEventSink::Impl {
   std::condition_variable wake_;
   std::deque<Pending> reliable_queue_;
   std::deque<Pending> best_effort_queue_;
+
+  std::mutex command_mutex_;
+  std::deque<CoreCommand> command_queue_;
+  std::string incoming_buffer_;
+
   std::thread worker_;
   HANDLE pipe_{INVALID_HANDLE_VALUE};
 };
@@ -345,6 +447,10 @@ bool CoreIpcEventSink::connected() const noexcept { return impl_->connected(); }
 
 std::uint64_t CoreIpcEventSink::dropped_best_effort() const noexcept {
   return impl_->dropped_best_effort();
+}
+
+std::optional<CoreCommand> CoreIpcEventSink::try_pop_command() {
+  return impl_->try_pop_command();
 }
 
 }  // namespace birdie::voice
