@@ -11,6 +11,7 @@ export class BirdieIpcServer extends EventEmitter {
     this.runtime = new BirdieRuntimeV0();
     this.server = null;
     this.clients = new Set();
+    this.microphoneState = 'ENABLED';
   }
 
   async start() {
@@ -34,6 +35,11 @@ export class BirdieIpcServer extends EventEmitter {
     await new Promise((resolve) => server.close(resolve));
   }
 
+  getSnapshot() {
+    const snapshot = this.runtime.getSnapshot();
+    return { ...snapshot, lifecycle: 'READY', microphoneState: this.microphoneState };
+  }
+
   publish(event) {
     const result = this.runtime.apply(event);
     if (result?.presenceChanged) this.#broadcast({ type: 'runtime.presence.changed', payload: result.snapshot.presence });
@@ -55,14 +61,14 @@ export class BirdieIpcServer extends EventEmitter {
     });
     socket.on('close', () => this.clients.delete(socket));
     socket.on('error', () => this.clients.delete(socket));
-    this.#send(socket, { type: 'runtime.snapshot', payload: this.runtime.getSnapshot() });
+    this.#send(socket, { type: 'runtime.snapshot', payload: this.getSnapshot() });
   }
 
   #handle(socket, line) {
     let message;
     try { message = JSON.parse(line); } catch { return this.#send(socket, { type: 'error', error: 'INVALID_JSON' }); }
     if (message.type === 'runtime.snapshot.request') {
-      return this.#send(socket, { type: 'runtime.snapshot', payload: this.runtime.getSnapshot() });
+      return this.#send(socket, { type: 'runtime.snapshot', payload: this.getSnapshot() });
     }
     if (message.type === 'runtime.event.publish') {
       try {
@@ -71,6 +77,16 @@ export class BirdieIpcServer extends EventEmitter {
       } catch (error) {
         return this.#send(socket, { type: 'error', requestId: message.requestId ?? null, error: String(error.message ?? error) });
       }
+    }
+    if (message.type === 'runtime.command') {
+      const command = message.payload?.name;
+      if (command === 'ui.microphone.set_enabled') {
+        this.microphoneState = message.payload?.enabled ? 'ENABLED' : 'MUTED_BY_USER';
+        const snapshot = this.getSnapshot();
+        this.#broadcast({ type: 'runtime.snapshot', payload: snapshot });
+        return this.#send(socket, { type: 'runtime.command.ack', requestId: message.requestId ?? null, payload: { accepted: true, microphoneState: this.microphoneState } });
+      }
+      return this.#send(socket, { type: 'error', requestId: message.requestId ?? null, error: 'UNKNOWN_COMMAND' });
     }
     this.#send(socket, { type: 'error', requestId: message.requestId ?? null, error: 'UNKNOWN_MESSAGE_TYPE' });
   }
