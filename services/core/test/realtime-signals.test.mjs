@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+import { IpcRole } from '../../../packages/protocol/src/contract.mjs';
 import { BirdieIpcServer } from '../src/ipc-server.mjs';
+import { connectIpcClient } from './helpers/ipc-client.mjs';
 
 function pipeName() {
   if (process.platform === 'win32') {
@@ -14,54 +15,6 @@ function pipeName() {
     os.tmpdir(),
     `birdie-realtime-test-${process.pid}-${Date.now()}.sock`,
   );
-}
-
-async function connect(name) {
-  const socket = net.createConnection(name);
-  socket.setEncoding('utf8');
-  await new Promise((resolve, reject) => {
-    socket.once('connect', resolve);
-    socket.once('error', reject);
-  });
-
-  let buffer = '';
-  const messages = [];
-  const waiters = new Set();
-
-  socket.on('data', (chunk) => {
-    buffer += chunk;
-    let newline;
-    while ((newline = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (line) messages.push(JSON.parse(line));
-    }
-    for (const waiter of [...waiters]) {
-      const match = messages.find(waiter.predicate);
-      if (!match) continue;
-      clearTimeout(waiter.timer);
-      waiters.delete(waiter);
-      waiter.resolve(match);
-    }
-  });
-
-  function waitFor(predicate, timeoutMs = 1_500) {
-    const existing = messages.find(predicate);
-    if (existing) return Promise.resolve(existing);
-    return new Promise((resolve, reject) => {
-      const waiter = {
-        predicate,
-        resolve,
-        timer: setTimeout(() => {
-          waiters.delete(waiter);
-          reject(new Error('timeout waiting for realtime IPC message'));
-        }, timeoutMs),
-      };
-      waiters.add(waiter);
-    });
-  }
-
-  return { socket, messages, waitFor };
 }
 
 function inputLevelEvent() {
@@ -91,18 +44,24 @@ test('Voice levels are normalized and forwarded without changing Presence', asyn
 
   const server = new BirdieIpcServer({ pipeName: name });
   await server.start();
-  const observer = await connect(name);
-  const publisher = await connect(name);
+  const observer = await connectIpcClient(name, {
+    role: IpcRole.OBSERVER,
+    component: 'presence-observer-test',
+  });
+  const voice = await connectIpcClient(name, {
+    role: IpcRole.VOICE,
+    component: 'birdie-voice-realtime-test',
+  });
 
   try {
     await observer.waitFor((message) => message.type === 'runtime.snapshot');
     const revisionBefore = server.getSnapshot().presence.revision;
 
-    publisher.socket.write(`${JSON.stringify({
+    voice.send({
       type: 'runtime.event.publish',
       requestId: 'best-effort-level',
       payload: inputLevelEvent(),
-    })}\n`);
+    });
 
     const realtime = await observer.waitFor(
       (message) => message.type === 'runtime.audio.input',
@@ -116,7 +75,7 @@ test('Voice levels are normalized and forwarded without changing Presence', asyn
 
     await new Promise((resolve) => setTimeout(resolve, 40));
     assert.equal(
-      publisher.messages.some(
+      voice.messages.some(
         (message) =>
           message.type === 'runtime.event.ack' &&
           message.requestId === 'best-effort-level',
@@ -125,15 +84,15 @@ test('Voice levels are normalized and forwarded without changing Presence', asyn
       'best-effort level events must not create ACK traffic',
     );
     assert.equal(
-      publisher.messages.some(
+      voice.messages.some(
         (message) => message.type === 'runtime.audio.input',
       ),
       false,
-      'Core must not echo derived audio levels back to the Voice publisher',
+      'Core must not send desktop audio projections to Voice role',
     );
   } finally {
     observer.socket.destroy();
-    publisher.socket.destroy();
+    voice.socket.destroy();
     await server.stop();
     if (process.platform !== 'win32' && fs.existsSync(name)) fs.unlinkSync(name);
   }
