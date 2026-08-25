@@ -1,0 +1,21 @@
+{
+  "name": "normal-turn",
+  "contract_version": "1.0",
+  "expected_presence_trace": [
+    "IDLE",
+    "SPEECH_DETECTED",
+    "LISTENING",
+    "THINKING",
+    "SPEAKING",
+    "IDLE"
+  ],
+  "events": [
+    {"name":"voice.activity.started","turn_id":null},
+    {"name":"voice.activation.accepted","turn_id":"turn-1"},
+    {"name":"voice.utterance.finalized","turn_id":"turn-1"},
+    {"name":"brain.response.completed","turn_id":"turn-1"},
+    {"name":"voice.output.started","turn_id":"turn-1"},
+    {"name":"voice.output.completed","turn_id":"turn-1"},
+    {"name":"runtime.turn.completed","turn_id":"turn-1"}
+  ]
+}
