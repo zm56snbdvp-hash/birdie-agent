@@ -48,6 +48,28 @@ export const DataClassification = Object.freeze({
   SENSITIVE: "sensitive",
 });
 
+export const IpcRole = Object.freeze({
+  DESKTOP: "desktop",
+  VOICE: "voice",
+  OBSERVER: "observer",
+});
+
+export const IpcMessageType = Object.freeze({
+  COMPONENT_HELLO: "component.hello",
+  COMPONENT_HELLO_ACK: "component.hello.ack",
+  RUNTIME_SNAPSHOT_REQUEST: "runtime.snapshot.request",
+  RUNTIME_SNAPSHOT: "runtime.snapshot",
+  RUNTIME_EVENT_PUBLISH: "runtime.event.publish",
+  RUNTIME_EVENT_ACK: "runtime.event.ack",
+  RUNTIME_COMMAND: "runtime.command",
+  RUNTIME_COMMAND_ACK: "runtime.command.ack",
+  RUNTIME_PRESENCE_CHANGED: "runtime.presence.changed",
+  RUNTIME_AUDIO_INPUT: "runtime.audio.input",
+  RUNTIME_AUDIO_OUTPUT: "runtime.audio.output",
+  VOICE_COMMAND: "voice.command",
+  ERROR: "error",
+});
+
 export const EventName = Object.freeze({
   COMPONENT_READY: "component.ready",
   COMPONENT_HEALTH_CHANGED: "component.health.changed",
