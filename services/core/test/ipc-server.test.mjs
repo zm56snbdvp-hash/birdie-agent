@@ -1,62 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs';
+import { IpcRole } from '../../../packages/protocol/src/contract.mjs';
 import { BirdieIpcServer } from '../src/ipc-server.mjs';
-
-async function connectClient(pipeName) {
-  const socket = net.createConnection(pipeName);
-  socket.setEncoding('utf8');
-  await new Promise((resolve, reject) => {
-    socket.once('connect', resolve);
-    socket.once('error', reject);
-  });
-
-  let buffer = '';
-  const messages = [];
-  const waiters = new Set();
-
-  function notify() {
-    for (const waiter of [...waiters]) {
-      const match = messages.find(waiter.predicate);
-      if (!match) continue;
-      clearTimeout(waiter.timer);
-      waiters.delete(waiter);
-      waiter.resolve(match);
-    }
-  }
-
-  socket.on('data', (chunk) => {
-    buffer += chunk;
-    let idx;
-    while ((idx = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, idx).trim();
-      buffer = buffer.slice(idx + 1);
-      if (line) messages.push(JSON.parse(line));
-    }
-    notify();
-  });
-
-  function waitFor(predicate, timeoutMs = 1_500) {
-    const existing = messages.find(predicate);
-    if (existing) return Promise.resolve(existing);
-    return new Promise((resolve, reject) => {
-      const waiter = {
-        predicate,
-        resolve,
-        timer: setTimeout(() => {
-          waiters.delete(waiter);
-          reject(new Error('timeout waiting for IPC message'));
-        }, timeoutMs),
-      };
-      waiters.add(waiter);
-    });
-  }
-
-  return { socket, messages, waitFor };
-}
+import { connectIpcClient } from './helpers/ipc-client.mjs';
 
 function voicePrivacyEvent(state, sequence = 1) {
   return {
@@ -85,19 +34,31 @@ test('IPC routes microphone command and waits for Voice privacy confirmation', a
   const server = new BirdieIpcServer({ pipeName });
   await server.start();
 
-  const desktop = await connectClient(pipeName);
-  const voice = await connectClient(pipeName);
+  const desktop = await connectIpcClient(pipeName, {
+    role: IpcRole.DESKTOP,
+    component: 'birdie-desktop-test',
+  });
+  const voice = await connectIpcClient(pipeName, {
+    role: IpcRole.VOICE,
+    component: 'birdie-voice-test',
+  });
+
   try {
     const initial = await desktop.waitFor(
       (message) => message.type === 'runtime.snapshot',
     );
     assert.equal(initial.payload.microphoneState, 'UNAVAILABLE');
+    assert.equal(
+      voice.messages.some((message) => message.type === 'runtime.snapshot'),
+      false,
+      'Voice role must not receive desktop snapshots',
+    );
 
-    desktop.socket.write(`${JSON.stringify({
+    desktop.send({
       type: 'runtime.command',
       requestId: 'mic-off',
       payload: { name: 'ui.microphone.set_enabled', enabled: false },
-    })}\n`);
+    });
 
     const routed = await voice.waitFor(
       (message) =>
@@ -118,11 +79,11 @@ test('IPC routes microphone command and waits for Voice privacy confirmation', a
     assert.equal(ack.payload.microphoneState, 'UNAVAILABLE');
     assert.equal(server.getSnapshot().microphoneState, 'UNAVAILABLE');
 
-    voice.socket.write(`${JSON.stringify({
+    voice.send({
       type: 'runtime.event.publish',
       requestId: 'privacy-confirmation',
       payload: voicePrivacyEvent('MUTED_BY_USER'),
-    })}\n`);
+    });
 
     const confirmed = await desktop.waitFor(
       (message) =>
@@ -131,6 +92,13 @@ test('IPC routes microphone command and waits for Voice privacy confirmation', a
     );
     assert.equal(confirmed.payload.microphoneState, 'MUTED_BY_USER');
     assert.equal(server.getSnapshot().microphoneState, 'MUTED_BY_USER');
+
+    const eventAck = await voice.waitFor(
+      (message) =>
+        message.type === 'runtime.event.ack' &&
+        message.requestId === 'privacy-confirmation',
+    );
+    assert.equal(eventAck.payload.accepted, true);
   } finally {
     desktop.socket.destroy();
     voice.socket.destroy();
