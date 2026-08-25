@@ -62,6 +62,7 @@ export const EventName = Object.freeze({
   VOICE_ACTIVATION_REJECTED: "voice.activation.rejected",
   VOICE_UTTERANCE_FINALIZED: "voice.utterance.finalized",
   VOICE_INPUT_LEVEL: "voice.input.level",
+  VOICE_PRIVACY_CHANGED: "voice.privacy.changed",
   BRAIN_TURN_START: "brain.turn.start",
   BRAIN_RESPONSE_COMPLETED: "brain.response.completed",
   BRAIN_TURN_CANCEL: "brain.turn.cancel",

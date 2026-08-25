@@ -1,0 +1,31 @@
+name: Birdie Voice Host
+
+on:
+  push:
+    branches:
+      - feature/birdie-desktop-alpha
+    paths:
+      - services/voice/**
+      - packages/protocol/**
+      - .github/workflows/birdie-voice.yml
+  pull_request:
+    paths:
+      - services/voice/**
+      - packages/protocol/**
+      - .github/workflows/birdie-voice.yml
+
+permissions:
+  contents: read
+
+jobs:
+  windows-build-and-test:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure CMake
+        run: cmake -S services/voice -B build/voice -A x64
+      - name: Build Release
+        run: cmake --build build/voice --config Release --parallel
+      - name: Run deterministic voice tests
+        run: ctest --test-dir build/voice -C Release --output-on-failure

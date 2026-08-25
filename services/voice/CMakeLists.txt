@@ -1,0 +1,32 @@
+cmake_minimum_required(VERSION 3.24)
+project(birdie_voice VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(birdie_voice STATIC
+  src/voice_host.cpp
+)
+
+target_include_directories(birdie_voice PUBLIC include)
+target_compile_features(birdie_voice PUBLIC cxx_std_20)
+
+if(MSVC)
+  target_compile_options(birdie_voice PRIVATE /W4 /permissive-)
+else()
+  target_compile_options(birdie_voice PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+add_executable(birdie-voice-host src/main.cpp)
+target_link_libraries(birdie-voice-host PRIVATE birdie_voice)
+
+if(WIN32)
+  target_sources(birdie-voice-host PRIVATE src/windows/wasapi_capture.cpp)
+  target_link_libraries(birdie-voice-host PRIVATE ole32 uuid)
+endif()
+
+enable_testing()
+add_executable(birdie-voice-tests tests/voice_host_tests.cpp)
+target_link_libraries(birdie-voice-tests PRIVATE birdie_voice)
+add_test(NAME birdie-voice-tests COMMAND birdie-voice-tests)
