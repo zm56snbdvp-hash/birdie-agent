@@ -1,3 +1,6 @@
+mod process_supervisor;
+
+use process_supervisor::ProcessSupervisor;
 use std::{fs::OpenOptions, io::{BufRead, BufReader, Write}, sync::{Arc, Mutex}, thread, time::Duration};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -141,7 +144,10 @@ pub fn run() {
     }))
     .plugin(tauri_plugin_autostart::Builder::new().build())
     .setup(move |app| {
+      let supervisor = ProcessSupervisor::start(app.handle().clone());
+      let _ = app.manage(supervisor);
       start_core_ipc(app.handle().clone(), runtime.clone());
+
       let show = MenuItem::with_id(app, "show", "Birdie anzeigen", true, None::<&str>)?;
       let hide = MenuItem::with_id(app, "hide", "Birdie verbergen", true, None::<&str>)?;
       let quit = MenuItem::with_id(app, "quit", "Birdie beenden", true, None::<&str>)?;
@@ -150,7 +156,10 @@ pub fn run() {
         match event.id.as_ref() {
           "show" => if let Some(w) = app.get_webview_window("core") { let _ = w.show(); },
           "hide" => if let Some(w) = app.get_webview_window("core") { let _ = w.hide(); },
-          "quit" => app.exit(0),
+          "quit" => {
+            app.state::<ProcessSupervisor>().shutdown();
+            app.exit(0);
+          }
           _ => {}
         }
       }).build(app)?;
