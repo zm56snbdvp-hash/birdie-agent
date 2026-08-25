@@ -99,6 +99,16 @@ fn start_core_ipc(app: tauri::AppHandle, shared: Arc<RuntimeState>) {
                 }
               }
             }
+            Some("runtime.audio.input") => {
+              if let Some(payload) = message.get("payload") {
+                let _ = app.emit("runtime.audio.input", payload.clone());
+              }
+            }
+            Some("runtime.audio.output") => {
+              if let Some(payload) = message.get("payload") {
+                let _ = app.emit("runtime.audio.output", payload.clone());
+              }
+            }
             _ => {}
           }
         }
