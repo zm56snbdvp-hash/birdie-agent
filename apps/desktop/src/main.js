@@ -3,12 +3,13 @@ import './styles.css';
 import { RuntimeBridge } from './runtime-bridge.js';
 
 const app = document.querySelector('#app');
-app.innerHTML = `<canvas id="birdie-core" aria-label="Birdie startet"></canvas><section id="panel" hidden><strong>BIRDIE</strong><span id="state">STARTING</span><small id="runtime-status">Runtime verbindet…</small><button id="mic-toggle" type="button">Mikrofon an</button></section>`;
+app.innerHTML = `<canvas id="birdie-core" aria-label="Birdie startet"></canvas><section id="panel" hidden><strong>BIRDIE</strong><span id="state">STARTING</span><small id="runtime-status">Runtime verbindet…</small><small id="component-status">Core · Voice</small><button id="mic-toggle" type="button" disabled>Mikrofon wird initialisiert…</button></section>`;
 
 const canvas = document.querySelector('#birdie-core');
 const panel = document.querySelector('#panel');
 const stateLabel = document.querySelector('#state');
 const runtimeStatus = document.querySelector('#runtime-status');
+const componentStatus = document.querySelector('#component-status');
 const micToggle = document.querySelector('#mic-toggle');
 
 const scene = new THREE.Scene();
@@ -53,7 +54,14 @@ const presets = {
   THINKING:[0.78,0.24,0.64,0.52], SPEAKING:[0.92,0.64,0.72,0.48], WORKING:[0.84,0.34,0.90,0.60],
   SUCCESS:[1,0.78,0.52,0.96], ERROR:[0.54,0.12,0.08,0.16], OFFLINE:[0.16,0.04,0.02,0.05]
 };
-let presenceState = 'OFFLINE', started = performance.now(), microphoneEnabled = true;
+
+let presenceState = 'OFFLINE';
+let started = performance.now();
+let microphoneState = 'UNAVAILABLE';
+let microphoneTarget = null;
+let microphoneTimeout = null;
+let runtimeReady = false;
+const components = new Map();
 
 function applyPresence(snapshot) {
   if (!presets[snapshot.state]) return;
@@ -62,33 +70,104 @@ function applyPresence(snapshot) {
   canvas.setAttribute('aria-label', `Birdie: ${snapshot.state}`);
 }
 
+function renderMicrophone() {
+  if (microphoneTarget !== null) {
+    micToggle.disabled = true;
+    micToggle.textContent = microphoneTarget
+      ? 'Mikrofon wird eingeschaltet…'
+      : 'Mikrofon wird ausgeschaltet…';
+    return;
+  }
+
+  switch (microphoneState) {
+    case 'ENABLED':
+      micToggle.disabled = !runtimeReady;
+      micToggle.textContent = 'Mikrofon aus';
+      break;
+    case 'MUTED_BY_USER':
+      micToggle.disabled = !runtimeReady;
+      micToggle.textContent = 'Mikrofon an';
+      break;
+    case 'PERMISSION_DENIED':
+      micToggle.disabled = true;
+      micToggle.textContent = 'Mikrofon-Berechtigung fehlt';
+      break;
+    default:
+      micToggle.disabled = !runtimeReady;
+      micToggle.textContent = 'Mikrofon erneut verbinden';
+      break;
+  }
+}
+
+function confirmMicrophone(nextState) {
+  microphoneState = nextState;
+  if (microphoneTarget !== null) {
+    const expected = microphoneTarget ? 'ENABLED' : 'MUTED_BY_USER';
+    if (nextState === expected || nextState === 'UNAVAILABLE' || nextState === 'PERMISSION_DENIED') {
+      microphoneTarget = null;
+      clearTimeout(microphoneTimeout);
+      microphoneTimeout = null;
+    }
+  }
+  renderMicrophone();
+}
+
+function renderComponents() {
+  const core = components.get('birdie-core')?.status ?? 'CONNECTING';
+  const voice = components.get('birdie-voice')?.status ?? 'CONNECTING';
+  componentStatus.textContent = `Core ${core} · Voice ${voice}`;
+}
+
 const bridge = new RuntimeBridge({
   onPresence: applyPresence,
   onSnapshot(snapshot) {
-    if (snapshot?.microphoneState) {
-      microphoneEnabled = snapshot.microphoneState === 'ENABLED';
-      micToggle.textContent = microphoneEnabled ? 'Mikrofon aus' : 'Mikrofon an';
-    }
+    if (snapshot?.microphoneState) confirmMicrophone(snapshot.microphoneState);
   },
   onStatus(status) {
-    runtimeStatus.textContent = status === 'READY' ? 'Wake-on-Speak · Local first' : status === 'OFFLINE' ? 'Runtime offline' : 'Runtime verbindet…';
+    runtimeReady = status === 'READY';
+    runtimeStatus.textContent = runtimeReady
+      ? 'Wake-on-Speak · Local first'
+      : status === 'OFFLINE'
+        ? 'Runtime offline'
+        : 'Runtime verbindet…';
     if (status === 'OFFLINE') applyPresence({ state: 'OFFLINE' });
+    renderMicrophone();
+  },
+  onComponent(component) {
+    if (!component?.component) return;
+    components.set(component.component, component);
+    renderComponents();
   }
 });
 
 canvas.addEventListener('click', () => { panel.hidden = !panel.hidden; });
 micToggle.addEventListener('click', async () => {
-  micToggle.disabled = true;
+  if (microphoneTarget !== null) return;
+  microphoneTarget = microphoneState !== 'ENABLED';
+  renderMicrophone();
+
+  microphoneTimeout = setTimeout(() => {
+    microphoneTarget = null;
+    runtimeStatus.textContent = 'Keine Voice-Bestätigung erhalten';
+    renderMicrophone();
+  }, 5_000);
+
   try {
-    await bridge.setMicrophoneEnabled(!microphoneEnabled);
-    microphoneEnabled = !microphoneEnabled;
-    micToggle.textContent = microphoneEnabled ? 'Mikrofon aus' : 'Mikrofon an';
-  } finally { micToggle.disabled = false; }
+    await bridge.setMicrophoneEnabled(microphoneTarget);
+  } catch {
+    clearTimeout(microphoneTimeout);
+    microphoneTimeout = null;
+    microphoneTarget = null;
+    runtimeStatus.textContent = 'Mikrofonbefehl fehlgeschlagen';
+    renderMicrophone();
+  }
 });
 
 bridge.connect().catch(() => {
+  runtimeReady = false;
   runtimeStatus.textContent = 'Runtime offline';
   applyPresence({ state: 'OFFLINE' });
+  renderMicrophone();
 });
 
 function frame(now) {
