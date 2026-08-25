@@ -1,5 +1,7 @@
 #pragma once
 
+#include "birdie/voice/addressability.hpp"
+
 #include <cstdint>
 #include <functional>
 #include <iosfwd>
@@ -119,6 +121,9 @@ class VoiceHost {
   void process(AudioFrame frame);
   bool accept_activation(ActivationMode mode, double confidence);
   bool reject_activation(std::string reason);
+  bool resolve_addressability(
+      const AddressabilityResult& result,
+      ActivationMode accepted_mode = ActivationMode::WakeOnSpeak);
   void set_output_active(bool active, std::string output_id = {}, std::string turn_id = {});
   void set_muted(bool muted);
 
