@@ -6,12 +6,16 @@ on:
       - feature/birdie-desktop-alpha
     paths:
       - services/voice/**
+      - services/core/**
       - packages/protocol/**
+      - tests/desktop-alpha/voice-core-process-smoke.mjs
       - .github/workflows/birdie-voice.yml
   pull_request:
     paths:
       - services/voice/**
+      - services/core/**
       - packages/protocol/**
+      - tests/desktop-alpha/voice-core-process-smoke.mjs
       - .github/workflows/birdie-voice.yml
 
 permissions:
@@ -23,9 +27,17 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
       - name: Configure CMake
         run: cmake -S services/voice -B build/voice -A x64
       - name: Build Release
         run: cmake --build build/voice --config Release --parallel
       - name: Run deterministic voice tests
         run: ctest --test-dir build/voice -C Release --output-on-failure
+      - name: Run C++ Voice to Node Core process integration
+        shell: pwsh
+        run: |
+          $env:BIRDIE_VOICE_SMOKE_EXE = (Resolve-Path "build/voice/Release/birdie-voice-core-smoke.exe").Path
+          node tests/desktop-alpha/voice-core-process-smoke.mjs
