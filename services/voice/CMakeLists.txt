@@ -12,6 +12,10 @@ add_library(birdie_voice STATIC
 target_include_directories(birdie_voice PUBLIC include)
 target_compile_features(birdie_voice PUBLIC cxx_std_20)
 
+if(WIN32)
+  target_sources(birdie_voice PRIVATE src/windows/core_ipc_sink.cpp)
+endif()
+
 if(MSVC)
   target_compile_options(birdie_voice PRIVATE /W4 /permissive-)
 else()
@@ -30,3 +34,9 @@ enable_testing()
 add_executable(birdie-voice-tests tests/voice_host_tests.cpp)
 target_link_libraries(birdie-voice-tests PRIVATE birdie_voice)
 add_test(NAME birdie-voice-tests COMMAND birdie-voice-tests)
+
+if(WIN32)
+  add_executable(birdie-voice-ipc-tests tests/core_ipc_sink_tests.cpp)
+  target_link_libraries(birdie-voice-ipc-tests PRIVATE birdie_voice)
+  add_test(NAME birdie-voice-ipc-tests COMMAND birdie-voice-ipc-tests)
+endif()
