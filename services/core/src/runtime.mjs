@@ -55,7 +55,8 @@ export class BirdieRuntime {
       case 'voice.activation.accepted':
         return this.#startOrContinueTurn(event);
       case 'voice.activation.rejected':
-        return this.#handleActivationRejected(event);
+      case 'voice.activation.abstained':
+        return this.#handleUnacceptedActivation(event.name);
       case 'voice.utterance.finalized':
         return this.#finalizeUtterance(event);
       case 'voice.output.started':
@@ -94,11 +95,11 @@ export class BirdieRuntime {
     return this.#setPresence('LISTENING', 'voice.activation.accepted');
   }
 
-  #handleActivationRejected() {
+  #handleUnacceptedActivation(reason) {
     if (this.presenceState === 'SPEECH_DETECTED' && this.activeTurn?.status === 'OUTPUTTING') {
-      return this.#setPresence('SPEAKING', 'voice.activation.rejected');
+      return this.#setPresence('SPEAKING', reason);
     }
-    return this.#setPresence('IDLE', 'voice.activation.rejected');
+    return this.#setPresence('IDLE', reason);
   }
 
   #finalizeUtterance(event) {
