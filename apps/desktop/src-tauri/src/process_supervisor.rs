@@ -15,6 +15,7 @@ use tauri::{AppHandle, Emitter};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Clone, Debug)]
@@ -25,7 +26,7 @@ struct ProcessSpec {
   working_directory: Option<PathBuf>,
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SupervisorEvent<'a> {
   component: &'a str,
@@ -244,7 +245,7 @@ fn discover_specs() -> Vec<ProcessSpec> {
   };
 
   let mut specs = Vec::new();
-  if env::var_os("BIRDIE_MANAGE_CORE").as_deref() != Some("0".as_ref()) {
+  if !env_disabled("BIRDIE_MANAGE_CORE") {
     let core_program = env::var_os("BIRDIE_CORE_PROGRAM")
       .map(PathBuf::from)
       .unwrap_or_else(|| PathBuf::from("node"));
@@ -259,7 +260,7 @@ fn discover_specs() -> Vec<ProcessSpec> {
     });
   }
 
-  if env::var_os("BIRDIE_MANAGE_VOICE").as_deref() != Some("0".as_ref()) {
+  if !env_disabled("BIRDIE_MANAGE_VOICE") {
     if let Some(voice_program) = discover_voice_executable(&repo_root) {
       let mut args = vec!["--mic".to_string()];
       if env_flag("BIRDIE_DEV_AUTO_ACCEPT") {
@@ -303,6 +304,12 @@ fn repo_root() -> Option<PathBuf> {
 fn env_flag(name: &str) -> bool {
   env::var(name)
     .map(|value| matches!(value.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
+    .unwrap_or(false)
+}
+
+fn env_disabled(name: &str) -> bool {
+  env::var(name)
+    .map(|value| matches!(value.to_ascii_lowercase().as_str(), "0" | "false" | "no" | "off"))
     .unwrap_or(false)
 }
 
