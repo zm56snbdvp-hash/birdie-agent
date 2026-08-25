@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { once } from 'node:events';
-import net from 'node:net';
+import { IpcRole } from '../../packages/protocol/src/contract.mjs';
 import { BirdieIpcServer, PIPE_NAME } from '../../services/core/src/ipc-server.mjs';
+import { connectIpcClient } from '../../services/core/test/helpers/ipc-client.mjs';
 
 const expectedStates = [
   'IDLE',
@@ -38,7 +38,10 @@ function waitForExit(child) {
 }
 
 const executable = process.env.BIRDIE_VOICE_SMOKE_EXE;
-assert.ok(executable, 'BIRDIE_VOICE_SMOKE_EXE must point to the built C++ smoke publisher');
+assert.ok(
+  executable,
+  'BIRDIE_VOICE_SMOKE_EXE must point to the built C++ smoke publisher',
+);
 
 const server = new BirdieIpcServer();
 let observer;
@@ -47,28 +50,28 @@ let child;
 try {
   await server.start();
 
+  observer = await connectIpcClient(PIPE_NAME, {
+    role: IpcRole.OBSERVER,
+    component: 'voice-core-process-observer',
+  });
   const states = [];
-  observer = net.createConnection(PIPE_NAME);
-  observer.setEncoding('utf8');
-  let buffer = '';
-  observer.on('data', (chunk) => {
-    buffer += chunk;
-    let newline;
-    while ((newline = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, newline).trim();
-      buffer = buffer.slice(newline + 1);
-      if (!line) continue;
-      const message = JSON.parse(line);
+  const originalMessagesLength = observer.messages.length;
+
+  const collect = setInterval(() => {
+    for (const message of observer.messages.splice(originalMessagesLength)) {
       if (message.type === 'runtime.presence.changed') {
         states.push(message.payload.state);
       }
     }
-  });
-  await once(observer, 'connect');
+  }, 10);
 
-  child = spawn(executable, [], { stdio: 'inherit', windowsHide: true });
-  await waitForExit(child);
-  await waitFor(() => states.length >= expectedStates.length);
+  try {
+    child = spawn(executable, [], { stdio: 'inherit', windowsHide: true });
+    await waitForExit(child);
+    await waitFor(() => states.length >= expectedStates.length);
+  } finally {
+    clearInterval(collect);
+  }
 
   assert.deepEqual(
     states.slice(0, expectedStates.length),
@@ -79,6 +82,6 @@ try {
   console.log(`voice-core-process-smoke: PASS (${states.join(' → ')})`);
 } finally {
   if (child && child.exitCode === null) child.kill();
-  observer?.destroy();
+  observer?.socket.destroy();
   await server.stop();
 }
