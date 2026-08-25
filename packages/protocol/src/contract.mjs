@@ -82,6 +82,7 @@ export const EventName = Object.freeze({
   VOICE_ACTIVITY_ENDED: "voice.activity.ended",
   VOICE_ACTIVATION_ACCEPTED: "voice.activation.accepted",
   VOICE_ACTIVATION_REJECTED: "voice.activation.rejected",
+  VOICE_ACTIVATION_ABSTAINED: "voice.activation.abstained",
   VOICE_UTTERANCE_FINALIZED: "voice.utterance.finalized",
   VOICE_INPUT_LEVEL: "voice.input.level",
   VOICE_PRIVACY_CHANGED: "voice.privacy.changed",
