@@ -17,7 +17,7 @@ export class BirdieIpcServer extends EventEmitter {
     this.runtime = new BirdieRuntimeV0();
     this.server = null;
     this.clients = new Set();
-    this.microphoneState = 'ENABLED';
+    this.microphoneState = 'UNAVAILABLE';
   }
 
   async start() {
