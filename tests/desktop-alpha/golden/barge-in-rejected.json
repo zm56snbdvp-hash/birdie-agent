@@ -1,0 +1,20 @@
+{
+  "name": "barge-in-rejected",
+  "contract_version": "1.0",
+  "expected_presence_trace": [
+    "SPEAKING",
+    "SPEECH_DETECTED",
+    "SPEAKING"
+  ],
+  "events": [
+    {"name":"voice.activity.started","turn_id":"turn-1"},
+    {"name":"voice.output.duck","turn_id":"turn-1"},
+    {"name":"voice.activation.rejected","turn_id":"turn-1"},
+    {"name":"voice.output.resume","turn_id":"turn-1"}
+  ],
+  "invariants": [
+    "turn-1 remains active",
+    "audio resumes from the existing output position",
+    "no new brain turn is created"
+  ]
+}
