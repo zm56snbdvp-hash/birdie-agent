@@ -11,6 +11,7 @@
 #include <csignal>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -97,6 +98,16 @@ int main(int argc, char** argv) {
                   << " duration_ms=" << utterance.duration_ms << '\n';
         std::fill(utterance.samples.begin(), utterance.samples.end(), 0.0F);
       });
+  std::mutex host_mutex;
+
+  auto host_is_muted = [&] {
+    std::scoped_lock lock(host_mutex);
+    return host.muted();
+  };
+  auto set_host_muted = [&](const bool muted) {
+    std::scoped_lock lock(host_mutex);
+    host.set_muted(muted);
+  };
 
   if (development_auto_accept) {
     std::cerr << "[birdie-voice] WARNING: --dev-auto-accept is active; "
@@ -113,9 +124,18 @@ int main(int argc, char** argv) {
                {{"microphone_state", std::move(microphone_state)}}});
   };
 
+  auto emit_component_ready = [&] {
+    sink.emit({"component.ready", monotonic_ms(), std::nullopt,
+               {{"component", std::string("birdie-voice")},
+                {"contract_version", std::string("1.0")},
+                {"capture", std::string("WASAPI_SHARED_16K_MONO")},
+                {"development_auto_accept", development_auto_accept}}});
+  };
+
   auto start_capture = [&](std::string& error) {
     return capture.start(
         [&](birdie::voice::AudioFrame frame) {
+          std::scoped_lock lock(host_mutex);
           host.process(std::move(frame));
           if (development_auto_accept &&
               host.phase() == birdie::voice::VoicePhase::SpeechCandidate) {
@@ -149,11 +169,7 @@ int main(int argc, char** argv) {
     return 3;
   }
 
-  sink.emit({"component.ready", monotonic_ms(), std::nullopt,
-             {{"component", std::string("birdie-voice")},
-              {"contract_version", std::string("1.0")},
-              {"capture", std::string("WASAPI_SHARED_16K_MONO")},
-              {"development_auto_accept", development_auto_accept}}});
+  emit_component_ready();
   emit_privacy("ENABLED");
 
   bool previous_core_connection = false;
@@ -164,22 +180,23 @@ int main(int argc, char** argv) {
       if (!command->enabled) {
         capture_enabled = false;
         capture.stop();
-        host.set_muted(true);  // Emits confirmation after WASAPI is released.
+        set_host_muted(true);  // Confirms only after WASAPI is released.
         std::cerr << "[birdie-voice] microphone disabled by user\n";
       } else {
         capture_enabled = true;
         if (capture.running()) {
-          if (host.muted()) {
-            host.set_muted(false);
+          if (host_is_muted()) {
+            set_host_muted(false);
           } else {
             emit_privacy("ENABLED");
           }
         } else {
           std::string restart_error;
           if (start_capture(restart_error)) {
-            host.set_muted(false);
+            set_host_muted(false);
             std::cerr << "[birdie-voice] microphone enabled by user\n";
           } else {
+            set_host_muted(true);
             emit_privacy("UNAVAILABLE");
             sink.emit({"component.health.changed", monotonic_ms(),
                        std::nullopt,
@@ -205,13 +222,14 @@ int main(int argc, char** argv) {
         std::chrono::steady_clock::now() >= next_restart_attempt) {
       std::string restart_error;
       if (start_capture(restart_error)) {
-        if (host.muted()) host.set_muted(false);
+        if (host_is_muted()) set_host_muted(false);
         emit_privacy("ENABLED");
         sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
                    {{"component", std::string("birdie-voice")},
                     {"status", std::string("READY")},
                     {"error_code", std::string("")}}});
       } else {
+        set_host_muted(true);
         emit_privacy("UNAVAILABLE");
         next_restart_attempt =
             std::chrono::steady_clock::now() + std::chrono::seconds(1);
@@ -224,14 +242,14 @@ int main(int argc, char** argv) {
                 << (current_core_connection ? "connected" : "disconnected")
                 << '\n';
       if (current_core_connection) {
-        sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
-                   {{"component", std::string("birdie-voice")},
-                    {"status", std::string("READY")},
-                    {"error_code", std::string("")}}});
+        // A restarted Core begins OFFLINE. Replaying component.ready rehydrates
+        // its canonical Presence state instead of leaving the desktop dark.
+        emit_component_ready();
+        const bool muted = host_is_muted();
         emit_privacy(capture_enabled && capture.running()
                          ? std::string("ENABLED")
-                         : host.muted() ? std::string("MUTED_BY_USER")
-                                        : std::string("UNAVAILABLE"));
+                         : muted ? std::string("MUTED_BY_USER")
+                                 : std::string("UNAVAILABLE"));
       }
       previous_core_connection = current_core_connection;
     }
@@ -240,7 +258,7 @@ int main(int argc, char** argv) {
   }
 
   capture.stop();
-  host.set_muted(true);
+  set_host_muted(true);
   std::cerr << "[birdie-voice] dropped best-effort IPC events: "
             << core_sink.dropped_best_effort() << '\n';
   return 0;
