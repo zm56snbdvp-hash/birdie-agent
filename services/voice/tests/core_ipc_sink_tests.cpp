@@ -72,7 +72,7 @@ void test_voice_event_is_published_to_core() {
 
       const std::string line = read_line(pipe);
       const std::string ack =
-          R"({"type":"runtime.event.ack","requestId":"test"})" "\n";
+          "{\"type\":\"runtime.event.ack\",\"requestId\":\"test\"}\n";
       DWORD written = 0;
       WriteFile(pipe, ack.data(), static_cast<DWORD>(ack.size()), &written,
                 nullptr);
