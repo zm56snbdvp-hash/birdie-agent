@@ -38,11 +38,14 @@ export class BirdieRuntimeV0 {
         this.pendingBargeIn = this.presence.state === PresenceState.SPEAKING;
         return this.#setPresence(PresenceState.SPEECH_DETECTED, event, 'voice.activity.started');
       case 'voice.activation.rejected':
+      case 'voice.activation.abstained': {
+        const reason = event.name;
         if (this.pendingBargeIn) {
           this.pendingBargeIn = false;
-          return this.#setPresence(PresenceState.SPEAKING, event, 'voice.activation.rejected');
+          return this.#setPresence(PresenceState.SPEAKING, event, reason);
         }
-        return this.#setPresence(PresenceState.IDLE, event, 'voice.activation.rejected', null);
+        return this.#setPresence(PresenceState.IDLE, event, reason, null);
+      }
       case 'voice.activation.accepted':
         if (this.pendingBargeIn) {
           const oldTurn = this.turns.activeTurnId;
