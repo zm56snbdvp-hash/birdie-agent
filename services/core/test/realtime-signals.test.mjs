@@ -124,6 +124,13 @@ test('Voice levels are normalized and forwarded without changing Presence', asyn
       false,
       'best-effort level events must not create ACK traffic',
     );
+    assert.equal(
+      publisher.messages.some(
+        (message) => message.type === 'runtime.audio.input',
+      ),
+      false,
+      'Core must not echo derived audio levels back to the Voice publisher',
+    );
   } finally {
     observer.socket.destroy();
     publisher.socket.destroy();
