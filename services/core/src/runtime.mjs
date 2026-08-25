@@ -1,5 +1,6 @@
-import { PRESENCE_STATES } from '../../../packages/protocol/src/contract.mjs';
+import { PresenceState } from '../../../packages/protocol/src/contract.mjs';
 
+const PRESENCE_STATES = new Set(Object.values(PresenceState));
 const TERMINAL_TURN_STATUSES = new Set(['COMPLETED', 'CANCELLED', 'FAILED', 'INTERRUPTED']);
 
 export class BirdieRuntime {
@@ -161,7 +162,7 @@ export class BirdieRuntime {
   }
 
   #setPresence(next, reason) {
-    if (!PRESENCE_STATES.includes(next)) throw new Error(`Unknown presence state: ${next}`);
+    if (!PRESENCE_STATES.has(next)) throw new Error(`Unknown presence state: ${next}`);
     const changed = next !== this.presenceState;
     if (changed) {
       this.presenceState = next;
