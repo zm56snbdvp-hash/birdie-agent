@@ -90,8 +90,8 @@ int main(int argc, char** argv) {
   birdie::voice::VoiceConfig config;
   birdie::voice::VoiceHost host(
       config, sink, [](birdie::voice::UtteranceAudio utterance) {
-        // The audio remains local. Gate-STT will emit voice.utterance.finalized
-        // only after an accepted turn has been transcribed.
+        // Audio remains local. Gate-STT will emit voice.utterance.finalized only
+        // after an accepted turn has been transcribed.
         std::cerr << "[birdie-voice] local utterance ready: id="
                   << utterance.utterance_id
                   << " duration_ms=" << utterance.duration_ms << '\n';
@@ -104,32 +104,46 @@ int main(int argc, char** argv) {
   }
 
   birdie::voice::WasapiCapture capture;
-  std::string start_error;
-  const bool started = capture.start(
-      [&](birdie::voice::AudioFrame frame) {
-        host.process(std::move(frame));
-        if (development_auto_accept &&
-            host.phase() == birdie::voice::VoicePhase::SpeechCandidate) {
-          host.accept_activation(birdie::voice::ActivationMode::Development,
-                                 0.99);
-        }
-      },
-      [&](std::string message) {
-        sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
-                   {{"component", std::string("birdie-voice")},
-                    {"status", std::string("DEGRADED")},
-                    {"error_code", std::string("VOICE.INPUT.CAPTURE_FAILED")},
-                    {"detail", std::move(message)}}});
-        stop_requested.store(true);
-      },
-      start_error);
+  std::atomic<bool> capture_faulted{false};
+  bool capture_enabled = true;
+  auto next_restart_attempt = std::chrono::steady_clock::now();
 
-  if (!started) {
+  auto emit_privacy = [&](std::string microphone_state) {
+    sink.emit({"voice.privacy.changed", monotonic_ms(), std::nullopt,
+               {{"microphone_state", std::move(microphone_state)}}});
+  };
+
+  auto start_capture = [&](std::string& error) {
+    return capture.start(
+        [&](birdie::voice::AudioFrame frame) {
+          host.process(std::move(frame));
+          if (development_auto_accept &&
+              host.phase() == birdie::voice::VoicePhase::SpeechCandidate) {
+            host.accept_activation(birdie::voice::ActivationMode::Development,
+                                   0.99);
+          }
+        },
+        [&](std::string message) {
+          sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
+                     {{"component", std::string("birdie-voice")},
+                      {"status", std::string("DEGRADED")},
+                      {"error_code",
+                       std::string("VOICE.INPUT.CAPTURE_FAILED")},
+                      {"detail", std::move(message)}}});
+          emit_privacy("UNAVAILABLE");
+          capture_faulted.store(true, std::memory_order_release);
+        },
+        error);
+  };
+
+  std::string start_error;
+  if (!start_capture(start_error)) {
     sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
                {{"component", std::string("birdie-voice")},
                 {"status", std::string("UNAVAILABLE")},
                 {"error_code", std::string("VOICE.INPUT.INIT_FAILED")},
                 {"detail", start_error}}});
+    emit_privacy("UNAVAILABLE");
     std::cerr << "Could not start Birdie Voice Host: " << start_error << '\n';
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     return 3;
@@ -140,9 +154,70 @@ int main(int argc, char** argv) {
               {"contract_version", std::string("1.0")},
               {"capture", std::string("WASAPI_SHARED_16K_MONO")},
               {"development_auto_accept", development_auto_accept}}});
+  emit_privacy("ENABLED");
 
   bool previous_core_connection = false;
-  while (!stop_requested.load() && capture.running()) {
+  while (!stop_requested.load(std::memory_order_acquire)) {
+    while (auto command = core_sink.try_pop_command()) {
+      if (command->name != "voice.mute.set") continue;
+
+      if (!command->enabled) {
+        capture_enabled = false;
+        capture.stop();
+        host.set_muted(true);  // Emits confirmation after WASAPI is released.
+        std::cerr << "[birdie-voice] microphone disabled by user\n";
+      } else {
+        capture_enabled = true;
+        if (capture.running()) {
+          if (host.muted()) {
+            host.set_muted(false);
+          } else {
+            emit_privacy("ENABLED");
+          }
+        } else {
+          std::string restart_error;
+          if (start_capture(restart_error)) {
+            host.set_muted(false);
+            std::cerr << "[birdie-voice] microphone enabled by user\n";
+          } else {
+            emit_privacy("UNAVAILABLE");
+            sink.emit({"component.health.changed", monotonic_ms(),
+                       std::nullopt,
+                       {{"component", std::string("birdie-voice")},
+                        {"status", std::string("DEGRADED")},
+                        {"error_code",
+                         std::string("VOICE.INPUT.RESTART_FAILED")},
+                        {"detail", restart_error}}});
+            next_restart_attempt =
+                std::chrono::steady_clock::now() + std::chrono::seconds(1);
+          }
+        }
+      }
+    }
+
+    if (capture_faulted.exchange(false, std::memory_order_acq_rel)) {
+      capture.stop();
+      next_restart_attempt =
+          std::chrono::steady_clock::now() + std::chrono::seconds(1);
+    }
+
+    if (capture_enabled && !capture.running() &&
+        std::chrono::steady_clock::now() >= next_restart_attempt) {
+      std::string restart_error;
+      if (start_capture(restart_error)) {
+        if (host.muted()) host.set_muted(false);
+        emit_privacy("ENABLED");
+        sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
+                   {{"component", std::string("birdie-voice")},
+                    {"status", std::string("READY")},
+                    {"error_code", std::string("")}}});
+      } else {
+        emit_privacy("UNAVAILABLE");
+        next_restart_attempt =
+            std::chrono::steady_clock::now() + std::chrono::seconds(1);
+      }
+    }
+
     const bool current_core_connection = core_sink.connected();
     if (current_core_connection != previous_core_connection) {
       std::cerr << "[birdie-voice] Birdie Core IPC "
@@ -153,14 +228,19 @@ int main(int argc, char** argv) {
                    {{"component", std::string("birdie-voice")},
                     {"status", std::string("READY")},
                     {"error_code", std::string("")}}});
+        emit_privacy(capture_enabled && capture.running()
+                         ? std::string("ENABLED")
+                         : host.muted() ? std::string("MUTED_BY_USER")
+                                        : std::string("UNAVAILABLE"));
       }
       previous_core_connection = current_core_connection;
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 
-  host.set_muted(true);
   capture.stop();
+  host.set_muted(true);
   std::cerr << "[birdie-voice] dropped best-effort IPC events: "
             << core_sink.dropped_best_effort() << '\n';
   return 0;
