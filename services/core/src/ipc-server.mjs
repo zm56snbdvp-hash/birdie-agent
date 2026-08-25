@@ -1,5 +1,10 @@
 import net from 'node:net';
 import { EventEmitter } from 'node:events';
+import {
+  CONTRACT_VERSION,
+  IpcMessageType,
+  IpcRole,
+} from '../../../packages/protocol/src/contract.mjs';
 import { BirdieRuntimeV0 } from './runtime-v0.mjs';
 
 const PIPE_NAME = String.raw`\\.\pipe\birdie.core.control.v1`;
@@ -13,11 +18,19 @@ const BEST_EFFORT_VOICE_EVENTS = new Set([
   'voice.input.level',
   'voice.output.level',
 ]);
+const SNAPSHOT_ROLES = new Set([IpcRole.DESKTOP, IpcRole.OBSERVER]);
+const PRESENCE_ROLES = new Set([IpcRole.DESKTOP, IpcRole.OBSERVER]);
+const AUDIO_ROLES = new Set([IpcRole.DESKTOP, IpcRole.OBSERVER]);
+const ALL_ROLES = new Set(Object.values(IpcRole));
 
 function normalized(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return 0;
   return Math.max(0, Math.min(1, number));
+}
+
+function major(version) {
+  return String(version ?? '').split('.', 1)[0];
 }
 
 export class BirdieIpcServer extends EventEmitter {
@@ -26,7 +39,7 @@ export class BirdieIpcServer extends EventEmitter {
     this.pipeName = pipeName;
     this.runtime = new BirdieRuntimeV0();
     this.server = null;
-    this.clients = new Set();
+    this.clients = new Map();
     this.microphoneState = 'UNAVAILABLE';
   }
 
@@ -43,7 +56,7 @@ export class BirdieIpcServer extends EventEmitter {
   }
 
   async stop() {
-    for (const socket of this.clients) socket.destroy();
+    for (const socket of this.clients.keys()) socket.destroy();
     this.clients.clear();
     if (!this.server) return;
     const server = this.server;
@@ -60,66 +73,59 @@ export class BirdieIpcServer extends EventEmitter {
     };
   }
 
-  publish(event, originSocket = null) {
+  publish(event) {
     const result = this.runtime.apply(event);
     if (result?.presenceChanged) {
-      this.#broadcast(
-        {
-          type: 'runtime.presence.changed',
-          payload: result.snapshot.presence,
-        },
-        originSocket,
-      );
+      this.#broadcastToRoles(PRESENCE_ROLES, {
+        type: IpcMessageType.RUNTIME_PRESENCE_CHANGED,
+        payload: result.snapshot.presence,
+      });
     }
 
     if (event?.name === 'voice.privacy.changed') {
       const nextState = event.payload?.microphone_state;
       if (MICROPHONE_STATES.has(nextState)) {
         this.microphoneState = nextState;
-        this.#broadcast(
-          {
-            type: 'runtime.snapshot',
-            payload: this.getSnapshot(),
-          },
-          originSocket,
-        );
+        this.#broadcastToRoles(SNAPSHOT_ROLES, {
+          type: IpcMessageType.RUNTIME_SNAPSHOT,
+          payload: this.getSnapshot(),
+        });
       }
     }
 
     if (event?.name === 'voice.input.level') {
-      this.#broadcast(
-        {
-          type: 'runtime.audio.input',
-          payload: {
-            level: normalized(event.payload?.normalized_level),
-            vadProbability: normalized(event.payload?.vad_probability),
-            monotonicMs: Number(event.monotonic_ms) || 0,
-          },
+      this.#broadcastToRoles(AUDIO_ROLES, {
+        type: IpcMessageType.RUNTIME_AUDIO_INPUT,
+        payload: {
+          level: normalized(event.payload?.normalized_level),
+          vadProbability: normalized(event.payload?.vad_probability),
+          monotonicMs: Number(event.monotonic_ms) || 0,
         },
-        originSocket,
-      );
+      });
     } else if (event?.name === 'voice.output.level') {
-      this.#broadcast(
-        {
-          type: 'runtime.audio.output',
-          payload: {
-            level: normalized(event.payload?.normalized_level),
-            monotonicMs: Number(event.monotonic_ms) || 0,
-          },
+      this.#broadcastToRoles(AUDIO_ROLES, {
+        type: IpcMessageType.RUNTIME_AUDIO_OUTPUT,
+        payload: {
+          level: normalized(event.payload?.normalized_level),
+          monotonicMs: Number(event.monotonic_ms) || 0,
         },
-        originSocket,
-      );
+      });
     }
 
     return result;
   }
 
   #attach(socket) {
-    this.clients.add(socket);
+    this.clients.set(socket, null);
     socket.setEncoding('utf8');
     let buffer = '';
     socket.on('data', (chunk) => {
       buffer += chunk;
+      if (buffer.length > 512 * 1024) {
+        this.#sendError(socket, null, 'CONTRACT.MESSAGE_TOO_LARGE');
+        socket.destroy();
+        return;
+      }
       let idx;
       while ((idx = buffer.indexOf('\n')) >= 0) {
         const line = buffer.slice(0, idx).trim();
@@ -127,12 +133,9 @@ export class BirdieIpcServer extends EventEmitter {
         if (line) this.#handle(socket, line);
       }
     });
-    socket.on('close', () => this.clients.delete(socket));
-    socket.on('error', () => this.clients.delete(socket));
-    this.#send(socket, {
-      type: 'runtime.snapshot',
-      payload: this.getSnapshot(),
-    });
+    const remove = () => this.clients.delete(socket);
+    socket.on('close', remove);
+    socket.on('error', remove);
   }
 
   #handle(socket, line) {
@@ -140,75 +143,195 @@ export class BirdieIpcServer extends EventEmitter {
     try {
       message = JSON.parse(line);
     } catch {
-      return this.#send(socket, { type: 'error', error: 'INVALID_JSON' });
+      return this.#sendError(socket, null, 'INVALID_JSON');
     }
 
-    if (message.type === 'runtime.snapshot.request') {
+    if (message.type === IpcMessageType.COMPONENT_HELLO) {
+      return this.#handleHello(socket, message);
+    }
+
+    const client = this.clients.get(socket);
+    if (!client) {
+      return this.#sendError(
+        socket,
+        message.requestId ?? null,
+        'CONTRACT.HANDSHAKE_REQUIRED',
+      );
+    }
+
+    if (message.type === IpcMessageType.RUNTIME_SNAPSHOT_REQUEST) {
+      if (!SNAPSHOT_ROLES.has(client.role)) {
+        return this.#forbidden(socket, message, 'snapshot.read');
+      }
       return this.#send(socket, {
-        type: 'runtime.snapshot',
+        type: IpcMessageType.RUNTIME_SNAPSHOT,
         payload: this.getSnapshot(),
       });
     }
 
-    if (message.type === 'runtime.event.publish') {
+    if (message.type === IpcMessageType.RUNTIME_EVENT_PUBLISH) {
+      if (client.role !== IpcRole.VOICE) {
+        return this.#forbidden(socket, message, 'voice.event.publish');
+      }
       try {
-        const result = this.publish(message.payload, socket);
+        const result = this.publish(message.payload);
         if (BEST_EFFORT_VOICE_EVENTS.has(message.payload?.name)) return;
         return this.#send(socket, {
-          type: 'runtime.event.ack',
+          type: IpcMessageType.RUNTIME_EVENT_ACK,
           requestId: message.requestId ?? null,
           payload: result,
         });
       } catch (error) {
-        return this.#send(socket, {
-          type: 'error',
-          requestId: message.requestId ?? null,
-          error: String(error.message ?? error),
-        });
+        return this.#sendError(
+          socket,
+          message.requestId ?? null,
+          String(error.message ?? error),
+        );
       }
     }
 
-    if (message.type === 'runtime.command') {
-      const command = message.payload?.name;
-      if (command === 'ui.microphone.set_enabled') {
-        const enabled = message.payload?.enabled === true;
-        const requestId = message.requestId ?? null;
-        this.#broadcast({
-          type: 'voice.command',
-          requestId,
-          payload: {
-            name: 'voice.mute.set',
-            enabled,
-          },
-        });
-        return this.#send(socket, {
-          type: 'runtime.command.ack',
-          requestId,
-          payload: {
-            accepted: true,
-            pendingVoiceConfirmation: true,
-            microphoneState: this.microphoneState,
-          },
-        });
+    if (message.type === IpcMessageType.RUNTIME_COMMAND) {
+      if (client.role !== IpcRole.DESKTOP) {
+        return this.#forbidden(socket, message, 'runtime.command');
       }
-      return this.#send(socket, {
-        type: 'error',
-        requestId: message.requestId ?? null,
-        error: 'UNKNOWN_COMMAND',
+      return this.#handleRuntimeCommand(socket, message);
+    }
+
+    this.#sendError(
+      socket,
+      message.requestId ?? null,
+      'UNKNOWN_MESSAGE_TYPE',
+    );
+  }
+
+  #handleHello(socket, message) {
+    if (this.clients.get(socket)) {
+      return this.#sendError(
+        socket,
+        message.requestId ?? null,
+        'CONTRACT.ALREADY_REGISTERED',
+      );
+    }
+
+    const payload = message.payload ?? {};
+    const role = payload.role;
+    const component = String(payload.component ?? '').trim();
+    const instanceId = String(payload.instanceId ?? '').trim();
+    const contractVersion = String(payload.contractVersion ?? '').trim();
+
+    if (!ALL_ROLES.has(role) || !component || !instanceId || !contractVersion) {
+      return this.#sendError(
+        socket,
+        message.requestId ?? null,
+        'CONTRACT.INVALID_HELLO',
+      );
+    }
+
+    if (major(contractVersion) !== major(CONTRACT_VERSION)) {
+      this.#sendError(
+        socket,
+        message.requestId ?? null,
+        'CONTRACT.VERSION_MISMATCH',
+        { expected: CONTRACT_VERSION, received: contractVersion },
+      );
+      socket.end();
+      return;
+    }
+
+    const client = {
+      role,
+      component,
+      instanceId,
+      contractVersion,
+      connectedAt: new Date().toISOString(),
+    };
+    this.clients.set(socket, client);
+
+    this.#send(socket, {
+      type: IpcMessageType.COMPONENT_HELLO_ACK,
+      requestId: message.requestId ?? null,
+      payload: {
+        accepted: true,
+        role,
+        contractVersion: CONTRACT_VERSION,
+      },
+    });
+
+    if (SNAPSHOT_ROLES.has(role)) {
+      this.#send(socket, {
+        type: IpcMessageType.RUNTIME_SNAPSHOT,
+        payload: this.getSnapshot(),
       });
     }
 
+    this.emit('client.registered', { ...client });
+  }
+
+  #handleRuntimeCommand(socket, message) {
+    const command = message.payload?.name;
+    if (command !== 'ui.microphone.set_enabled') {
+      return this.#sendError(
+        socket,
+        message.requestId ?? null,
+        'UNKNOWN_COMMAND',
+      );
+    }
+
+    const enabled = message.payload?.enabled === true;
+    const requestId = message.requestId ?? null;
+    const recipients = this.#sendToRole(IpcRole.VOICE, {
+      type: IpcMessageType.VOICE_COMMAND,
+      requestId,
+      payload: {
+        name: 'voice.mute.set',
+        enabled,
+      },
+    });
+
     this.#send(socket, {
-      type: 'error',
-      requestId: message.requestId ?? null,
-      error: 'UNKNOWN_MESSAGE_TYPE',
+      type: IpcMessageType.RUNTIME_COMMAND_ACK,
+      requestId,
+      payload: {
+        accepted: recipients > 0,
+        pendingVoiceConfirmation: recipients > 0,
+        microphoneState: this.microphoneState,
+        errorCode: recipients > 0 ? null : 'VOICE.UNAVAILABLE',
+      },
     });
   }
 
-  #broadcast(message, excludedSocket = null) {
-    for (const socket of this.clients) {
-      if (socket !== excludedSocket) this.#send(socket, message);
+  #forbidden(socket, message, capability) {
+    this.#sendError(
+      socket,
+      message.requestId ?? null,
+      'CONTRACT.CAPABILITY_DENIED',
+      { capability },
+    );
+  }
+
+  #sendToRole(role, message) {
+    let sent = 0;
+    for (const [socket, client] of this.clients) {
+      if (client?.role !== role) continue;
+      this.#send(socket, message);
+      sent += 1;
     }
+    return sent;
+  }
+
+  #broadcastToRoles(roles, message) {
+    for (const [socket, client] of this.clients) {
+      if (client && roles.has(client.role)) this.#send(socket, message);
+    }
+  }
+
+  #sendError(socket, requestId, error, details = undefined) {
+    this.#send(socket, {
+      type: IpcMessageType.ERROR,
+      requestId,
+      error,
+      ...(details ? { details } : {}),
+    });
   }
 
   #send(socket, message) {
