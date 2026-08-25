@@ -118,6 +118,7 @@ int main(int argc, char** argv) {
   std::atomic<bool> capture_faulted{false};
   bool capture_enabled = true;
   auto next_restart_attempt = std::chrono::steady_clock::now();
+  auto next_ipc_liveness_probe = std::chrono::steady_clock::now();
 
   auto emit_privacy = [&](std::string microphone_state) {
     sink.emit({"voice.privacy.changed", monotonic_ms(), std::nullopt,
@@ -181,6 +182,7 @@ int main(int argc, char** argv) {
         capture_enabled = false;
         capture.stop();
         set_host_muted(true);  // Confirms only after WASAPI is released.
+        next_ipc_liveness_probe = std::chrono::steady_clock::now();
         std::cerr << "[birdie-voice] microphone disabled by user\n";
       } else {
         capture_enabled = true;
@@ -216,6 +218,7 @@ int main(int argc, char** argv) {
       capture.stop();
       next_restart_attempt =
           std::chrono::steady_clock::now() + std::chrono::seconds(1);
+      next_ipc_liveness_probe = std::chrono::steady_clock::now();
     }
 
     if (capture_enabled && !capture.running() &&
@@ -234,6 +237,18 @@ int main(int argc, char** argv) {
         next_restart_attempt =
             std::chrono::steady_clock::now() + std::chrono::seconds(1);
       }
+    }
+
+    const auto now = std::chrono::steady_clock::now();
+    if (!capture.running() && now >= next_ipc_liveness_probe) {
+      // Input levels are explicitly best-effort. A zero-level probe therefore
+      // detects a dead pipe without persisting data or growing the reliable
+      // queue while Core is offline. The renderer treats it as silence.
+      sink.emit({"voice.input.level", monotonic_ms(), std::nullopt,
+                 {{"normalized_level", 0.0},
+                  {"vad_probability", 0.0},
+                  {"liveness_probe", true}}});
+      next_ipc_liveness_probe = now + std::chrono::milliseconds(500);
     }
 
     const bool current_core_connection = core_sink.connected();
