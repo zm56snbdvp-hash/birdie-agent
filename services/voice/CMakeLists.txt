@@ -7,6 +7,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(birdie_voice STATIC
   src/addressability.cpp
+  src/addressability_voice_host.cpp
   src/voice_host.cpp
 )
 
