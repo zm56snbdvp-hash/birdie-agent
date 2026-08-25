@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "start": "node src/server-main.mjs",
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
