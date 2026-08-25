@@ -6,27 +6,77 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { BirdieIpcServer } from '../src/ipc-server.mjs';
 
-function connectAndCollect(pipeName) {
-  return new Promise((resolve, reject) => {
-    const socket = net.createConnection(pipeName);
-    socket.setEncoding('utf8');
-    let buffer = '';
-    const messages = [];
-    socket.on('data', chunk => {
-      buffer += chunk;
-      let idx;
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx).trim();
-        buffer = buffer.slice(idx + 1);
-        if (line) messages.push(JSON.parse(line));
-      }
-      if (messages.length >= 1) resolve({ socket, messages });
-    });
-    socket.on('error', reject);
+async function connectClient(pipeName) {
+  const socket = net.createConnection(pipeName);
+  socket.setEncoding('utf8');
+  await new Promise((resolve, reject) => {
+    socket.once('connect', resolve);
+    socket.once('error', reject);
   });
+
+  let buffer = '';
+  const messages = [];
+  const waiters = new Set();
+
+  function notify() {
+    for (const waiter of [...waiters]) {
+      const match = messages.find(waiter.predicate);
+      if (!match) continue;
+      clearTimeout(waiter.timer);
+      waiters.delete(waiter);
+      waiter.resolve(match);
+    }
+  }
+
+  socket.on('data', (chunk) => {
+    buffer += chunk;
+    let idx;
+    while ((idx = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, idx).trim();
+      buffer = buffer.slice(idx + 1);
+      if (line) messages.push(JSON.parse(line));
+    }
+    notify();
+  });
+
+  function waitFor(predicate, timeoutMs = 1_500) {
+    const existing = messages.find(predicate);
+    if (existing) return Promise.resolve(existing);
+    return new Promise((resolve, reject) => {
+      const waiter = {
+        predicate,
+        resolve,
+        timer: setTimeout(() => {
+          waiters.delete(waiter);
+          reject(new Error('timeout waiting for IPC message'));
+        }, timeoutMs),
+      };
+      waiters.add(waiter);
+    });
+  }
+
+  return { socket, messages, waitFor };
 }
 
-test('IPC emits snapshot and applies microphone command', async () => {
+function voicePrivacyEvent(state, sequence = 1) {
+  return {
+    contract_version: '1.0',
+    kind: 'event',
+    name: 'voice.privacy.changed',
+    event_id: `privacy-${sequence}`,
+    source: 'birdie-voice-test',
+    timestamp_utc: new Date().toISOString(),
+    monotonic_ms: sequence,
+    source_sequence: sequence,
+    trace_id: 'trace-microphone-test',
+    session_id: 'session-microphone-test',
+    turn_id: null,
+    data_classification: 'operational',
+    payload: { microphone_state: state },
+  };
+}
+
+test('IPC routes microphone command and waits for Voice privacy confirmation', async () => {
   const pipeName = process.platform === 'win32'
     ? `\\\\.\\pipe\\birdie-core-test-${process.pid}-${Date.now()}`
     : path.join(os.tmpdir(), `birdie-core-test-${process.pid}-${Date.now()}.sock`);
@@ -35,32 +85,45 @@ test('IPC emits snapshot and applies microphone command', async () => {
   const server = new BirdieIpcServer({ pipeName });
   await server.start();
 
-  const { socket, messages } = await connectAndCollect(pipeName);
-  assert.equal(messages[0].type, 'runtime.snapshot');
-  assert.equal(messages[0].payload.microphoneState, 'ENABLED');
+  const client = await connectClient(pipeName);
+  try {
+    const initial = await client.waitFor((message) => message.type === 'runtime.snapshot');
+    assert.equal(initial.payload.microphoneState, 'UNAVAILABLE');
 
-  socket.write(JSON.stringify({
-    type: 'runtime.command',
-    requestId: 'mic-off',
-    payload: { name: 'ui.microphone.set_enabled', enabled: false }
-  }) + '\n');
+    client.socket.write(`${JSON.stringify({
+      type: 'runtime.command',
+      requestId: 'mic-off',
+      payload: { name: 'ui.microphone.set_enabled', enabled: false },
+    })}\n`);
 
-  const response = await new Promise((resolve, reject) => {
-    let buffer = '';
-    socket.on('data', chunk => {
-      buffer += chunk;
-      const lines = buffer.split('\n').filter(Boolean).map(line => JSON.parse(line));
-      const ack = lines.find(m => m.type === 'runtime.command.ack');
-      if (ack) resolve(ack);
+    const routed = await client.waitFor((message) =>
+      message.type === 'voice.command' && message.requestId === 'mic-off');
+    assert.deepEqual(routed.payload, {
+      name: 'voice.mute.set',
+      enabled: false,
     });
-    socket.on('error', reject);
-    setTimeout(() => reject(new Error('timeout waiting for runtime.command.ack')), 1500);
-  });
 
-  assert.equal(response.payload.accepted, true);
-  assert.equal(response.payload.microphoneState, 'MUTED_BY_USER');
+    const ack = await client.waitFor((message) =>
+      message.type === 'runtime.command.ack' && message.requestId === 'mic-off');
+    assert.equal(ack.payload.accepted, true);
+    assert.equal(ack.payload.pendingVoiceConfirmation, true);
+    assert.equal(ack.payload.microphoneState, 'UNAVAILABLE');
+    assert.equal(server.getSnapshot().microphoneState, 'UNAVAILABLE');
 
-  socket.destroy();
-  await server.stop();
-  if (process.platform !== 'win32' && fs.existsSync(pipeName)) fs.unlinkSync(pipeName);
+    client.socket.write(`${JSON.stringify({
+      type: 'runtime.event.publish',
+      requestId: 'privacy-confirmation',
+      payload: voicePrivacyEvent('MUTED_BY_USER'),
+    })}\n`);
+
+    const confirmed = await client.waitFor((message) =>
+      message.type === 'runtime.snapshot' &&
+      message.payload.microphoneState === 'MUTED_BY_USER');
+    assert.equal(confirmed.payload.microphoneState, 'MUTED_BY_USER');
+    assert.equal(server.getSnapshot().microphoneState, 'MUTED_BY_USER');
+  } finally {
+    client.socket.destroy();
+    await server.stop();
+    if (process.platform !== 'win32' && fs.existsSync(pipeName)) fs.unlinkSync(pipeName);
+  }
 });
