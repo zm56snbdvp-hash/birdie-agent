@@ -1,0 +1,25 @@
+{
+  "name": "barge-in-accepted",
+  "contract_version": "1.0",
+  "expected_presence_trace": [
+    "SPEAKING",
+    "SPEECH_DETECTED",
+    "LISTENING",
+    "THINKING",
+    "SPEAKING"
+  ],
+  "events": [
+    {"name":"voice.activity.started","turn_id":"turn-1"},
+    {"name":"voice.output.duck","turn_id":"turn-1"},
+    {"name":"voice.activation.accepted","turn_id":"turn-2"},
+    {"name":"brain.turn.cancel","turn_id":"turn-1"},
+    {"name":"voice.output.cancel","turn_id":"turn-1"},
+    {"name":"voice.utterance.finalized","turn_id":"turn-2"},
+    {"name":"brain.response.completed","turn_id":"turn-2"},
+    {"name":"voice.output.started","turn_id":"turn-2"}
+  ],
+  "invariants": [
+    "turn-1 cannot emit visible or audible output after cancellation",
+    "turn-2 is a distinct turn"
+  ]
+}
