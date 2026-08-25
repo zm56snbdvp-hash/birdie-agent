@@ -1,0 +1,35 @@
+name: Birdie Desktop Alpha
+
+on:
+  push:
+    branches: [feature/birdie-desktop-alpha]
+    paths:
+      - 'packages/protocol/**'
+      - 'services/core/**'
+      - 'tests/desktop-alpha/**'
+      - '.github/workflows/birdie-desktop-alpha.yml'
+  pull_request:
+    paths:
+      - 'packages/protocol/**'
+      - 'services/core/**'
+      - 'tests/desktop-alpha/**'
+
+jobs:
+  contract-and-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate protocol contract
+        run: node packages/protocol/src/validate-contract.mjs
+      - name: Core runtime tests
+        run: node --test services/core/test/*.test.mjs
+      - name: Golden event simulator
+        run: |
+          node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/normal-turn.json
+          node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/barge-in-accepted.json
+          node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/barge-in-rejected.json
+      - name: Walking skeleton
+        run: node tests/desktop-alpha/walking-skeleton.mjs
