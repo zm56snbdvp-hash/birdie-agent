@@ -48,30 +48,35 @@ export class RuntimeBridge {
   }
 
   async requestSnapshot() {
-    const snapshot = await invoke('runtime_get_snapshot', { lastRevision: this.lastRevision });
+    const snapshot = await invoke('runtime_get_snapshot', {
+      lastRevision: this.lastRevision,
+    });
     this.#applySnapshot(snapshot);
     return snapshot;
   }
 
   async setMicrophoneEnabled(enabled) {
-    const snapshot = await invoke('runtime_set_microphone_enabled', { enabled });
-    this.#applySnapshot(snapshot, { allowSameRevision: true });
-    return snapshot;
+    await invoke('runtime_set_microphone_enabled', { enabled });
   }
 
   dispose() {
     for (const stop of this.unlisten.splice(0)) stop();
   }
 
-  #applySnapshot(snapshot, { allowSameRevision = false } = {}) {
+  #applySnapshot(snapshot) {
     if (!snapshot) return;
     const presence = snapshot.presence ?? snapshot;
     const revision = Number(presence.revision ?? snapshot.revision ?? -1);
-    if (revision < this.lastRevision || (!allowSameRevision && revision === this.lastRevision)) return;
-    this.lastRevision = Math.max(this.lastRevision, revision);
+
+    // Orthogonal state such as microphone/privacy may change without a new
+    // Presence revision. Deliver the snapshot, but never replay old motion.
     this.onSnapshot?.(snapshot);
-    this.onPresence?.(presence);
     this.onStatus?.(this.#statusFromSnapshot(snapshot, presence));
+
+    if (revision > this.lastRevision) {
+      this.lastRevision = revision;
+      this.onPresence?.(presence);
+    }
   }
 
   #applyPresence(presence) {
