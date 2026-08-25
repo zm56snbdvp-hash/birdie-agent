@@ -9,6 +9,16 @@ const MICROPHONE_STATES = new Set([
   'UNAVAILABLE',
   'PERMISSION_DENIED',
 ]);
+const BEST_EFFORT_VOICE_EVENTS = new Set([
+  'voice.input.level',
+  'voice.output.level',
+]);
+
+function normalized(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(1, number));
+}
 
 export class BirdieIpcServer extends EventEmitter {
   constructor({ pipeName = PIPE_NAME } = {}) {
@@ -43,7 +53,11 @@ export class BirdieIpcServer extends EventEmitter {
 
   getSnapshot() {
     const snapshot = this.runtime.getSnapshot();
-    return { ...snapshot, lifecycle: 'READY', microphoneState: this.microphoneState };
+    return {
+      ...snapshot,
+      lifecycle: 'READY',
+      microphoneState: this.microphoneState,
+    };
   }
 
   publish(event) {
@@ -59,8 +73,30 @@ export class BirdieIpcServer extends EventEmitter {
       const nextState = event.payload?.microphone_state;
       if (MICROPHONE_STATES.has(nextState)) {
         this.microphoneState = nextState;
-        this.#broadcast({ type: 'runtime.snapshot', payload: this.getSnapshot() });
+        this.#broadcast({
+          type: 'runtime.snapshot',
+          payload: this.getSnapshot(),
+        });
       }
+    }
+
+    if (event?.name === 'voice.input.level') {
+      this.#broadcast({
+        type: 'runtime.audio.input',
+        payload: {
+          level: normalized(event.payload?.normalized_level),
+          vadProbability: normalized(event.payload?.vad_probability),
+          monotonicMs: Number(event.monotonic_ms) || 0,
+        },
+      });
+    } else if (event?.name === 'voice.output.level') {
+      this.#broadcast({
+        type: 'runtime.audio.output',
+        payload: {
+          level: normalized(event.payload?.normalized_level),
+          monotonicMs: Number(event.monotonic_ms) || 0,
+        },
+      });
     }
 
     return result;
@@ -81,7 +117,10 @@ export class BirdieIpcServer extends EventEmitter {
     });
     socket.on('close', () => this.clients.delete(socket));
     socket.on('error', () => this.clients.delete(socket));
-    this.#send(socket, { type: 'runtime.snapshot', payload: this.getSnapshot() });
+    this.#send(socket, {
+      type: 'runtime.snapshot',
+      payload: this.getSnapshot(),
+    });
   }
 
   #handle(socket, line) {
@@ -102,6 +141,7 @@ export class BirdieIpcServer extends EventEmitter {
     if (message.type === 'runtime.event.publish') {
       try {
         const result = this.publish(message.payload);
+        if (BEST_EFFORT_VOICE_EVENTS.has(message.payload?.name)) return;
         return this.#send(socket, {
           type: 'runtime.event.ack',
           requestId: message.requestId ?? null,
