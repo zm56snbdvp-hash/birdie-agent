@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import './styles.css';
+import { RuntimeBridge } from './runtime-bridge.js';
 
 const app = document.querySelector('#app');
-app.innerHTML = `<canvas id="birdie-core" aria-label="Birdie ist bereit"></canvas><section id="panel" hidden><strong>BIRDIE</strong><span id="state">IDLE</span><small>Wake-on-Speak · Local first</small></section>`;
+app.innerHTML = `<canvas id="birdie-core" aria-label="Birdie startet"></canvas><section id="panel" hidden><strong>BIRDIE</strong><span id="state">STARTING</span><small id="runtime-status">Runtime verbindet…</small><button id="mic-toggle" type="button">Mikrofon an</button></section>`;
 
 const canvas = document.querySelector('#birdie-core');
 const panel = document.querySelector('#panel');
 const stateLabel = document.querySelector('#state');
+const runtimeStatus = document.querySelector('#runtime-status');
+const micToggle = document.querySelector('#mic-toggle');
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
@@ -42,7 +45,7 @@ const meridianCurve = new THREE.CatmullRomCurve3([
   new THREE.Vector3(0.28,0.58,0.44), new THREE.Vector3(0.52,0.02,0.5),
   new THREE.Vector3(0.35,-0.48,0.48)
 ]);
-const meridian = new THREE.Mesh(new THREE.TubeGeometry(meridianCurve, 48, 0.014, 8, false), new THREE.MeshBasicMaterial({ color: 0xd5ad55 }));
+const meridian = new THREE.Mesh(new THREE.TubeGeometry(meridianCurve, 48, 0.014, 8, false), new THREE.MeshBasicMaterial({ color: 0xd5ad55, transparent: true }));
 scene.add(meridian);
 
 const presets = {
@@ -50,17 +53,43 @@ const presets = {
   THINKING:[0.78,0.24,0.64,0.52], SPEAKING:[0.92,0.64,0.72,0.48], WORKING:[0.84,0.34,0.90,0.60],
   SUCCESS:[1,0.78,0.52,0.96], ERROR:[0.54,0.12,0.08,0.16], OFFLINE:[0.16,0.04,0.02,0.05]
 };
-let presenceState = 'IDLE', started = performance.now();
+let presenceState = 'OFFLINE', started = performance.now(), microphoneEnabled = true;
 
-export function applyPresence(snapshot) {
+function applyPresence(snapshot) {
   if (!presets[snapshot.state]) return;
   presenceState = snapshot.state;
   stateLabel.textContent = snapshot.state;
   canvas.setAttribute('aria-label', `Birdie: ${snapshot.state}`);
 }
-window.__birdieApplyPresence = applyPresence;
+
+const bridge = new RuntimeBridge({
+  onPresence: applyPresence,
+  onSnapshot(snapshot) {
+    if (snapshot?.microphoneState) {
+      microphoneEnabled = snapshot.microphoneState === 'ENABLED';
+      micToggle.textContent = microphoneEnabled ? 'Mikrofon aus' : 'Mikrofon an';
+    }
+  },
+  onStatus(status) {
+    runtimeStatus.textContent = status === 'READY' ? 'Wake-on-Speak · Local first' : status === 'OFFLINE' ? 'Runtime offline' : 'Runtime verbindet…';
+    if (status === 'OFFLINE') applyPresence({ state: 'OFFLINE' });
+  }
+});
 
 canvas.addEventListener('click', () => { panel.hidden = !panel.hidden; });
+micToggle.addEventListener('click', async () => {
+  micToggle.disabled = true;
+  try {
+    await bridge.setMicrophoneEnabled(!microphoneEnabled);
+    microphoneEnabled = !microphoneEnabled;
+    micToggle.textContent = microphoneEnabled ? 'Mikrofon aus' : 'Mikrofon an';
+  } finally { micToggle.disabled = false; }
+});
+
+bridge.connect().catch(() => {
+  runtimeStatus.textContent = 'Runtime offline';
+  applyPresence({ state: 'OFFLINE' });
+});
 
 function frame(now) {
   const t = (now - started) / 1000;
