@@ -12,6 +12,7 @@
 #include <cstdlib>
 #include <future>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -19,6 +20,7 @@
 namespace {
 
 using namespace std::chrono_literals;
+using birdie::voice::CoreCommand;
 using birdie::voice::CoreIpcEventSink;
 using birdie::voice::VoiceEvent;
 
@@ -48,8 +50,21 @@ std::string read_line(HANDLE pipe) {
   }
 }
 
-void test_voice_event_is_published_to_core() {
-  const std::wstring pipe_name = unique_pipe_name(L"publish");
+void write_all(HANDLE pipe, const std::string& message) {
+  std::size_t offset = 0;
+  while (offset < message.size()) {
+    DWORD written = 0;
+    if (!WriteFile(pipe, message.data() + offset,
+                   static_cast<DWORD>(message.size() - offset), &written,
+                   nullptr) || written == 0) {
+      throw std::runtime_error("named-pipe server could not write response");
+    }
+    offset += written;
+  }
+}
+
+void test_voice_event_and_core_command_round_trip() {
+  const std::wstring pipe_name = unique_pipe_name(L"roundtrip");
   std::promise<std::string> received_promise;
   auto received = received_promise.get_future();
   std::atomic<bool> server_ready{false};
@@ -71,15 +86,16 @@ void test_voice_event_is_published_to_core() {
       }
 
       const std::string line = read_line(pipe);
-      const std::string ack =
-          "{\"type\":\"runtime.event.ack\",\"requestId\":\"test\"}\n";
-      DWORD written = 0;
-      WriteFile(pipe, ack.data(), static_cast<DWORD>(ack.size()), &written,
-                nullptr);
+      const std::string responses =
+          "{\"type\":\"runtime.event.ack\",\"requestId\":\"test\"}\n"
+          "{\"type\":\"voice.command\",\"requestId\":\"mic-off\","
+          "\"payload\":{\"name\":\"voice.mute.set\",\"enabled\":false}}\n";
+      write_all(pipe, responses);
       FlushFileBuffers(pipe);
+      received_promise.set_value(line);
+      std::this_thread::sleep_for(250ms);
       DisconnectNamedPipe(pipe);
       CloseHandle(pipe);
-      received_promise.set_value(line);
     } catch (...) {
       received_promise.set_exception(std::current_exception());
     }
@@ -89,6 +105,7 @@ void test_voice_event_is_published_to_core() {
     std::this_thread::sleep_for(5ms);
   }
 
+  std::optional<CoreCommand> command;
   {
     CoreIpcEventSink sink("test-session", "test-trace", pipe_name, 4);
     const auto deadline = std::chrono::steady_clock::now() + 3s;
@@ -108,6 +125,13 @@ void test_voice_event_is_published_to_core() {
 
     require(received.wait_for(3s) == std::future_status::ready,
             "Birdie Core pipe must receive the Voice event");
+
+    const auto command_deadline = std::chrono::steady_clock::now() + 3s;
+    while (!command && std::chrono::steady_clock::now() < command_deadline) {
+      command = sink.try_pop_command();
+      if (!command) std::this_thread::sleep_for(10ms);
+    }
+    require(command.has_value(), "Voice sink must queue Core control command");
   }
 
   server.join();
@@ -127,6 +151,13 @@ void test_voice_event_is_published_to_core() {
   require(line.find("\"barge_in_candidate\":true") !=
               std::string::npos,
           "message must preserve typed payload values");
+
+  require(command->request_id == "mic-off",
+          "Voice command must preserve request id");
+  require(command->name == "voice.mute.set",
+          "Voice command must use canonical command name");
+  require(!command->enabled,
+          "Voice command must preserve requested microphone state");
 }
 
 void test_disconnected_level_events_are_dropped() {
@@ -142,7 +173,7 @@ void test_disconnected_level_events_are_dropped() {
 
 int main() {
   try {
-    test_voice_event_is_published_to_core();
+    test_voice_event_and_core_command_round_trip();
     test_disconnected_level_events_are_dropped();
     std::cout << "birdie-voice-ipc-tests: PASS\n";
     return EXIT_SUCCESS;
