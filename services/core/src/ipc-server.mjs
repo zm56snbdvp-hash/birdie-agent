@@ -60,43 +60,55 @@ export class BirdieIpcServer extends EventEmitter {
     };
   }
 
-  publish(event) {
+  publish(event, originSocket = null) {
     const result = this.runtime.apply(event);
     if (result?.presenceChanged) {
-      this.#broadcast({
-        type: 'runtime.presence.changed',
-        payload: result.snapshot.presence,
-      });
+      this.#broadcast(
+        {
+          type: 'runtime.presence.changed',
+          payload: result.snapshot.presence,
+        },
+        originSocket,
+      );
     }
 
     if (event?.name === 'voice.privacy.changed') {
       const nextState = event.payload?.microphone_state;
       if (MICROPHONE_STATES.has(nextState)) {
         this.microphoneState = nextState;
-        this.#broadcast({
-          type: 'runtime.snapshot',
-          payload: this.getSnapshot(),
-        });
+        this.#broadcast(
+          {
+            type: 'runtime.snapshot',
+            payload: this.getSnapshot(),
+          },
+          originSocket,
+        );
       }
     }
 
     if (event?.name === 'voice.input.level') {
-      this.#broadcast({
-        type: 'runtime.audio.input',
-        payload: {
-          level: normalized(event.payload?.normalized_level),
-          vadProbability: normalized(event.payload?.vad_probability),
-          monotonicMs: Number(event.monotonic_ms) || 0,
+      this.#broadcast(
+        {
+          type: 'runtime.audio.input',
+          payload: {
+            level: normalized(event.payload?.normalized_level),
+            vadProbability: normalized(event.payload?.vad_probability),
+            monotonicMs: Number(event.monotonic_ms) || 0,
+          },
         },
-      });
+        originSocket,
+      );
     } else if (event?.name === 'voice.output.level') {
-      this.#broadcast({
-        type: 'runtime.audio.output',
-        payload: {
-          level: normalized(event.payload?.normalized_level),
-          monotonicMs: Number(event.monotonic_ms) || 0,
+      this.#broadcast(
+        {
+          type: 'runtime.audio.output',
+          payload: {
+            level: normalized(event.payload?.normalized_level),
+            monotonicMs: Number(event.monotonic_ms) || 0,
+          },
         },
-      });
+        originSocket,
+      );
     }
 
     return result;
@@ -140,7 +152,7 @@ export class BirdieIpcServer extends EventEmitter {
 
     if (message.type === 'runtime.event.publish') {
       try {
-        const result = this.publish(message.payload);
+        const result = this.publish(message.payload, socket);
         if (BEST_EFFORT_VOICE_EVENTS.has(message.payload?.name)) return;
         return this.#send(socket, {
           type: 'runtime.event.ack',
@@ -193,8 +205,10 @@ export class BirdieIpcServer extends EventEmitter {
     });
   }
 
-  #broadcast(message) {
-    for (const socket of this.clients) this.#send(socket, message);
+  #broadcast(message, excludedSocket = null) {
+    for (const socket of this.clients) {
+      if (socket !== excludedSocket) this.#send(socket, message);
+    }
   }
 
   #send(socket, message) {
