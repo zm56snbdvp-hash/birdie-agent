@@ -29,6 +29,7 @@ namespace {
 
 using namespace std::chrono_literals;
 constexpr std::size_t kMaximumIncomingBuffer = 256 * 1024;
+constexpr std::string_view kContractVersion = "1.0";
 
 std::string escape_json(const std::string_view input) {
   std::ostringstream out;
@@ -88,6 +89,21 @@ bool is_best_effort(const std::string_view event_name) {
          event_name == "voice.output.level";
 }
 
+std::string serialize_hello(const std::string& session_id) {
+  const std::string request_id = "voice-hello-" + session_id;
+  std::ostringstream out;
+  out << '{'
+      << "\"type\":\"component.hello\","
+      << "\"requestId\":\"" << escape_json(request_id) << "\","
+      << "\"payload\":{"
+      << "\"component\":\"birdie-voice\","
+      << "\"role\":\"voice\","
+      << "\"instanceId\":\"" << escape_json(session_id) << "\","
+      << "\"contractVersion\":\"" << kContractVersion << "\""
+      << "}}\n";
+  return out.str();
+}
+
 std::string serialize_publish_request(const VoiceEvent& event,
                                       const std::string& session_id,
                                       const std::string& trace_id,
@@ -102,7 +118,7 @@ std::string serialize_publish_request(const VoiceEvent& event,
       << "\"type\":\"runtime.event.publish\","
       << "\"requestId\":\"" << escape_json(request_id) << "\","
       << "\"payload\":{"
-      << "\"contract_version\":\"1.0\","
+      << "\"contract_version\":\"" << kContractVersion << "\","
       << "\"kind\":\"event\","
       << "\"name\":\"" << escape_json(event.name) << "\","
       << "\"event_id\":\"" << escape_json(event_id) << "\","
@@ -206,8 +222,8 @@ class CoreIpcEventSink::Impl {
       : session_id_(std::move(session_id)),
         trace_id_(std::move(trace_id)),
         pipe_name_(std::move(pipe_name)),
-        best_effort_queue_limit_(std::max<std::size_t>(1,
-                                                        best_effort_queue_limit)) {
+        best_effort_queue_limit_(std::max<std::size_t>(
+            1, best_effort_queue_limit)) {
     if (session_id_.empty() || trace_id_.empty() || pipe_name_.empty()) {
       throw std::invalid_argument(
           "CoreIpcEventSink requires session, trace and pipe identifiers");
@@ -230,9 +246,10 @@ class CoreIpcEventSink::Impl {
     }
 
     const auto sequence = sequence_.fetch_add(1, std::memory_order_relaxed) + 1;
-    Pending pending{serialize_publish_request(event, session_id_, trace_id_,
-                                              sequence),
-                    best_effort};
+    Pending pending{
+      serialize_publish_request(event, session_id_, trace_id_, sequence),
+      best_effort,
+    };
 
     {
       std::scoped_lock lock(queue_mutex_);
@@ -307,7 +324,7 @@ class CoreIpcEventSink::Impl {
 
       if (stop_.load(std::memory_order_acquire)) break;
       if (!pending) {
-        drain_available();
+        read_available();
         continue;
       }
 
@@ -323,15 +340,16 @@ class CoreIpcEventSink::Impl {
         disconnect();
         continue;
       }
-      drain_available();
+      read_available();
     }
   }
 
   bool connect() {
     if (!WaitNamedPipeW(pipe_name_.c_str(), 250)) return false;
 
-    HANDLE handle = CreateFileW(pipe_name_.c_str(), GENERIC_READ | GENERIC_WRITE,
-                                0, nullptr, OPEN_EXISTING, 0, nullptr);
+    HANDLE handle = CreateFileW(
+        pipe_name_.c_str(), GENERIC_READ | GENERIC_WRITE, 0, nullptr,
+        OPEN_EXISTING, 0, nullptr);
     if (handle == INVALID_HANDLE_VALUE) return false;
 
     DWORD mode = PIPE_READMODE_BYTE;
@@ -341,9 +359,29 @@ class CoreIpcEventSink::Impl {
     }
 
     pipe_ = handle;
+    handshake_accepted_ = false;
+    handshake_rejected_ = false;
+    incoming_buffer_.clear();
+
+    if (!write_all(serialize_hello(session_id_)) || !await_handshake()) {
+      disconnect();
+      return false;
+    }
+
     connected_.store(true, std::memory_order_release);
-    drain_available();
     return true;
+  }
+
+  bool await_handshake() {
+    const auto deadline = std::chrono::steady_clock::now() + 1500ms;
+    while (!stop_.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline) {
+      if (!read_available()) return false;
+      if (handshake_accepted_) return true;
+      if (handshake_rejected_) return false;
+      std::this_thread::sleep_for(5ms);
+    }
+    return false;
   }
 
   bool write_all(const std::string& line) {
@@ -361,27 +399,25 @@ class CoreIpcEventSink::Impl {
     return true;
   }
 
-  void drain_available() {
-    if (pipe_ == INVALID_HANDLE_VALUE) return;
+  bool read_available() {
+    if (pipe_ == INVALID_HANDLE_VALUE) return false;
     char buffer[4096];
     for (;;) {
       DWORD available = 0;
       if (!PeekNamedPipe(pipe_, nullptr, 0, nullptr, &available, nullptr)) {
-        disconnect();
-        return;
+        return false;
       }
-      if (available == 0) return;
+      if (available == 0) return true;
+
       DWORD read = 0;
       const DWORD requested = std::min<DWORD>(available, sizeof(buffer));
-      if (!ReadFile(pipe_, buffer, requested, &read, nullptr)) {
-        disconnect();
-        return;
-      }
-      if (read == 0) return;
+      if (!ReadFile(pipe_, buffer, requested, &read, nullptr)) return false;
+      if (read == 0) return true;
+
       incoming_buffer_.append(buffer, read);
       if (incoming_buffer_.size() > kMaximumIncomingBuffer) {
         incoming_buffer_.clear();
-        continue;
+        return false;
       }
       process_incoming_lines();
     }
@@ -393,6 +429,18 @@ class CoreIpcEventSink::Impl {
       if (newline == std::string::npos) return;
       const std::string line = incoming_buffer_.substr(0, newline);
       incoming_buffer_.erase(0, newline + 1);
+
+      const auto type = json_string(line, "type");
+      if (type == std::optional<std::string>{"component.hello.ack"}) {
+        handshake_accepted_ = json_bool(line, "accepted").value_or(false);
+        handshake_rejected_ = !handshake_accepted_;
+        continue;
+      }
+      if (type == std::optional<std::string>{"error"} &&
+          !handshake_accepted_) {
+        handshake_rejected_ = true;
+        continue;
+      }
       if (auto command = parse_core_command(line)) {
         std::scoped_lock lock(command_mutex_);
         command_queue_.push_back(std::move(*command));
@@ -402,6 +450,8 @@ class CoreIpcEventSink::Impl {
 
   void disconnect() noexcept {
     connected_.store(false, std::memory_order_release);
+    handshake_accepted_ = false;
+    handshake_rejected_ = false;
     incoming_buffer_.clear();
     if (pipe_ != INVALID_HANDLE_VALUE) {
       CloseHandle(pipe_);
@@ -427,23 +477,29 @@ class CoreIpcEventSink::Impl {
   std::mutex command_mutex_;
   std::deque<CoreCommand> command_queue_;
   std::string incoming_buffer_;
+  bool handshake_accepted_{false};
+  bool handshake_rejected_{false};
 
   std::thread worker_;
   HANDLE pipe_{INVALID_HANDLE_VALUE};
 };
 
-CoreIpcEventSink::CoreIpcEventSink(std::string session_id, std::string trace_id,
-                                   std::wstring pipe_name,
-                                   const std::size_t best_effort_queue_limit)
-    : impl_(std::make_unique<Impl>(std::move(session_id), std::move(trace_id),
-                                   std::move(pipe_name),
-                                   best_effort_queue_limit)) {}
+CoreIpcEventSink::CoreIpcEventSink(
+    std::string session_id, std::string trace_id, std::wstring pipe_name,
+    const std::size_t best_effort_queue_limit)
+    : impl_(std::make_unique<Impl>(
+          std::move(session_id), std::move(trace_id), std::move(pipe_name),
+          best_effort_queue_limit)) {}
 
 CoreIpcEventSink::~CoreIpcEventSink() = default;
 
-void CoreIpcEventSink::emit(const VoiceEvent& event) { impl_->emit(event); }
+void CoreIpcEventSink::emit(const VoiceEvent& event) {
+  impl_->emit(event);
+}
 
-bool CoreIpcEventSink::connected() const noexcept { return impl_->connected(); }
+bool CoreIpcEventSink::connected() const noexcept {
+  return impl_->connected();
+}
 
 std::uint64_t CoreIpcEventSink::dropped_best_effort() const noexcept {
   return impl_->dropped_best_effort();
