@@ -1,7 +1,7 @@
 mod process_supervisor;
 
 use process_supervisor::ProcessSupervisor;
-use std::{fs::OpenOptions, io::{BufRead, BufReader, Write}, sync::{Arc, Mutex}, thread, time::Duration};
+use std::{fs::OpenOptions, io::{BufRead, BufReader, Write}, sync::{Arc, Mutex}, thread, time::{Duration, SystemTime, UNIX_EPOCH}};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{Emitter, Manager, State, menu::{Menu, MenuItem}, tray::TrayIconBuilder};
@@ -28,7 +28,7 @@ struct RuntimeSnapshot {
 }
 
 fn default_lifecycle() -> String { "READY".into() }
-fn default_microphone_state() -> String { "ENABLED".into() }
+fn default_microphone_state() -> String { "UNAVAILABLE".into() }
 
 struct RuntimeState {
   snapshot: Mutex<RuntimeSnapshot>,
@@ -42,16 +42,17 @@ fn runtime_get_snapshot(state: State<'_, RuntimeState>, last_revision: i64) -> R
 }
 
 #[tauri::command]
-fn runtime_set_microphone_enabled(state: State<'_, RuntimeState>, enabled: bool) -> Result<RuntimeSnapshot, String> {
+fn runtime_set_microphone_enabled(state: State<'_, RuntimeState>, enabled: bool) -> Result<(), String> {
+  let nonce = SystemTime::now()
+    .duration_since(UNIX_EPOCH)
+    .map_err(|error| format!("SYSTEM.CLOCK_ERROR:{error}"))?
+    .as_millis();
   let command = json!({
     "type": "runtime.command",
-    "requestId": format!("desktop-mic-{}", std::process::id()),
+    "requestId": format!("desktop-mic-{}-{nonce}", std::process::id()),
     "payload": { "name": "ui.microphone.set_enabled", "enabled": enabled }
   });
-  send_pipe_message(&state.writer, &command)?;
-  let mut snapshot = state.snapshot.lock().map_err(|_| "runtime state poisoned".to_string())?;
-  snapshot.microphone_state = if enabled { "ENABLED".into() } else { "MUTED_BY_USER".into() };
-  Ok(snapshot.clone())
+  send_pipe_message(&state.writer, &command)
 }
 
 fn send_pipe_message(writer: &Mutex<Option<std::fs::File>>, value: &Value) -> Result<(), String> {
@@ -80,13 +81,10 @@ fn start_core_ipc(app: tauri::AppHandle, shared: Arc<RuntimeState>) {
           match message.get("type").and_then(Value::as_str) {
             Some("runtime.snapshot") => {
               if let Some(payload) = message.get("payload") {
-                if let Some(presence_value) = payload.get("presence") {
-                  if let Ok(presence) = serde_json::from_value::<PresenceSnapshot>(presence_value.clone()) {
-                    let mut snapshot = shared.snapshot.lock().expect("runtime state poisoned");
-                    snapshot.lifecycle = "READY".into();
-                    snapshot.presence = presence;
-                    let _ = app.emit("runtime.snapshot", &*snapshot);
-                  }
+                if let Ok(next) = serde_json::from_value::<RuntimeSnapshot>(payload.clone()) {
+                  let mut snapshot = shared.snapshot.lock().expect("runtime state poisoned");
+                  *snapshot = next;
+                  let _ = app.emit("runtime.snapshot", &*snapshot);
                 }
               }
             }
@@ -112,6 +110,7 @@ fn start_core_ipc(app: tauri::AppHandle, shared: Arc<RuntimeState>) {
     {
       let mut snapshot = shared.snapshot.lock().expect("runtime state poisoned");
       snapshot.lifecycle = "DEGRADED".into();
+      snapshot.microphone_state = "UNAVAILABLE".into();
       snapshot.presence.revision = snapshot.presence.revision.saturating_add(1);
       snapshot.presence.state = "OFFLINE".into();
       snapshot.presence.reason = "runtime.ipc.disconnected".into();
@@ -128,7 +127,7 @@ pub fn run() {
     snapshot: Mutex::new(RuntimeSnapshot {
       lifecycle: "STARTING".into(),
       presence: PresenceSnapshot { revision: 0, state: "OFFLINE".into(), reason: "runtime.not_connected".into() },
-      microphone_state: "ENABLED".into(),
+      microphone_state: "UNAVAILABLE".into(),
     }),
     writer: Mutex::new(None),
   });
