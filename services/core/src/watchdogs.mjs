@@ -1,0 +1,18 @@
+export const ALPHA_WATCHDOGS_MS = Object.freeze({
+  SPEECH_DETECTED: 2_000,
+  LISTENING: 20_000,
+  THINKING_WARNING: 15_000,
+  THINKING_HARD: 30_000,
+  SPEAKING_ABSOLUTE_MAX: 90_000,
+  RUNTIME_HEARTBEAT: 5_000,
+});
+
+export function watchdogForPresence(state) {
+  switch (state) {
+    case 'SPEECH_DETECTED': return ALPHA_WATCHDOGS_MS.SPEECH_DETECTED;
+    case 'LISTENING': return ALPHA_WATCHDOGS_MS.LISTENING;
+    case 'THINKING': return ALPHA_WATCHDOGS_MS.THINKING_HARD;
+    case 'SPEAKING': return ALPHA_WATCHDOGS_MS.SPEAKING_ABSOLUTE_MAX;
+    default: return null;
+  }
+}
