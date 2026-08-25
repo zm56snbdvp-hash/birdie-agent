@@ -2,11 +2,20 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 export class RuntimeBridge {
-  constructor({ onSnapshot, onPresence, onStatus, onComponent }) {
+  constructor({
+    onSnapshot,
+    onPresence,
+    onStatus,
+    onComponent,
+    onAudioInput,
+    onAudioOutput,
+  }) {
     this.onSnapshot = onSnapshot;
     this.onPresence = onPresence;
     this.onStatus = onStatus;
     this.onComponent = onComponent;
+    this.onAudioInput = onAudioInput;
+    this.onAudioOutput = onAudioOutput;
     this.lastRevision = -1;
     this.unlisten = [];
   }
@@ -33,9 +42,18 @@ export class RuntimeBridge {
         this.onStatus?.('OFFLINE');
       }
     });
-    const stopSupervisor = await listen('supervisor.component.changed', ({ payload }) => {
-      this.onComponent?.(payload);
-    });
+    const stopSupervisor = await listen(
+      'supervisor.component.changed',
+      ({ payload }) => this.onComponent?.(payload),
+    );
+    const stopAudioInput = await listen(
+      'runtime.audio.input',
+      ({ payload }) => this.onAudioInput?.(this.#normalizeAudio(payload)),
+    );
+    const stopAudioOutput = await listen(
+      'runtime.audio.output',
+      ({ payload }) => this.onAudioOutput?.(this.#normalizeAudio(payload)),
+    );
 
     this.unlisten.push(
       stopPresence,
@@ -43,6 +61,8 @@ export class RuntimeBridge {
       stopDisconnected,
       stopConnected,
       stopSupervisor,
+      stopAudioInput,
+      stopAudioOutput,
     );
     await this.requestSnapshot();
   }
@@ -92,5 +112,14 @@ export class RuntimeBridge {
     if (lifecycle === 'STARTING') return 'CONNECTING';
     if (lifecycle !== 'READY' || presence?.state === 'OFFLINE') return 'OFFLINE';
     return 'READY';
+  }
+
+  #normalizeAudio(payload) {
+    const clamp = (value) => Math.max(0, Math.min(1, Number(value) || 0));
+    return {
+      level: clamp(payload?.level),
+      vadProbability: clamp(payload?.vadProbability),
+      monotonicMs: Number(payload?.monotonicMs) || 0,
+    };
   }
 }
