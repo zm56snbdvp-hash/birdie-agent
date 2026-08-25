@@ -37,21 +37,26 @@ struct SupervisorEvent<'a> {
 }
 
 struct Worker {
+  component: &'static str,
   child: Arc<Mutex<Option<Child>>>,
   thread: Option<JoinHandle<()>>,
 }
 
 pub struct ProcessSupervisor {
   stop: Arc<AtomicBool>,
+  voice_enabled: Arc<AtomicBool>,
+  voice_managed: bool,
   workers: Mutex<Vec<Worker>>,
 }
 
 impl ProcessSupervisor {
   pub fn start(app: AppHandle) -> Self {
     let stop = Arc::new(AtomicBool::new(false));
+    let voice_enabled = Arc::new(AtomicBool::new(true));
     let mut workers = Vec::new();
 
     let specs = discover_specs();
+    let voice_managed = specs.iter().any(|spec| spec.component == "birdie-voice");
     if specs.is_empty() {
       let _ = app.emit(
         "supervisor.component.changed",
@@ -67,8 +72,21 @@ impl ProcessSupervisor {
 
     for spec in specs {
       let child = Arc::new(Mutex::new(None));
-      let thread = spawn_worker(app.clone(), stop.clone(), child.clone(), spec);
+      let component_enabled = if spec.component == "birdie-voice" {
+        voice_enabled.clone()
+      } else {
+        Arc::new(AtomicBool::new(true))
+      };
+      let component = spec.component;
+      let thread = spawn_worker(
+        app.clone(),
+        stop.clone(),
+        component_enabled,
+        child.clone(),
+        spec,
+      );
       workers.push(Worker {
+        component,
         child,
         thread: Some(thread),
       });
@@ -76,8 +94,43 @@ impl ProcessSupervisor {
 
     Self {
       stop,
+      voice_enabled,
+      voice_managed,
       workers: Mutex::new(workers),
     }
+  }
+
+  pub fn set_voice_enabled(&self, enabled: bool) -> Result<(), String> {
+    if !self.voice_managed {
+      return Err("VOICE.SUPERVISOR.NOT_MANAGED".to_string());
+    }
+
+    self.voice_enabled.store(enabled, Ordering::Release);
+    if enabled {
+      return Ok(());
+    }
+
+    // Privacy first: synchronously terminate the capture process before the
+    // UI command is acknowledged. The worker remains disabled until re-enabled.
+    let workers = self
+      .workers
+      .lock()
+      .map_err(|_| "VOICE.SUPERVISOR.STATE_POISONED".to_string())?;
+    for worker in workers.iter().filter(|worker| worker.component == "birdie-voice") {
+      let mut guard = worker
+        .child
+        .lock()
+        .map_err(|_| "VOICE.SUPERVISOR.CHILD_POISONED".to_string())?;
+      if let Some(mut child) = guard.take() {
+        child
+          .kill()
+          .map_err(|error| format!("VOICE.SUPERVISOR.KILL_FAILED:{error}"))?;
+        child
+          .wait()
+          .map_err(|error| format!("VOICE.SUPERVISOR.WAIT_FAILED:{error}"))?;
+      }
+    }
+    Ok(())
   }
 
   pub fn shutdown(&self) {
@@ -111,6 +164,7 @@ impl Drop for ProcessSupervisor {
 fn spawn_worker(
   app: AppHandle,
   stop: Arc<AtomicBool>,
+  component_enabled: Arc<AtomicBool>,
   child_slot: Arc<Mutex<Option<Child>>>,
   spec: ProcessSpec,
 ) -> JoinHandle<()> {
@@ -119,8 +173,28 @@ fn spawn_worker(
     .spawn(move || {
       let mut restart_count = 0_u32;
       let mut backoff = Duration::from_millis(500);
+      let mut disabled_reported = false;
 
       while !stop.load(Ordering::Acquire) {
+        if !component_enabled.load(Ordering::Acquire) {
+          if !disabled_reported {
+            let _ = app.emit(
+              "supervisor.component.changed",
+              SupervisorEvent {
+                component: spec.component,
+                status: "STOPPED_BY_USER",
+                pid: None,
+                restart_count,
+                error_code: Some("VOICE.MICROPHONE.MUTED_BY_USER"),
+              },
+            );
+            disabled_reported = true;
+          }
+          thread::sleep(Duration::from_millis(100));
+          continue;
+        }
+        disabled_reported = false;
+
         let mut command = Command::new(&spec.program);
         command
           .args(&spec.args)
@@ -173,15 +247,25 @@ fn spawn_worker(
                 return;
               }
 
-              let status = {
+              if !component_enabled.load(Ordering::Acquire) {
                 let mut guard = child_slot.lock().expect("supervised child poisoned");
-                guard
-                  .as_mut()
-                  .and_then(|child| child.try_wait().ok())
-                  .flatten()
+                if let Some(child) = guard.as_mut() {
+                  let _ = child.kill();
+                  let _ = child.wait();
+                }
+                *guard = None;
+                break;
+              }
+
+              let exited = {
+                let mut guard = child_slot.lock().expect("supervised child poisoned");
+                match guard.as_mut() {
+                  Some(child) => child.try_wait().ok().flatten().is_some(),
+                  None => true,
+                }
               };
 
-              if status.is_some() {
+              if exited {
                 *child_slot.lock().expect("supervised child poisoned") = None;
                 restart_count = restart_count.saturating_add(1);
                 let _ = app.emit(
@@ -197,7 +281,7 @@ fn spawn_worker(
                 break;
               }
 
-              thread::sleep(Duration::from_millis(200));
+              thread::sleep(Duration::from_millis(100));
             }
           }
           Err(_) => {
@@ -215,6 +299,9 @@ fn spawn_worker(
           }
         }
 
+        if !component_enabled.load(Ordering::Acquire) {
+          continue;
+        }
         if sleep_until_restart(&stop, backoff) {
           return;
         }
