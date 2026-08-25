@@ -3,6 +3,12 @@ import { EventEmitter } from 'node:events';
 import { BirdieRuntimeV0 } from './runtime-v0.mjs';
 
 const PIPE_NAME = String.raw`\\.\pipe\birdie.core.control.v1`;
+const MICROPHONE_STATES = new Set([
+  'ENABLED',
+  'MUTED_BY_USER',
+  'UNAVAILABLE',
+  'PERMISSION_DENIED',
+]);
 
 export class BirdieIpcServer extends EventEmitter {
   constructor({ pipeName = PIPE_NAME } = {}) {
@@ -42,7 +48,21 @@ export class BirdieIpcServer extends EventEmitter {
 
   publish(event) {
     const result = this.runtime.apply(event);
-    if (result?.presenceChanged) this.#broadcast({ type: 'runtime.presence.changed', payload: result.snapshot.presence });
+    if (result?.presenceChanged) {
+      this.#broadcast({
+        type: 'runtime.presence.changed',
+        payload: result.snapshot.presence,
+      });
+    }
+
+    if (event?.name === 'voice.privacy.changed') {
+      const nextState = event.payload?.microphone_state;
+      if (MICROPHONE_STATES.has(nextState)) {
+        this.microphoneState = nextState;
+        this.#broadcast({ type: 'runtime.snapshot', payload: this.getSnapshot() });
+      }
+    }
+
     return result;
   }
 
@@ -66,33 +86,80 @@ export class BirdieIpcServer extends EventEmitter {
 
   #handle(socket, line) {
     let message;
-    try { message = JSON.parse(line); } catch { return this.#send(socket, { type: 'error', error: 'INVALID_JSON' }); }
-    if (message.type === 'runtime.snapshot.request') {
-      return this.#send(socket, { type: 'runtime.snapshot', payload: this.getSnapshot() });
+    try {
+      message = JSON.parse(line);
+    } catch {
+      return this.#send(socket, { type: 'error', error: 'INVALID_JSON' });
     }
+
+    if (message.type === 'runtime.snapshot.request') {
+      return this.#send(socket, {
+        type: 'runtime.snapshot',
+        payload: this.getSnapshot(),
+      });
+    }
+
     if (message.type === 'runtime.event.publish') {
       try {
         const result = this.publish(message.payload);
-        return this.#send(socket, { type: 'runtime.event.ack', requestId: message.requestId ?? null, payload: result });
+        return this.#send(socket, {
+          type: 'runtime.event.ack',
+          requestId: message.requestId ?? null,
+          payload: result,
+        });
       } catch (error) {
-        return this.#send(socket, { type: 'error', requestId: message.requestId ?? null, error: String(error.message ?? error) });
+        return this.#send(socket, {
+          type: 'error',
+          requestId: message.requestId ?? null,
+          error: String(error.message ?? error),
+        });
       }
     }
+
     if (message.type === 'runtime.command') {
       const command = message.payload?.name;
       if (command === 'ui.microphone.set_enabled') {
-        this.microphoneState = message.payload?.enabled ? 'ENABLED' : 'MUTED_BY_USER';
-        const snapshot = this.getSnapshot();
-        this.#broadcast({ type: 'runtime.snapshot', payload: snapshot });
-        return this.#send(socket, { type: 'runtime.command.ack', requestId: message.requestId ?? null, payload: { accepted: true, microphoneState: this.microphoneState } });
+        const enabled = message.payload?.enabled === true;
+        const requestId = message.requestId ?? null;
+        this.#broadcast({
+          type: 'voice.command',
+          requestId,
+          payload: {
+            name: 'voice.mute.set',
+            enabled,
+          },
+        });
+        return this.#send(socket, {
+          type: 'runtime.command.ack',
+          requestId,
+          payload: {
+            accepted: true,
+            pendingVoiceConfirmation: true,
+            microphoneState: this.microphoneState,
+          },
+        });
       }
-      return this.#send(socket, { type: 'error', requestId: message.requestId ?? null, error: 'UNKNOWN_COMMAND' });
+      return this.#send(socket, {
+        type: 'error',
+        requestId: message.requestId ?? null,
+        error: 'UNKNOWN_COMMAND',
+      });
     }
-    this.#send(socket, { type: 'error', requestId: message.requestId ?? null, error: 'UNKNOWN_MESSAGE_TYPE' });
+
+    this.#send(socket, {
+      type: 'error',
+      requestId: message.requestId ?? null,
+      error: 'UNKNOWN_MESSAGE_TYPE',
+    });
   }
 
-  #broadcast(message) { for (const socket of this.clients) this.#send(socket, message); }
-  #send(socket, message) { if (!socket.destroyed) socket.write(`${JSON.stringify(message)}\n`); }
+  #broadcast(message) {
+    for (const socket of this.clients) this.#send(socket, message);
+  }
+
+  #send(socket, message) {
+    if (!socket.destroyed) socket.write(`${JSON.stringify(message)}\n`);
+  }
 }
 
 export { PIPE_NAME };
