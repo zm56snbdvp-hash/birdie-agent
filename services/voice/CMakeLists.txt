@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(birdie_voice STATIC
+  src/addressability.cpp
   src/voice_host.cpp
 )
 
@@ -34,6 +35,11 @@ if(WIN32)
 endif()
 
 enable_testing()
+
+add_executable(birdie-addressability-tests tests/addressability_tests.cpp)
+target_link_libraries(birdie-addressability-tests PRIVATE birdie_voice)
+add_test(NAME birdie-addressability-tests COMMAND birdie-addressability-tests)
+
 add_executable(birdie-voice-tests tests/voice_host_tests.cpp)
 target_link_libraries(birdie-voice-tests PRIVATE birdie_voice)
 add_test(NAME birdie-voice-tests COMMAND birdie-voice-tests)
