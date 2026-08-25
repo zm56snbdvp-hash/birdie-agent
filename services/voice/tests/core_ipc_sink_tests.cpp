@@ -16,6 +16,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <utility>
 
 namespace {
 
@@ -65,7 +66,7 @@ void write_all(HANDLE pipe, const std::string& message) {
 
 void test_voice_event_and_core_command_round_trip() {
   const std::wstring pipe_name = unique_pipe_name(L"roundtrip");
-  std::promise<std::string> received_promise;
+  std::promise<std::pair<std::string, std::string>> received_promise;
   auto received = received_promise.get_future();
   std::atomic<bool> server_ready{false};
 
@@ -85,14 +86,23 @@ void test_voice_event_and_core_command_round_trip() {
         throw std::runtime_error("ConnectNamedPipe failed");
       }
 
-      const std::string line = read_line(pipe);
+      const std::string hello = read_line(pipe);
+      write_all(
+          pipe,
+          "{\"type\":\"component.hello.ack\","
+          "\"requestId\":\"voice-hello-test-session\","
+          "\"payload\":{\"accepted\":true,\"role\":\"voice\","
+          "\"contractVersion\":\"1.0\"}}\n");
+      FlushFileBuffers(pipe);
+
+      const std::string event = read_line(pipe);
       const std::string responses =
           "{\"type\":\"runtime.event.ack\",\"requestId\":\"test\"}\n"
           "{\"type\":\"voice.command\",\"requestId\":\"mic-off\","
           "\"payload\":{\"name\":\"voice.mute.set\",\"enabled\":false}}\n";
       write_all(pipe, responses);
       FlushFileBuffers(pipe);
-      received_promise.set_value(line);
+      received_promise.set_value({hello, event});
       std::this_thread::sleep_for(250ms);
       DisconnectNamedPipe(pipe);
       CloseHandle(pipe);
@@ -112,7 +122,9 @@ void test_voice_event_and_core_command_round_trip() {
     while (!sink.connected() && std::chrono::steady_clock::now() < deadline) {
       std::this_thread::sleep_for(10ms);
     }
-    require(sink.connected(), "voice sink must connect to Birdie Core pipe");
+    require(
+        sink.connected(),
+        "voice sink must report connected only after Core accepts hello");
 
     sink.emit(VoiceEvent{
         "voice.activity.started",
@@ -124,7 +136,7 @@ void test_voice_event_and_core_command_round_trip() {
     });
 
     require(received.wait_for(3s) == std::future_status::ready,
-            "Birdie Core pipe must receive the Voice event");
+            "Birdie Core pipe must receive hello and Voice event");
 
     const auto command_deadline = std::chrono::steady_clock::now() + 3s;
     while (!command && std::chrono::steady_clock::now() < command_deadline) {
@@ -135,20 +147,29 @@ void test_voice_event_and_core_command_round_trip() {
   }
 
   server.join();
-  const std::string line = received.get();
-  require(line.find("\"type\":\"runtime.event.publish\"") !=
+  const auto [hello, event] = received.get();
+  require(hello.find("\"type\":\"component.hello\"") !=
+              std::string::npos,
+          "first Voice message must be component.hello");
+  require(hello.find("\"role\":\"voice\"") != std::string::npos,
+          "Voice hello must request voice role");
+  require(hello.find("\"contractVersion\":\"1.0\"") !=
+              std::string::npos,
+          "Voice hello must carry contract version");
+
+  require(event.find("\"type\":\"runtime.event.publish\"") !=
               std::string::npos,
           "message must use runtime.event.publish");
-  require(line.find("\"name\":\"voice.activity.started\"") !=
+  require(event.find("\"name\":\"voice.activity.started\"") !=
               std::string::npos,
           "message must contain the canonical Voice event name");
-  require(line.find("\"source\":\"birdie-voice\"") !=
+  require(event.find("\"source\":\"birdie-voice\"") !=
               std::string::npos,
           "message must identify the Voice producer");
-  require(line.find("\"contract_version\":\"1.0\"") !=
+  require(event.find("\"contract_version\":\"1.0\"") !=
               std::string::npos,
           "message must carry the shared contract version");
-  require(line.find("\"barge_in_candidate\":true") !=
+  require(event.find("\"barge_in_candidate\":true") !=
               std::string::npos,
           "message must preserve typed payload values");
 
