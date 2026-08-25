@@ -14,6 +14,7 @@
 #include <deque>
 #include <iomanip>
 #include <mutex>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <string_view>
@@ -137,11 +138,12 @@ class CoreIpcEventSink::Impl {
         trace_id_(std::move(trace_id)),
         pipe_name_(std::move(pipe_name)),
         best_effort_queue_limit_(std::max<std::size_t>(1,
-                                                        best_effort_queue_limit)),
-        worker_([this] { run(); }) {
+                                                        best_effort_queue_limit)) {
     if (session_id_.empty() || trace_id_.empty() || pipe_name_.empty()) {
-      throw std::invalid_argument("CoreIpcEventSink requires session, trace and pipe identifiers");
+      throw std::invalid_argument(
+          "CoreIpcEventSink requires session, trace and pipe identifiers");
     }
+    worker_ = std::thread([this] { run(); });
   }
 
   ~Impl() {
@@ -201,7 +203,8 @@ class CoreIpcEventSink::Impl {
           wake_.wait_for(lock, reconnect_delay, [this] {
             return stop_.load(std::memory_order_acquire);
           });
-          reconnect_delay = std::min(reconnect_delay * 2, 2s);
+          reconnect_delay = std::min(
+              reconnect_delay * 2, std::chrono::milliseconds{2000});
           continue;
         }
         reconnect_delay = 100ms;
