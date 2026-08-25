@@ -6,11 +6,18 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace birdie::voice {
 
 #ifdef _WIN32
+
+struct CoreCommand {
+  std::string request_id;
+  std::string name;
+  bool enabled{false};
+};
 
 class CoreIpcEventSink final : public IEventSink {
  public:
@@ -26,6 +33,7 @@ class CoreIpcEventSink final : public IEventSink {
 
   [[nodiscard]] bool connected() const noexcept;
   [[nodiscard]] std::uint64_t dropped_best_effort() const noexcept;
+  [[nodiscard]] std::optional<CoreCommand> try_pop_command();
 
  private:
   class Impl;
