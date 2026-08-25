@@ -85,44 +85,55 @@ test('IPC routes microphone command and waits for Voice privacy confirmation', a
   const server = new BirdieIpcServer({ pipeName });
   await server.start();
 
-  const client = await connectClient(pipeName);
+  const desktop = await connectClient(pipeName);
+  const voice = await connectClient(pipeName);
   try {
-    const initial = await client.waitFor((message) => message.type === 'runtime.snapshot');
+    const initial = await desktop.waitFor(
+      (message) => message.type === 'runtime.snapshot',
+    );
     assert.equal(initial.payload.microphoneState, 'UNAVAILABLE');
 
-    client.socket.write(`${JSON.stringify({
+    desktop.socket.write(`${JSON.stringify({
       type: 'runtime.command',
       requestId: 'mic-off',
       payload: { name: 'ui.microphone.set_enabled', enabled: false },
     })}\n`);
 
-    const routed = await client.waitFor((message) =>
-      message.type === 'voice.command' && message.requestId === 'mic-off');
+    const routed = await voice.waitFor(
+      (message) =>
+        message.type === 'voice.command' && message.requestId === 'mic-off',
+    );
     assert.deepEqual(routed.payload, {
       name: 'voice.mute.set',
       enabled: false,
     });
 
-    const ack = await client.waitFor((message) =>
-      message.type === 'runtime.command.ack' && message.requestId === 'mic-off');
+    const ack = await desktop.waitFor(
+      (message) =>
+        message.type === 'runtime.command.ack' &&
+        message.requestId === 'mic-off',
+    );
     assert.equal(ack.payload.accepted, true);
     assert.equal(ack.payload.pendingVoiceConfirmation, true);
     assert.equal(ack.payload.microphoneState, 'UNAVAILABLE');
     assert.equal(server.getSnapshot().microphoneState, 'UNAVAILABLE');
 
-    client.socket.write(`${JSON.stringify({
+    voice.socket.write(`${JSON.stringify({
       type: 'runtime.event.publish',
       requestId: 'privacy-confirmation',
       payload: voicePrivacyEvent('MUTED_BY_USER'),
     })}\n`);
 
-    const confirmed = await client.waitFor((message) =>
-      message.type === 'runtime.snapshot' &&
-      message.payload.microphoneState === 'MUTED_BY_USER');
+    const confirmed = await desktop.waitFor(
+      (message) =>
+        message.type === 'runtime.snapshot' &&
+        message.payload.microphoneState === 'MUTED_BY_USER',
+    );
     assert.equal(confirmed.payload.microphoneState, 'MUTED_BY_USER');
     assert.equal(server.getSnapshot().microphoneState, 'MUTED_BY_USER');
   } finally {
-    client.socket.destroy();
+    desktop.socket.destroy();
+    voice.socket.destroy();
     await server.stop();
     if (process.platform !== 'win32' && fs.existsSync(pipeName)) fs.unlinkSync(pipeName);
   }
