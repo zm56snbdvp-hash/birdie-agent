@@ -21,7 +21,8 @@ struct RuntimeSnapshot {
 struct RuntimeState(Mutex<RuntimeSnapshot>);
 
 #[tauri::command]
-fn runtime_get_snapshot(state: State<'_, RuntimeState>, _last_revision: i64) -> RuntimeSnapshot {
+fn runtime_get_snapshot(state: State<'_, RuntimeState>, last_revision: i64) -> RuntimeSnapshot {
+  let _ = last_revision;
   state.0.lock().expect("runtime state poisoned").clone()
 }
 
