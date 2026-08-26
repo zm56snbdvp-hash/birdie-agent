@@ -1,8 +1,12 @@
-# BirdieWorld Beta 01 — private review
+# BirdieWorld Beta 02 candidate — private review
 
 Open this folder as a Unity 6 LTS project.
 
-The review target is WebGL and intentionally contains only the Birdie Express opener, character creation and the ready confirmation. The generated scene and WebGL build are available from the Unity menu under `BirdieWorld`.
+The WebGL review target follows one bounded path:
+
+`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt`
+
+On the first run, both opener choices lead through Character Creation and the ready confirmation. A returning player with a valid ready profile may resume through `REISE BEGINNEN`; `BIRDIE ERSTELLEN` still opens the creator. The journey begins on the platform, introduces human Leni, reveals the route map, boards the Birdie Express and stops outside The Nest. The Nest interior and the wider world remain out of scope. The generated scene and WebGL build are available from the Unity menu under `BirdieWorld`.
 
 For account sync, the surrounding authenticated shell supplies an in-memory Birdie bearer token after `birdieworld:ready`:
 
@@ -20,3 +24,9 @@ The template derives an in-memory SHA-256 isolation key from the JWT issuer, `su
 Character reads and saves use `/birdie-app/v1/character`; local `PlayerPrefs` is only for a signed-out draft. Account-bound state remains in memory until the server confirms it and is never reused across account switches. The client never sends `birdieId`, `characterId`, timestamps or economic state. An authenticated account without a server profile starts from a new blank character and is never seeded automatically from a previous local/account profile.
 
 The creator renders a human live-preview from Unity UI primitives. Name, story and signature-color changes update it immediately, while selected controls receive a visible focus state. This preview has no mascot or economic behavior and can later be replaced by a production 3D human prefab without changing the character API.
+
+The first journey receives only a read-only snapshot of the selected display name, story and signature color. Its stage, movement and responsive UI state stay in memory: it does not use `PlayerPrefs`, call the network, write the character profile or create any Coin effect. Keyboard and touch controls must both complete the same route on desktop and iPhone-sized portrait layouts.
+
+## Review boundary
+
+Beta 02 account sync must still pass create → save → reload with the same server-owned `characterId`. A new clean WebGL artifact must then pass the entire candidate flow on Acer and iPhone. Production confirmation, invite protection and Founder acceptance remain separate release gates. This candidate is not live, public, or Founder-accepted.

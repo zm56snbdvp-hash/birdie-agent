@@ -1,6 +1,6 @@
 # BirdieWorld Unity Beta
 
-Current private-review vertical slice for BirdieWorld.
+Current **Beta 02 candidate** vertical slice for BirdieWorld. This source is not live, public, or Founder-accepted.
 
 ## Product lock
 
@@ -13,11 +13,13 @@ The beta is intentionally small:
 5. No Harry-Potter world, houses, wizard school, spells, or borrowed lore.
 6. Character creation is the first durable player-owned object in BirdieWorld.
 7. Visual language: near-black / deep forest green / brass-gold / warm interior light / premium rail travel.
-8. Future destinations include Coin Shop and The Nest; the beta does not need those spaces playable yet.
+8. The first journey may reach the exterior forecourt of The Nest; The Nest interior, Coin Shop and the wider world are not playable yet.
 
-## Beta 01 flow
+## Beta 02 candidate flow
 
-`Opener -> Reise beginnen / Birdie erstellen -> Character Creation -> Save -> Ready`
+`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt`
+
+On a first run, both opener choices enter Character Creation. A successful local or account-backed save reaches the ready confirmation before the player can begin the bounded first journey. A returning player with a valid ready profile may resume from `REISE BEGINNEN`; `BIRDIE ERSTELLEN` always reopens the creator. Leni is a human travel companion. At The Nest forecourt the candidate stops; no interior, free-roam world or second route is implied.
 
 Character profile schema: `birdieworld-character/v1`.
 
@@ -64,11 +66,11 @@ The build is written to:
 
 `clients/unity/BirdieWorld/Builds/WebGL`
 
-The WebGL build intentionally has Unity compression disabled for Beta 01 so it can be served by a basic static host without custom Brotli/Gzip response headers. We can optimize payload size after the first deployment.
+The WebGL build intentionally has Unity compression disabled for this candidate so it can be served by a basic static host without custom Brotli/Gzip response headers. We can optimize payload size after the first accepted deployment.
 
 ## Art implementation
 
-`BirdieWorldBetaBootstrap` now wires the cinematic opener, start menu, character form, authenticated persistence and completion screen without committing placeholder fantasy lore. Character Creation includes a lightweight human live-preview that reacts to name, story and signature color without adding downloadable art dependencies. The approved cinematic train artwork should be imported as the background asset layer, followed by a production 3D human avatar prefab that keeps the same preview contract.
+`BirdieWorldBetaBootstrap` wires the cinematic opener, start menu, character form, authenticated persistence, ready screen and the bounded Beta 02 first journey without committing placeholder fantasy lore. Character Creation includes a lightweight human live-preview that reacts to name, story and signature color without adding downloadable art dependencies. `BirdieWorldFirstJourney` receives a read-only cosmetic snapshot, owns only in-memory presentation state and never writes character, account or economic data. The approved cinematic train artwork should be imported as the background asset layer, followed by a production 3D human avatar prefab that keeps the same preview contract.
 
 Target opener composition:
 
@@ -89,6 +91,16 @@ Target creation composition:
 - portrait layouts stack the journey/creator panels and the WebGL shell respects mobile safe areas
 - later: production 3D avatar parts behind the existing preview/profile contract
 
+Target first-journey composition:
+
+- begin on the BirdieWorld platform only after the ready confirmation
+- meet human Leni as the player's travel companion
+- read the bounded route map before boarding
+- ride the Birdie Express through the established green/gold Birdie & Breakfast world
+- arrive at The Nest forecourt and stop at the candidate boundary
+- keyboard and touch controls plus responsive desktop/iPhone layouts
+- session-only journey state: no `PlayerPrefs`, network call, Coin effect or profile mutation
+
 ## Private review and later public-beta gate
 
-The source is not externally invite-ready until a current Unity WebGL build passes Acer and iPhone review, the authenticated shell injects the session in memory, BirdieOS dispatches the character actions, create → save → reload returns the same server-owned `characterId`, and the exact Founder production confirmation plus fresh project/artifact-bound invite-only receipt are present. The client never accepts or sends a caller-supplied Birdie identity.
+Beta 02 account sync and release remain separate gates. The source is not externally invite-ready until a current Unity WebGL build passes the complete Beta 02 flow on Acer and iPhone, the authenticated shell injects the session in memory, BirdieOS dispatches the character actions, create → save → reload returns the same server-owned `characterId`, and the exact Founder production confirmation plus fresh project/artifact-bound invite-only receipt are present. The client never accepts or sends a caller-supplied Birdie identity. A green source test or build-only artifact does not make this candidate live, public, or Founder-accepted.

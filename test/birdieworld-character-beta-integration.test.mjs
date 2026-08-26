@@ -82,15 +82,15 @@ test("authenticated persistence isolates account state from signed-out drafts", 
   assert.match(bootstrap, /new GameObject\("BirdieWorld Auth Session"\)/);
   assert.match(bootstrap, /persistence\.Initialize\(characterApi\)/);
   assert.match(bootstrap, /authSession\.Initialize\(characterApi\)/);
-  assert.match(bootstrap, /if \(!profileIsAccountScoped\) store\.Save\(profile\)/);
-  assert.match(bootstrap, /!profileIsAccountScoped \|\| !persistence\.IsServerConfigured \|\| !accountProfileReady/);
+  assert.match(bootstrap, /if \(!profileIsAccountScoped\)\s*\{[\s\S]*?store\.Save\(profile\)/);
+  assert.match(bootstrap, /if \(!persistence\.IsServerConfigured \|\| !accountProfileReady\)/);
   assert.match(bootstrap, /persistence\.LoadServerProfile\(/);
   assert.match(bootstrap, /persistence\.CancelPendingRequests\(\)/);
   assert.match(bootstrap, /nameField\.onValueChanged\.AddListener\(value =>[\s\S]*profile\.displayName = value/);
   assert.match(bootstrap, /if \(!accountProfileReady\)\s*\{\s*HandleAuthenticatedSession\(\)/);
   assert.match(bootstrap, /sessionGeneration != authSession\.Generation/);
   assert.match(bootstrap, /profileRevision/);
-  assert.match(bootstrap, /accountProfileReady = true;\s*pendingUnboundDraft = null;\s*store\.Clear\(\)/);
+  assert.match(bootstrap, /accountProfileReady = true;[\s\S]*?pendingUnboundDraft = null;[\s\S]*?store\.Clear\(\)/);
   assert.match(bootstrap, /serverProfile == null && revisionAtLoad == profileRevision/);
   assert.doesNotMatch(bootstrap, /SaveFromServer/);
 });

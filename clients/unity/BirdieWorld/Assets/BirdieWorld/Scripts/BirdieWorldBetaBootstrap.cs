@@ -19,6 +19,7 @@ namespace BirdieWorld
         private GameObject startScreen;
         private GameObject creatorScreen;
         private GameObject readyScreen;
+        private GameObject journeyScreen;
         private RectTransform startVisualLayout;
         private RectTransform startMenuLayout;
         private RectTransform creatorPreviewLayout;
@@ -35,11 +36,14 @@ namespace BirdieWorld
         private BirdieWorldCharacterPersistence persistence;
         private BirdieWorldAuthSession authSession;
         private BirdieWorldAvatarPreview avatarPreview;
+        private BirdieWorldFirstJourney firstJourney;
         private readonly Dictionary<string, GameObject> storyChoices = new();
         private readonly Dictionary<string, GameObject> colorChoices = new();
         private CharacterProfile pendingUnboundDraft;
+        private bool pendingUnboundDraftReady;
         private bool profileIsAccountScoped;
         private bool accountProfileReady;
+        private bool profileReadyForJourney;
         private int profileRevision;
         private int layoutWidth;
         private int layoutHeight;
@@ -56,6 +60,7 @@ namespace BirdieWorld
             DontDestroyOnLoad(gameObject);
             store = new CharacterStore();
             profile = store.LoadOrCreate();
+            profileReadyForJourney = HasValidProfileName();
             font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             BuildServices();
             BuildEventSystem();
@@ -63,6 +68,7 @@ namespace BirdieWorld
             BuildStartScreen();
             BuildCreatorScreen();
             BuildReadyScreen();
+            BuildFirstJourney();
             ApplyResponsiveLayout(true);
             Show(startScreen);
             BuildCinematicOpener();
@@ -139,9 +145,9 @@ namespace BirdieWorld
             startMenuLayout = menu.GetComponent<RectTransform>();
             Label(menu.transform, "BIRDIEWORLD", 52, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.89f));
             Label(menu.transform, "BETA · DEIN ERSTER SCHRITT IN DIE WELT", 18, ivory, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.66f), new Vector2(0.92f, 0.73f));
-            Button(menu.transform, "REISE BEGINNEN", "Steig ein und entdecke die Welt", new Vector2(0.12f, 0.46f), new Vector2(0.88f, 0.61f), () => Show(creatorScreen));
+            Button(menu.transform, "REISE BEGINNEN", "Steig ein und entdecke die Welt", new Vector2(0.12f, 0.46f), new Vector2(0.88f, 0.61f), ResumeJourneyOrCreate);
             Button(menu.transform, "BIRDIE ERSTELLEN", "Deinen Charakter erschaffen", new Vector2(0.12f, 0.28f), new Vector2(0.88f, 0.43f), () => Show(creatorScreen));
-            Label(menu.transform, "BETA 01 · CHARACTER CREATION", 16, gold, TextAnchor.MiddleCenter, new Vector2(0.15f, 0.10f), new Vector2(0.85f, 0.18f));
+            Label(menu.transform, "BETA 02 · ERSTE REISE", 16, gold, TextAnchor.MiddleCenter, new Vector2(0.15f, 0.10f), new Vector2(0.85f, 0.18f));
         }
 
         private void BuildCreatorScreen()
@@ -168,6 +174,7 @@ namespace BirdieWorld
             nameField.onValueChanged.AddListener(value =>
             {
                 profile.displayName = value;
+                profileReadyForJourney = false;
                 profileRevision++;
                 RefreshCreatorPreview();
             });
@@ -200,20 +207,85 @@ namespace BirdieWorld
             readyNameText = Label(card.transform, string.Empty, 30, gold, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.48f), new Vector2(0.88f, 0.60f));
             readyStatusText = Label(card.transform, string.Empty, 19, ivory, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.31f), new Vector2(0.88f, 0.46f));
             Button(card.transform, "BIRDIE ANPASSEN", string.Empty, new Vector2(0.10f, 0.12f), new Vector2(0.44f, 0.23f), () => Show(creatorScreen));
-            Button(card.transform, "ZURÜCK ZUM START", string.Empty, new Vector2(0.56f, 0.12f), new Vector2(0.90f, 0.23f), () => Show(startScreen));
+            Button(card.transform, "ERSTE REISE STARTEN", string.Empty, new Vector2(0.56f, 0.12f), new Vector2(0.90f, 0.23f), BeginFirstJourney);
+        }
+
+        private void BuildFirstJourney()
+        {
+            firstJourney = gameObject.AddComponent<BirdieWorldFirstJourney>();
+            firstJourney.Build(canvas.transform, font, () => Show(startScreen));
+            journeyScreen = firstJourney.Screen;
+        }
+
+        private void ResumeJourneyOrCreate()
+        {
+            if (!HasReadyProfile())
+            {
+                Show(creatorScreen);
+                if (statusText != null && HasValidProfileName())
+                    statusText.text = "Speichere deine aktuelle Auswahl zuerst mit WEITER.";
+                return;
+            }
+
+            BeginFirstJourney();
+        }
+
+        private void BeginFirstJourney()
+        {
+            if (profileIsAccountScoped && !accountProfileReady)
+            {
+                Show(creatorScreen);
+                if (statusText != null)
+                    statusText.text = "Dein Konto-Birdie wird noch geladen · danach kann die Reise beginnen.";
+                return;
+            }
+
+            if (!HasReadyProfile())
+            {
+                Show(creatorScreen);
+                if (statusText != null)
+                    statusText.text = HasValidProfileName()
+                        ? "Speichere deine aktuelle Auswahl zuerst mit WEITER."
+                        : "Erstelle zuerst dein Birdie, bevor die Reise beginnt.";
+                return;
+            }
+
+            // The journey receives a snapshot so it can never mutate the persisted profile.
+            var readOnlyProfile = CharacterProfile.FromJson(profile.ToJson());
+            Show(journeyScreen);
+            firstJourney.Enter(readOnlyProfile);
+        }
+
+        private bool HasValidProfileName()
+        {
+            var name = profile?.displayName?.Trim();
+            return !string.IsNullOrEmpty(name) && name.Length >= 2 && name.Length <= 40;
+        }
+
+        private bool HasReadyProfile()
+        {
+            return profileReadyForJourney && HasValidProfileName();
         }
 
         private void HandleAuthenticatedSession()
         {
+            firstJourney?.ResetJourney();
             persistence.CancelPendingRequests();
             if (!profileIsAccountScoped && pendingUnboundDraft == null)
+            {
                 pendingUnboundDraft = profile;
+                pendingUnboundDraftReady = profileReadyForJourney;
+            }
             else if (profileIsAccountScoped && pendingUnboundDraft == null)
+            {
                 store.Clear();
+                pendingUnboundDraftReady = false;
+            }
 
             profile = CharacterProfile.CreateDefault();
             profileIsAccountScoped = true;
             accountProfileReady = false;
+            profileReadyForJourney = false;
             nameField.SetTextWithoutNotify(string.Empty);
             profileRevision++;
             Show(startScreen);
@@ -227,10 +299,12 @@ namespace BirdieWorld
                     if (sessionGeneration != authSession.Generation) return;
                     accountProfileReady = true;
                     pendingUnboundDraft = null;
+                    pendingUnboundDraftReady = false;
                     store.Clear();
                     if (serverProfile != null && revisionAtLoad == profileRevision)
                     {
                         BirdieWorldCharacterMapper.ApplyServerProfile(profile, serverProfile);
+                        profileReadyForJourney = HasValidProfileName();
                         nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
                         RefreshCreatorPreview();
                         profileRevision++;
@@ -238,6 +312,7 @@ namespace BirdieWorld
                     }
                     else if (serverProfile == null && revisionAtLoad == profileRevision)
                     {
+                        profileReadyForJourney = false;
                         nameField.SetTextWithoutNotify(string.Empty);
                         RefreshCreatorPreview();
                         profileRevision++;
@@ -245,6 +320,7 @@ namespace BirdieWorld
                     }
                     else
                     {
+                        profileReadyForJourney = false;
                         statusText.text = "Konto verbunden · deine aktuelle Auswahl bleibt erhalten.";
                     }
                     SetBusy(false);
@@ -258,6 +334,8 @@ namespace BirdieWorld
                         profile = pendingUnboundDraft;
                         pendingUnboundDraft = null;
                         profileIsAccountScoped = false;
+                        profileReadyForJourney = pendingUnboundDraftReady;
+                        pendingUnboundDraftReady = false;
                         nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
                         RefreshCreatorPreview();
                         profileRevision++;
@@ -282,6 +360,8 @@ namespace BirdieWorld
 
         private void HandleSessionFailure(string _)
         {
+            var journeyWasActive = journeyScreen != null && journeyScreen.activeSelf;
+            firstJourney?.ResetJourney();
             persistence.CancelPendingRequests();
             accountProfileReady = false;
             if (profileIsAccountScoped)
@@ -291,6 +371,8 @@ namespace BirdieWorld
                     profile = pendingUnboundDraft;
                     pendingUnboundDraft = null;
                     profileIsAccountScoped = false;
+                    profileReadyForJourney = pendingUnboundDraftReady;
+                    pendingUnboundDraftReady = false;
                     nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
                     RefreshCreatorPreview();
                 }
@@ -298,10 +380,15 @@ namespace BirdieWorld
                 {
                     store.Clear();
                     profile = CharacterProfile.CreateDefault();
+                    profileReadyForJourney = false;
                     nameField.SetTextWithoutNotify(string.Empty);
                     RefreshCreatorPreview();
                 }
                 profileRevision++;
+                Show(startScreen);
+            }
+            else if (journeyWasActive)
+            {
                 Show(startScreen);
             }
             SetBusy(false, "Anmeldung konnte nicht übernommen werden · lokaler Modus bleibt aktiv.");
@@ -309,10 +396,13 @@ namespace BirdieWorld
 
         private void HandleSessionCleared()
         {
+            firstJourney?.ResetJourney();
             persistence.CancelPendingRequests();
             pendingUnboundDraft = null;
+            pendingUnboundDraftReady = false;
             profileIsAccountScoped = false;
             accountProfileReady = false;
+            profileReadyForJourney = false;
             store.Clear();
             profile = CharacterProfile.CreateDefault();
             nameField.SetTextWithoutNotify(string.Empty);
@@ -333,14 +423,20 @@ namespace BirdieWorld
 
             profile.displayName = name;
             profileRevision++;
-            if (!profileIsAccountScoped) store.Save(profile);
+            profileReadyForJourney = false;
             var revisionAtSave = profileRevision;
 
-            if (!profileIsAccountScoped || !persistence.IsServerConfigured || !accountProfileReady)
+            if (!profileIsAccountScoped)
             {
-                ShowReady(profileIsAccountScoped
-                    ? "Im aktuellen Fenster erhalten. Konto-Sync folgt erst nach bestätigter Kontoverbindung."
-                    : "Auf diesem Gerät gespeichert. Mit deiner Birdie-Anmeldung folgt der Geräte-Sync.");
+                store.Save(profile);
+                profileReadyForJourney = true;
+                ShowReady("Auf diesem Gerät gespeichert. Mit deiner Birdie-Anmeldung folgt der Geräte-Sync.");
+                return;
+            }
+
+            if (!persistence.IsServerConfigured || !accountProfileReady)
+            {
+                SetBusy(false, "Dein Konto-Birdie ist noch nicht speicherbereit · bitte versuche es gleich erneut.");
                 return;
             }
 
@@ -359,6 +455,7 @@ namespace BirdieWorld
                     BirdieWorldCharacterMapper.ApplyServerProfile(profile, serverProfile);
                     profileIsAccountScoped = true;
                     accountProfileReady = true;
+                    profileReadyForJourney = true;
                     store.Clear();
                     nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
                     RefreshCreatorPreview();
@@ -369,8 +466,8 @@ namespace BirdieWorld
                 _ =>
                 {
                     if (sessionGeneration != authSession.Generation) return;
-                    SetBusy(false);
-                    ShowReady("Im aktuellen Fenster erhalten. Der Konto-Sync wird wieder möglich, sobald die Verbindung steht.");
+                    profileReadyForJourney = false;
+                    SetBusy(false, "Dein Konto-Birdie wurde nicht gespeichert · bitte versuche es erneut.");
                 });
         }
 
@@ -393,6 +490,7 @@ namespace BirdieWorld
             var choice = Button(parent, title, string.Empty, min, max, () =>
             {
                 profile.story = value;
+                profileReadyForJourney = false;
                 profileRevision++;
                 statusText.text = $"Story gewählt: {title}";
                 RefreshCreatorPreview();
@@ -405,6 +503,7 @@ namespace BirdieWorld
             var choice = Button(parent, title, string.Empty, new Vector2(x, 0.17f), new Vector2(x + 0.18f, 0.235f), () =>
             {
                 profile.color = value;
+                profileReadyForJourney = false;
                 profileRevision++;
                 statusText.text = $"Farbe gewählt: {title}";
                 RefreshCreatorPreview();
@@ -534,6 +633,7 @@ namespace BirdieWorld
             if (startScreen != null) startScreen.SetActive(target == startScreen);
             if (creatorScreen != null) creatorScreen.SetActive(target == creatorScreen);
             if (readyScreen != null) readyScreen.SetActive(target == readyScreen);
+            if (journeyScreen != null) journeyScreen.SetActive(target == journeyScreen);
         }
     }
 }

@@ -1,11 +1,20 @@
-# BirdieWorld Character Creation Beta — private-review and release gates
+# BirdieWorld Beta 02 candidate — private-review and release gates
 
-The current private-review candidate, and later first public beta, is intentionally limited to:
+The candidate is intentionally limited to one coherent path:
 
 1. Cinematic Birdie Express opener.
 2. Character creation.
 3. Account-bound character persistence.
 4. Completion screen confirming that the Birdie is ready.
+5. First-journey platform and meeting human Leni.
+6. Route map and bounded Birdie Express ride.
+7. Arrival at The Nest forecourt.
+
+Canonical flow:
+
+`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt`
+
+The candidate stops at the forecourt. It does not unlock The Nest interior, free-roam travel, a second destination or a public audience.
 
 ## Product lock
 
@@ -14,6 +23,15 @@ The current private-review candidate, and later first public beta, is intentiona
 - Leni remains the recurring companion in the travel experience.
 - Visual direction: black / deep forest green / brass-gold, warm practical lighting, premium railway interior, dramatic mountain climbs and descents.
 - No Harry-Potter-derived names, lore, houses, symbols, creatures, school language, or recognizable franchise design vocabulary.
+
+## First-journey runtime boundary
+
+- `BirdieWorldFirstJourney` receives a read-only cosmetic snapshot after the ready screen.
+- Display name, story and signature color may personalize presentation; the journey must not mutate the profile.
+- Journey progression is session-only and must not use `PlayerPrefs` or a new network endpoint.
+- The first journey has no Coin, balance, reward, transaction or redemption effect.
+- Keyboard and touch must expose the same bounded stages, and the layout must remain usable on desktop and iPhone portrait.
+- Leni is human; neither Birdie nor Leni is represented as a bird mascot.
 
 ## Persistence contract
 
@@ -30,8 +48,12 @@ The client never supplies `birdieId`, `characterId`, timestamps or schema author
 2. Deploy the Birdie Agent containing the authenticated character routes.
 3. Open `clients/unity/BirdieWorld` in Unity 6 LTS with Web Build Support.
 4. Run `BirdieWorld > Build WebGL Beta`.
-5. Verify that `birdieworld-build.json` names the intended clean source SHA and record the run ID plus `birdieworld-files.sha256` digest; verify that exact artifact on Acer and iPhone Safari/touch.
-6. Verify create → save → reload → the same authenticated server-owned `characterId`.
-7. Verify invite-only protection, then use the protected production workflow to release that accepted prior artifact without rebuilding it.
+5. Verify that `birdieworld-build.json` names the intended clean source SHA and record the run ID plus `birdieworld-files.sha256` digest.
+6. Verify the exact artifact on Acer and iPhone Safari/touch through creator, ready, platform, human Leni, route map, Birdie Express ride and The Nest forecourt.
+7. Complete the separate account sync gate: create → save → reload → the same authenticated server-owned `characterId`.
+8. Record explicit Founder acceptance for that exact artifact.
+9. Verify invite-only protection, then use the protected production workflow to release that accepted prior artifact without rebuilding it.
 
 Local `PlayerPrefs` is only for a signed-out draft. Account-bound state is isolated in memory and the server profile is authoritative once authentication is available.
+
+Passing source tests, Unity compile or a build-only artifact does not consume any release gate. Until the exact device, account sync, invite and Founder gates above pass, Beta 02 is not live, public, or Founder-accepted.

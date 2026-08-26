@@ -56,7 +56,7 @@ namespace BirdieWorld
             button.GetComponent<Image>().color=new Color(.08f,.16f,.11f,1);button.AddComponent<Outline>().effectColor=new Color(.72f,.54f,.27f,1);
             MakeText(button.transform,"EINSTEIGEN",22,new Vector2(.05f,.1f),new Vector2(.95f,.9f),new Color(.94f,.91f,.83f,1),TextAnchor.MiddleCenter);
             button.GetComponent<Button>().onClick.AddListener(()=>{if(!leaving)StartCoroutine(Leave(onBoard));});
-            footerLayout = MakeText(root.transform,"BETA 01  ·  CHARACTER CREATION",14,new Vector2(.06f,.10f),new Vector2(.42f,.16f),new Color(.62f,.51f,.32f,1),TextAnchor.MiddleLeft).rectTransform;
+            footerLayout = MakeText(root.transform,"BETA 02  ·  ERSTE REISE",14,new Vector2(.06f,.10f),new Vector2(.42f,.16f),new Color(.62f,.51f,.32f,1),TextAnchor.MiddleLeft).rectTransform;
             ApplyResponsiveLayout(true);
             StartCoroutine(RoutePulse());
         }
