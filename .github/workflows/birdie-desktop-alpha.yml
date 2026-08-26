@@ -173,10 +173,12 @@ jobs:
               $fixture.Refresh()
               if ($core.HasExited) { throw "Birdie Core exited before ready fixture: $($core.ExitCode)" }
               if ($fixture.HasExited) { throw "Ready runtime fixture exited: $($fixture.ExitCode)" }
-              $fixtureProof = if (Test-Path -LiteralPath $fixtureOut) {
-                [string](Get-Content -LiteralPath $fixtureOut -Raw)
-              } else { '' }
-              $fixtureReady = $fixtureProof.Contains(
+              $fixtureProof = ''
+              if (Test-Path -LiteralPath $fixtureOut) {
+                $fixtureProof = [string](Get-Content -LiteralPath $fixtureOut -Raw)
+              }
+              $fixtureReady = -not [string]::IsNullOrEmpty($fixtureProof) -and
+                $fixtureProof.Contains(
                 'READY_RUNTIME_FIXTURE presence=IDLE microphone=ENABLED'
               )
               if ($fixtureReady) { break }
