@@ -1,6 +1,7 @@
 #include "birdie/voice/gate_stt.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 namespace birdie::voice {
@@ -25,6 +26,21 @@ GateSttResult UnavailableGateStt::transcribe(
       ? "VOICE.GATE_STT.EMPTY_AUDIO"
       : "VOICE.GATE_STT.UNAVAILABLE";
   return result;
+}
+
+SerializedGateStt::SerializedGateStt(
+    std::unique_ptr<IGateStt> provider)
+    : provider_(std::move(provider)) {
+  if (!provider_) {
+    throw std::invalid_argument(
+        "SerializedGateStt requires a local STT provider");
+  }
+}
+
+GateSttResult SerializedGateStt::transcribe(
+    const GateSttRequest& request) {
+  std::scoped_lock lock(mutex_);
+  return provider_->transcribe(request);
 }
 
 void secure_clear(GateSttRequest& request) noexcept {
