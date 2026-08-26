@@ -43,15 +43,18 @@ int main() {
                        {{"activity_id", std::string("activity-smoke")},
                         {"confidence", 0.99},
                         {"barge_in_candidate", false}}});
-  sink.emit(VoiceEvent{"voice.activation.accepted", at++, std::nullopt,
-                       {{"activation_mode", std::string("DEVELOPMENT")},
+  sink.emit(VoiceEvent{"voice.activation.accepted", at++,
+                       std::string("turn-smoke"),
+                       {{"turn_id", std::string("turn-smoke")},
+                        {"activation_mode", std::string("DEVELOPMENT")},
                         {"confidence", 0.99}}});
   sink.emit(VoiceEvent{"voice.utterance.finalized", at++,
                        std::string("turn-smoke"),
                        {{"utterance_id", std::string("utterance-smoke")},
                         {"transcript", std::string("Hallo Birdie")},
                         {"language", std::string("de-DE")},
-                        {"confidence", 0.99}}});
+                        {"confidence", 0.99}},
+                       "content"});
   sink.emit(VoiceEvent{"voice.output.started", at++,
                        std::string("turn-smoke"),
                        {{"output_id", std::string("output-smoke")}}});
