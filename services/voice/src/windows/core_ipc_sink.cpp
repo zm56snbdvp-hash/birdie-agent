@@ -84,6 +84,13 @@ std::string value_to_json(const EventValue& value) {
   }, value);
 }
 
+std::string data_classification(const std::string_view requested) {
+  if (requested == "content" || requested == "sensitive") {
+    return std::string(requested);
+  }
+  return "operational";
+}
+
 bool is_best_effort(const std::string_view event_name) {
   return event_name == "voice.input.level" ||
          event_name == "voice.output.level";
@@ -112,6 +119,8 @@ std::string serialize_publish_request(const VoiceEvent& event,
                                std::to_string(sequence);
   const std::string request_id = "voice-request-" + session_id + '-' +
                                  std::to_string(sequence);
+  const std::string classification =
+      data_classification(event.data_classification);
 
   std::ostringstream out;
   out << '{'
@@ -136,7 +145,8 @@ std::string serialize_publish_request(const VoiceEvent& event,
     out << "null";
   }
 
-  out << ",\"data_classification\":\"operational\",\"payload\":{";
+  out << ",\"data_classification\":\""
+      << escape_json(classification) << "\",\"payload\":{";
   for (std::size_t index = 0; index < event.payload.size(); ++index) {
     if (index > 0) out << ',';
     out << '"' << escape_json(event.payload[index].first) << "\":"
@@ -324,7 +334,7 @@ class CoreIpcEventSink::Impl {
 
       if (stop_.load(std::memory_order_acquire)) break;
       if (!pending) {
-        read_available();
+        if (!read_available()) disconnect();
         continue;
       }
 
@@ -340,7 +350,7 @@ class CoreIpcEventSink::Impl {
         disconnect();
         continue;
       }
-      read_available();
+      if (!read_available()) disconnect();
     }
   }
 
