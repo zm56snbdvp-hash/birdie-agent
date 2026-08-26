@@ -20,6 +20,7 @@ enum class AddressabilityConfidenceBand {
 
 struct AddressabilityEvidence {
   bool explicit_activation{false};
+  bool direct_address{false};
   bool follow_up_window{false};
   bool follow_up_semantics_match{false};
   bool recently_active{false};
