@@ -1,5 +1,6 @@
 [CmdletBinding()]
 param(
+  [switch]$FullVoiceDemo,
   [switch]$DevelopmentAutoAccept,
   [switch]$SkipVoiceBuild,
   [ValidateSet('Debug', 'Release')]
@@ -77,6 +78,32 @@ Require-Command 'node'
 Require-Command 'npm'
 Require-Command 'cargo'
 
+if ($FullVoiceDemo) {
+  if ($DevelopmentAutoAccept) {
+    throw 'FullVoiceDemo uses the real local Addressability path and cannot be combined with DevelopmentAutoAccept.'
+  }
+  if ($PSBoundParameters.ContainsKey('GateSttProvider') -and
+      $GateSttProvider -ne 'WhisperCpp') {
+    throw 'FullVoiceDemo requires GateSttProvider=WhisperCpp.'
+  }
+  if ($PSBoundParameters.ContainsKey('BrainProvider') -and
+      $BrainProvider -ne 'DevelopmentAck') {
+    throw 'FullVoiceDemo requires BrainProvider=DevelopmentAck.'
+  }
+  if ($PSBoundParameters.ContainsKey('TtsProvider') -and
+      $TtsProvider -ne 'WindowsSapi') {
+    throw 'FullVoiceDemo requires TtsProvider=WindowsSapi.'
+  }
+
+  $GateSttProvider = 'WhisperCpp'
+  $BrainProvider = 'DevelopmentAck'
+  $TtsProvider = 'WindowsSapi'
+  $SetupWhisperCpp = [switch]::Present
+  if (-not $PSBoundParameters.ContainsKey('GateSttLanguage')) {
+    $GateSttLanguage = 'de'
+  }
+}
+
 if ($DevelopmentAutoAccept -and $GateSttProvider -eq 'WhisperCpp') {
   throw 'DevelopmentAutoAccept bypasses Addressability and cannot be combined with GateSttProvider=WhisperCpp.'
 }
@@ -119,7 +146,7 @@ if ($GateSttProvider -eq 'WhisperCpp') {
 
   if (-not (Test-Path -LiteralPath $WhisperCppSource -PathType Container) -or
       -not (Test-Path -LiteralPath $GateSttModel -PathType Leaf)) {
-    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -GateSttProvider WhisperCpp -SetupWhisperCpp -GateSttModelName $GateSttModelName -GateSttLanguage de -BrainProvider DevelopmentAck -TtsProvider WindowsSapi"
+    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -FullVoiceDemo"
     throw "Local Whisper source/model is missing. Run: $setupCommand"
   }
 
@@ -227,6 +254,11 @@ else {
 
 if ($DevelopmentAutoAccept) {
   Write-Warning 'DevelopmentAutoAccept is enabled. Every qualifying speech candidate may be treated as addressed to Birdie. Do not use this mode for privacy validation.'
+}
+
+if ($FullVoiceDemo) {
+  Write-Warning 'FullVoiceDemo validates local Whisper, deterministic development Brain and the installed Windows system voice. It is not a production AI or final Birdie voice test.'
+  Write-Host 'After Birdie reaches IDLE, say clearly: "Birdie, bist du da?"' -ForegroundColor Cyan
 }
 
 if (-not (Test-Path -LiteralPath (Join-Path $desktopDir 'node_modules'))) {
