@@ -7,6 +7,7 @@ on:
       - 'apps/desktop/**'
       - 'packages/protocol/**'
       - 'services/core/**'
+      - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
       - 'tests/desktop-alpha/**'
       - '.github/workflows/birdie-desktop-alpha.yml'
   pull_request:
@@ -14,6 +15,7 @@ on:
       - 'apps/desktop/**'
       - 'packages/protocol/**'
       - 'services/core/**'
+      - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
       - 'tests/desktop-alpha/**'
       - '.github/workflows/birdie-desktop-alpha.yml'
 
@@ -50,8 +52,22 @@ jobs:
         with:
           node-version: '22'
       - uses: dtolnay/rust-toolchain@stable
+      - name: Validate Desktop PowerShell launcher
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path 'scripts/repair-and-run-birdie-desktop-alpha.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          )
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw 'Desktop recovery launcher parser validation failed.'
+          }
       - name: Install desktop dependencies
-        run: npm install --prefix apps/desktop --no-audit --no-fund
+        run: npm install --prefix apps/desktop --include=optional --no-audit --no-fund
       - name: Build Presence frontend
         run: npm run build --prefix apps/desktop
       - name: Test Tauri host library
