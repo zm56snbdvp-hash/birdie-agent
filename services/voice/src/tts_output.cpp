@@ -1,6 +1,7 @@
 #include "birdie/voice/tts_output.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cstdlib>
 #include <stdexcept>
@@ -60,11 +61,6 @@ TtsWorkerUpdate update_from_request(
   update.data_classification = request.data_classification;
   return update;
 }
-
-#ifdef _WIN32
-std::unique_ptr<ITtsOutput> create_windows_sapi_tts(
-    long rate, unsigned long volume);
-#endif
 
 }  // namespace
 
