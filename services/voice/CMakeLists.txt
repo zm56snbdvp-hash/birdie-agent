@@ -7,7 +7,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 add_library(birdie_voice STATIC
   src/addressability.cpp
+  src/addressability_pipeline.cpp
   src/addressability_voice_host.cpp
+  src/gate_stt.cpp
   src/voice_host.cpp
 )
 
@@ -40,6 +42,19 @@ enable_testing()
 add_executable(birdie-addressability-tests tests/addressability_tests.cpp)
 target_link_libraries(birdie-addressability-tests PRIVATE birdie_voice)
 add_test(NAME birdie-addressability-tests COMMAND birdie-addressability-tests)
+
+add_executable(
+  birdie-addressability-pipeline-tests
+  tests/addressability_pipeline_tests.cpp
+)
+target_link_libraries(
+  birdie-addressability-pipeline-tests
+  PRIVATE birdie_voice
+)
+add_test(
+  NAME birdie-addressability-pipeline-tests
+  COMMAND birdie-addressability-pipeline-tests
+)
 
 add_executable(
   birdie-addressability-voice-host-tests
