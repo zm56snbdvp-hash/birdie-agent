@@ -54,7 +54,9 @@ jobs:
             )
             if ($errors.Count -gt 0) {
               $failed = $true
-              $errors | ForEach-Object { Write-Error "$file: $($_.Message)" }
+              $errors | ForEach-Object {
+                Write-Error "${file}: $($_.Message)"
+              }
             }
           }
           if ($failed) { throw "PowerShell parser validation failed." }
