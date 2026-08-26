@@ -1,6 +1,7 @@
 #include "birdie/voice/voice_host.hpp"
 
 #include <string>
+#include <utility>
 
 namespace birdie::voice {
 
@@ -50,10 +51,24 @@ bool VoiceHost::resolve_addressability(
 }
 
 void VoiceHost::handle_input_unavailable(std::string reason) {
-  if (phase_ != VoicePhase::Quiet) {
+  if (phase_ == VoicePhase::SpeechCandidate) {
+    reject_activation(reason);
+  } else if (phase_ == VoicePhase::Listening) {
+    emit(
+        "voice.input.cancelled",
+        last_frame_ms_,
+        {
+            {"activity_id", activity_id_},
+            {"reason", reason},
+            {"barge_in", output_active_},
+            {"output_id", active_output_id_},
+        });
     finish_activity(last_frame_ms_, std::move(reason));
+    reset_interaction(true);
+  } else {
+    reset_interaction(true);
   }
-  reset_interaction(true);
+
   gate_stt_activity_id_.clear();
   vad_.reset();
   last_level_event_ms_ = 0;
