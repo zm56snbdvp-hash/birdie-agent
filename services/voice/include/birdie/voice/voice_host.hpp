@@ -1,6 +1,7 @@
 #pragma once
 
 #include "birdie/voice/addressability.hpp"
+#include "birdie/voice/gate_stt.hpp"
 
 #include <cstdint>
 #include <functional>
@@ -9,6 +10,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -124,9 +126,14 @@ class VoiceHost {
   bool resolve_addressability(
       const AddressabilityResult& result,
       ActivationMode accepted_mode = ActivationMode::WakeOnSpeak);
+  bool resolve_addressability(
+      std::string_view expected_activity_id,
+      const AddressabilityResult& result,
+      ActivationMode accepted_mode = ActivationMode::WakeOnSpeak);
   void set_output_active(bool active, std::string output_id = {}, std::string turn_id = {});
   void set_muted(bool muted);
 
+  [[nodiscard]] std::optional<GateSttRequest> gate_stt_request() const;
   [[nodiscard]] VoicePhase phase() const noexcept;
   [[nodiscard]] bool muted() const noexcept;
   [[nodiscard]] bool output_active() const noexcept;
