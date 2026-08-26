@@ -1,11 +1,12 @@
 #include "birdie/voice/gate_stt_provider.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <charconv>
 #include <cmath>
 #include <cstdlib>
-#include <limits>
 #include <string_view>
+#include <system_error>
 #include <utility>
 
 namespace birdie::voice {
