@@ -37,8 +37,29 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Validate PowerShell launch scripts
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($file in @(
+            "scripts/setup-birdie-whisper-cpp.ps1",
+            "scripts/run-birdie-desktop-alpha.ps1"
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $file),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $failed = $true
+              $errors | ForEach-Object { Write-Error "$file: $($_.Message)" }
+            }
+          }
+          if ($failed) { throw "PowerShell parser validation failed." }
       - name: Configure CMake
-        run: cmake -S services/voice -B build/voice -A x64
+        run: cmake -S services/voice -B build/voice -A x64 -DGGML_NATIVE=OFF
       - name: Build Release
         run: cmake --build build/voice --config Release --parallel
       - name: Run deterministic voice tests
@@ -55,15 +76,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fetch reviewed whisper.cpp source
+      - name: Prepare reviewed whisper.cpp source through Birdie helper
         shell: pwsh
         run: |
-          $source = Join-Path $PWD "third_party/whisper.cpp"
-          New-Item -ItemType Directory -Path $source -Force | Out-Null
-          git -C $source init
-          git -C $source remote add origin https://github.com/ggml-org/whisper.cpp.git
-          git -C $source fetch --depth 1 origin $env:BIRDIE_REVIEWED_WHISPER_CPP_COMMIT
-          git -C $source checkout --detach FETCH_HEAD
+          .\scripts\setup-birdie-whisper-cpp.ps1 `
+            -SourceDirectory (Join-Path $PWD "third_party/whisper.cpp") `
+            -SourceOnly | Out-Host
+
+          $source = (Resolve-Path "third_party/whisper.cpp").Path
           $actual = (git -C $source rev-parse HEAD).Trim()
           if ($actual -ne $env:BIRDIE_REVIEWED_WHISPER_CPP_COMMIT) {
             throw "Unexpected whisper.cpp revision: $actual"
