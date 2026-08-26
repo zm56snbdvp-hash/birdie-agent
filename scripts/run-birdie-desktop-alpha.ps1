@@ -6,6 +6,8 @@ param(
   [string]$VoiceConfiguration = 'Release',
   [ValidateSet('Unavailable', 'WhisperCpp')]
   [string]$GateSttProvider = 'Unavailable',
+  [ValidateSet('Disabled', 'DevelopmentAck')]
+  [string]$BrainProvider = 'Disabled',
   [switch]$SetupWhisperCpp,
   [ValidateSet(
     'tiny', 'tiny.en',
@@ -108,7 +110,7 @@ if ($GateSttProvider -eq 'WhisperCpp') {
 
   if (-not (Test-Path -LiteralPath $WhisperCppSource -PathType Container) -or
       -not (Test-Path -LiteralPath $GateSttModel -PathType Leaf)) {
-    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -GateSttProvider WhisperCpp -SetupWhisperCpp -GateSttModelName $GateSttModelName -GateSttLanguage de"
+    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -GateSttProvider WhisperCpp -SetupWhisperCpp -GateSttModelName $GateSttModelName -GateSttLanguage de -BrainProvider DevelopmentAck"
     throw "Local Whisper source/model is missing. Run: $setupCommand"
   }
 
@@ -168,6 +170,12 @@ $env:BIRDIE_VOICE_EXE = $voiceExe
 $env:BIRDIE_MANAGE_CORE = '1'
 $env:BIRDIE_MANAGE_VOICE = '1'
 $env:BIRDIE_DEV_AUTO_ACCEPT = if ($DevelopmentAutoAccept) { '1' } else { '0' }
+$env:BIRDIE_BRAIN_PROVIDER = if ($BrainProvider -eq 'DevelopmentAck') {
+  'development-ack'
+}
+else {
+  'disabled'
+}
 $env:BIRDIE_GATE_STT_THREADS = [string]$GateSttThreads
 $env:BIRDIE_GATE_STT_LANGUAGE = if ([string]::IsNullOrWhiteSpace($GateSttLanguage)) { 'auto' } else { $GateSttLanguage }
 $env:BIRDIE_GATE_STT_USE_GPU = if ($GateSttCpuOnly) { '0' } else { '1' }
@@ -182,6 +190,14 @@ else {
   $env:BIRDIE_GATE_STT_PROVIDER = 'unavailable'
   Remove-Item Env:BIRDIE_GATE_STT_MODEL -ErrorAction SilentlyContinue
   Write-Host 'Gate-STT: unavailable (fail-closed)' -ForegroundColor Yellow
+}
+
+if ($BrainProvider -eq 'DevelopmentAck') {
+  Write-Warning 'DevelopmentAck is a deterministic local orchestration test, not Birdies production AI response.'
+  Write-Host 'Brain: local development acknowledgement' -ForegroundColor Green
+}
+else {
+  Write-Host 'Brain: disabled (fail-closed)' -ForegroundColor Yellow
 }
 
 if ($DevelopmentAutoAccept) {
