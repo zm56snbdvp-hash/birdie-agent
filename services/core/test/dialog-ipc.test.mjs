@@ -137,7 +137,7 @@ test('classified transcript becomes a Voice output and completes Presence', asyn
           message.type === 'runtime.presence.changed' &&
           message.payload?.state === 'SPEAKING',
       );
-      assert.equal(speaking.payload.turnId, 'turn-dialog-ipc');
+      assert.equal(speaking.payload.activeTurnId, 'turn-dialog-ipc');
 
       publish(voice, 'output-completed', event('voice.output.completed', 7, {
         turnId: 'turn-dialog-ipc',
@@ -149,7 +149,7 @@ test('classified transcript becomes a Voice output and completes Presence', asyn
           message.payload?.state === 'IDLE' &&
           message.payload?.reason === 'voice.output.completed',
       );
-      assert.equal(idle.payload.turnId, null);
+      assert.equal(idle.payload.activeTurnId, null);
 
       const observerSerialization = JSON.stringify(observer.messages);
       assert.equal(
