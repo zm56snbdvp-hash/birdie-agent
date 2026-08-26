@@ -127,7 +127,7 @@ Set-Location $repoRoot
 New-Item -ItemType Directory -Force -Path $logDir | Out-Null
 Remove-Item $coreOut,$coreErr,$voiceOut,$voiceErr -Force -ErrorAction SilentlyContinue
 Stop-BirdieProcesses
-Remove-Item $diagnosticLog -Force -ErrorAction Stop
+Remove-Item $diagnosticLog -Force -ErrorAction SilentlyContinue
 Write-Diagnostic 'SCRIPT_START' "repoRoot=$repoRoot"
 Write-Diagnostic 'PROCESS_CLEAN' 'birdie-desktop=0 birdie-voice-host=0'
 
@@ -284,6 +284,73 @@ try {
     throw "Birdie Desktop exited before the hardware test started (code $desktopExitCode). Check $diagnosticLog for a stale single-instance process."
   }
   Write-Diagnostic 'DESKTOP_RUNNING' "pid=$($desktopProcess.Id) buildId=$buildId"
+
+  # Do not make the operator infer success from a still-open translucent panel.
+  # The hardware path is accepted only after the same authoritative READY
+  # snapshot has crossed every boundary through the visible DOM projection.
+  $bridgeDeadline = [DateTime]::UtcNow.AddSeconds(30)
+  $frontendReady = $false
+  $pipeReady = $false
+  $helloReady = $false
+  $rustReady = $false
+  $invokeReady = $false
+  $statusReady = $false
+  $domReady = $false
+  do {
+    $desktopProcess.Refresh()
+    if ($desktopProcess.HasExited) {
+      $desktopExitCode = $desktopProcess.ExitCode
+      throw "Birdie Desktop exited while waiting for bridge proof (code $desktopExitCode)."
+    }
+
+    if (Test-Path -LiteralPath $diagnosticLog -PathType Leaf) {
+      $proofLines = @(Get-Content -LiteralPath $diagnosticLog -ErrorAction SilentlyContinue)
+      $frontendReady = @($proofLines | Where-Object {
+        $_ -like "*DESKTOP_FRONTEND source=js buildId=$buildId*"
+      }).Count -gt 0
+      $pipeReady = @($proofLines | Where-Object {
+        $_ -like '*PIPE_CONNECTED*'
+      }).Count -gt 0
+      $helloReady = @($proofLines | Where-Object {
+        $_ -like '*HELLO_ACK accepted=true*'
+      }).Count -gt 0
+      $rustReady = @($proofLines | Where-Object {
+        $_ -like '*RUST_STATE_UPDATED*' -and
+        $_ -like '*lifecycle=READY*' -and
+        $_ -like '*presence.state=IDLE*' -and
+        $_ -like '*microphoneState=ENABLED*'
+      }).Count -gt 0
+      $invokeReady = @($proofLines | Where-Object {
+        $_ -like '*TAURI_INVOKE_RESULT source=js command=runtime_get_snapshot*' -and
+        $_ -like '*lifecycle=READY*' -and
+        $_ -like '*presence.state=IDLE*' -and
+        $_ -like '*microphoneState=ENABLED*'
+      }).Count -gt 0
+      $statusReady = @($proofLines | Where-Object {
+        $_ -like '*JS_STATUS source=js status=READY*'
+      }).Count -gt 0
+      $domReady = @($proofLines | Where-Object {
+        $_ -like '*DOM_STATE source=js state=IDLE*' -and
+        $_ -like '*runtime=Wake-on-Speak*'
+      }).Count -gt 0
+    }
+
+    if ($frontendReady -and $pipeReady -and $helloReady -and $rustReady -and $invokeReady -and $statusReady -and $domReady) {
+      break
+    }
+    Start-Sleep -Milliseconds 250
+  } while ([DateTime]::UtcNow -lt $bridgeDeadline)
+
+  if (-not ($frontendReady -and $pipeReady -and $helloReady -and $rustReady -and $invokeReady -and $statusReady -and $domReady)) {
+    Write-Host 'Desktop bridge did not reach the visible READY state. Consolidated diagnostic:' -ForegroundColor Red
+    if (Test-Path -LiteralPath $diagnosticLog) {
+      Get-Content -LiteralPath $diagnosticLog -Tail 160 | Out-Host
+    }
+    throw "Desktop bridge proof failed. Full diagnostic: $diagnosticLog"
+  }
+
+  Write-Host 'DESKTOP BRIDGE READY: state=IDLE runtime=Wake-on-Speak microphone=ENABLED' -ForegroundColor Green
+  Write-Diagnostic 'DESKTOP_BRIDGE_READY' "pid=$($desktopProcess.Id) buildId=$buildId state=IDLE microphoneState=ENABLED"
   $desktopProcess.WaitForExit()
   $desktopExitCode = $desktopProcess.ExitCode
   Write-Diagnostic 'DESKTOP_EXIT' "pid=$($desktopProcess.Id) exitCode=$desktopExitCode"

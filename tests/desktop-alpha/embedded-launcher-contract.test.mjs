@@ -19,6 +19,8 @@ test('embedded launcher builds and fingerprints the current frontend before Taur
   assert.match(launcher, /Frontend bundle does not contain build ID \$buildId/);
   assert.match(launcher, /Get-FileHash -LiteralPath \$desktopExe/);
   assert.match(launcher, /desktop-runtime-diagnostic\.log/);
+  assert.match(launcher, /DESKTOP BRIDGE READY/);
+  assert.match(launcher, /Desktop bridge proof failed/);
   assert.doesNotMatch(
     launcher,
     /\[IO\.Path\]::GetRelativePath/,
@@ -67,4 +69,7 @@ test('Windows CI parses the hardware launcher and verifies embedded build identi
   assert.match(workflow, /cargo build --manifest-path apps\/desktop\/src-tauri\/Cargo\.toml/);
   assert.match(workflow, /DESKTOP_FRONTEND source=js buildId=/);
   assert.match(workflow, /TAURI_LISTEN_RESULT source=js event=runtime:ipc-error result=OK/);
+  assert.match(workflow, /Prove live Core named pipe through Rust and embedded WebView/);
+  assert.match(workflow, /RUST_STATE_UPDATED/);
+  assert.match(workflow, /DOM_STATE source=js state=IDLE/);
 });

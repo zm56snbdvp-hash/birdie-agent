@@ -141,6 +141,84 @@ jobs:
           finally {
             if ($desktop -and -not $desktop.HasExited) {
               Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $desktop.Id -Timeout 10 -ErrorAction SilentlyContinue
+            }
+          }
+      - name: Prove live Core named pipe through Rust and embedded WebView
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:RUNNER_TEMP 'birdie-desktop-live-core-diagnostic.log'
+          $coreOut = Join-Path $env:RUNNER_TEMP 'birdie-core-live.stdout.log'
+          $coreErr = Join-Path $env:RUNNER_TEMP 'birdie-core-live.stderr.log'
+          Remove-Item $diagnostic,$coreOut,$coreErr -Force -ErrorAction SilentlyContinue
+          Get-Process birdie-desktop -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+          $env:BIRDIE_DESKTOP_DIAGNOSTIC_LOG = $diagnostic
+          $env:BIRDIE_MANAGE_CORE = '0'
+          $env:BIRDIE_MANAGE_VOICE = '0'
+          $env:BIRDIE_BRAIN_PROVIDER = 'development-ack'
+          $core = Start-Process -FilePath 'node' -ArgumentList @(
+            'services/core/src/server-main.mjs'
+          ) -WorkingDirectory $PWD -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr -PassThru
+          $desktop = $null
+          try {
+            $executable = Resolve-Path 'apps/desktop/src-tauri/target/debug/birdie-desktop.exe'
+            $desktop = Start-Process -FilePath $executable -PassThru
+            $deadline = [DateTime]::UtcNow.AddSeconds(40)
+            $nativePipe = $false
+            $hello = $false
+            $rustReady = $false
+            $jsReady = $false
+            $domReady = $false
+            do {
+              $core.Refresh()
+              if ($core.HasExited) {
+                throw "Birdie Core exited during live pipe proof: $($core.ExitCode)"
+              }
+              $desktop.Refresh()
+              if ($desktop.HasExited) {
+                throw "Tauri desktop exited during live pipe proof: $($desktop.ExitCode)"
+              }
+              if (Test-Path -LiteralPath $diagnostic) {
+                $lines = @(Get-Content -LiteralPath $diagnostic)
+                $nativePipe = @($lines | Where-Object { $_ -like '*PIPE_CONNECTED*' }).Count -gt 0
+                $hello = @($lines | Where-Object { $_ -like '*HELLO_ACK accepted=true*' }).Count -gt 0
+                $rustReady = @($lines | Where-Object {
+                  $_ -like '*RUST_STATE_UPDATED*' -and
+                  $_ -like '*lifecycle=READY*' -and
+                  $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*brainState=READY*'
+                }).Count -gt 0
+                $jsReady = @($lines | Where-Object {
+                  $_ -like '*TAURI_INVOKE_RESULT source=js command=runtime_get_snapshot*' -and
+                  $_ -like '*lifecycle=READY*' -and
+                  $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*brainState=READY*'
+                }).Count -gt 0
+                $domReady = @($lines | Where-Object {
+                  $_ -like '*DOM_STATE source=js state=IDLE*' -and
+                  $_ -like '*runtime=Wake-on-Speak*'
+                }).Count -gt 0
+                if ($nativePipe -and $hello -and $rustReady -and $jsReady -and $domReady) { break }
+              }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+
+            if (-not ($nativePipe -and $hello -and $rustReady -and $jsReady -and $domReady)) {
+              if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic | Out-Host }
+              if (Test-Path -LiteralPath $coreOut) { Get-Content -LiteralPath $coreOut | Out-Host }
+              if (Test-Path -LiteralPath $coreErr) { Get-Content -LiteralPath $coreErr | Out-Host }
+              throw 'Live Core named pipe did not reach the visible embedded WebView READY state.'
+            }
+          }
+          finally {
+            if ($desktop -and -not $desktop.HasExited) {
+              Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $desktop.Id -Timeout 10 -ErrorAction SilentlyContinue
+            }
+            if ($core -and -not $core.HasExited) {
+              Stop-Process -Id $core.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $core.Id -Timeout 10 -ErrorAction SilentlyContinue
             }
           }
       - name: Verify native build did not mutate watched source files
