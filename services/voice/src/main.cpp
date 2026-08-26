@@ -1,3 +1,5 @@
+#include "birdie/voice/addressability_pipeline.hpp"
+#include "birdie/voice/addressability_worker.hpp"
 #include "birdie/voice/voice_host.hpp"
 
 #ifdef _WIN32
@@ -19,6 +21,7 @@
 namespace {
 
 std::atomic<bool> stop_requested{false};
+constexpr std::uint64_t kMinimumGateCandidateMs = 320;
 
 void handle_signal(int) { stop_requested.store(true); }
 
@@ -63,7 +66,7 @@ int main(int argc, char** argv) {
   const bool stdout_events = has_argument(argc, argv, "--stdout-events");
 
   if (!capture_microphone) {
-    std::cout << "Birdie Voice Host v0.1\n"
+    std::cout << "Birdie Voice Host v0.2\n"
               << "Usage: birdie-voice-host --mic [--dev-auto-accept] "
                  "[--stdout-events]\n";
     return 0;
@@ -91,9 +94,9 @@ int main(int argc, char** argv) {
   birdie::voice::VoiceConfig config;
   birdie::voice::VoiceHost host(
       config, sink, [](birdie::voice::UtteranceAudio utterance) {
-        // Audio remains local. Gate-STT will emit voice.utterance.finalized only
-        // after an accepted turn has been transcribed.
-        std::cerr << "[birdie-voice] local utterance ready: id="
+        // Accepted audio remains local. Full local STT / Brain handoff is a
+        // separate post-addressability stage and is not implemented here.
+        std::cerr << "[birdie-voice] accepted local utterance ready: id="
                   << utterance.utterance_id
                   << " duration_ms=" << utterance.duration_ms << '\n';
         std::fill(utterance.samples.begin(), utterance.samples.end(), 0.0F);
@@ -109,9 +112,47 @@ int main(int argc, char** argv) {
     host.set_muted(muted);
   };
 
+  std::atomic<bool> addressability_enabled{true};
+  birdie::voice::UnavailableGateStt gate_stt;
+  birdie::voice::AddressabilityEvidencePipeline addressability_pipeline(
+      gate_stt);
+  birdie::voice::AddressabilityWorker addressability_worker(
+      addressability_pipeline,
+      [&](birdie::voice::AddressabilityEvaluation evaluation) {
+        if (!addressability_enabled.load(std::memory_order_acquire)) return;
+
+        const auto mode = evaluation.evidence.follow_up_semantics_match
+            ? birdie::voice::ActivationMode::FollowUp
+            : birdie::voice::ActivationMode::WakeOnSpeak;
+        bool applied = false;
+        {
+          std::scoped_lock lock(host_mutex);
+          if (addressability_enabled.load(std::memory_order_acquire)) {
+            applied = host.resolve_addressability(
+                evaluation.activity_id, evaluation.result, mode);
+          }
+        }
+
+        if (applied) {
+          std::cerr
+              << "[birdie-voice] addressability="
+              << birdie::voice::addressability_decision_name(
+                     evaluation.result.decision)
+              << " gate_stt="
+              << birdie::voice::gate_stt_status_name(
+                     evaluation.gate_stt_status)
+              << " reason=" << evaluation.result.reason
+              << " score=" << evaluation.result.score << '\n';
+        }
+      });
+  std::string submitted_activity_id;
+
   if (development_auto_accept) {
     std::cerr << "[birdie-voice] WARNING: --dev-auto-accept is active; "
                  "all qualifying speech candidates are treated as addressed.\n";
+  } else {
+    std::cerr << "[birdie-voice] Gate-STT is fail-closed until a local decoder "
+                 "is configured; unresolved speech will ABSTAIN.\n";
   }
 
   birdie::voice::WasapiCapture capture;
@@ -130,21 +171,48 @@ int main(int argc, char** argv) {
                {{"component", std::string("birdie-voice")},
                 {"contract_version", std::string("1.0")},
                 {"capture", std::string("WASAPI_SHARED_16K_MONO")},
+                {"addressability", std::string("LOCAL_ACCEPT_REJECT_ABSTAIN")},
+                {"gate_stt", std::string("UNCONFIGURED_FAIL_CLOSED")},
                 {"development_auto_accept", development_auto_accept}}});
   };
 
   auto start_capture = [&](std::string& error) {
     return capture.start(
         [&](birdie::voice::AudioFrame frame) {
-          std::scoped_lock lock(host_mutex);
-          host.process(std::move(frame));
-          if (development_auto_accept &&
-              host.phase() == birdie::voice::VoicePhase::SpeechCandidate) {
-            host.accept_activation(birdie::voice::ActivationMode::Development,
-                                   0.99);
+          std::optional<birdie::voice::GateSttRequest> gate_request;
+          {
+            std::scoped_lock lock(host_mutex);
+            host.process(std::move(frame));
+
+            if (development_auto_accept &&
+                host.phase() == birdie::voice::VoicePhase::SpeechCandidate) {
+              host.accept_activation(
+                  birdie::voice::ActivationMode::Development, 0.99);
+            } else if (!development_auto_accept &&
+                       addressability_enabled.load(
+                           std::memory_order_acquire) &&
+                       host.phase() ==
+                           birdie::voice::VoicePhase::SpeechCandidate) {
+              auto candidate = host.gate_stt_request();
+              if (candidate &&
+                  candidate->captured_through_ms >=
+                      candidate->candidate_started_ms +
+                          kMinimumGateCandidateMs &&
+                  candidate->activity_id != submitted_activity_id) {
+                submitted_activity_id = candidate->activity_id;
+                gate_request = std::move(candidate);
+              }
+            }
+          }
+
+          if (gate_request) {
+            birdie::voice::AddressabilityContext context;
+            addressability_worker.submit(
+                std::move(*gate_request), std::move(context));
           }
         },
         [&](std::string message) {
+          addressability_enabled.store(false, std::memory_order_release);
           sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
                      {{"component", std::string("birdie-voice")},
                       {"status", std::string("DEGRADED")},
@@ -159,6 +227,7 @@ int main(int argc, char** argv) {
 
   std::string start_error;
   if (!start_capture(start_error)) {
+    addressability_enabled.store(false, std::memory_order_release);
     sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
                {{"component", std::string("birdie-voice")},
                 {"status", std::string("UNAVAILABLE")},
@@ -179,6 +248,8 @@ int main(int argc, char** argv) {
       if (command->name != "voice.mute.set") continue;
 
       if (!command->enabled) {
+        addressability_enabled.store(false, std::memory_order_release);
+        addressability_worker.discard_pending();
         capture_enabled = false;
         capture.stop();
         set_host_muted(true);  // Confirms only after WASAPI is released.
@@ -187,6 +258,7 @@ int main(int argc, char** argv) {
       } else {
         capture_enabled = true;
         if (capture.running()) {
+          addressability_enabled.store(true, std::memory_order_release);
           if (host_is_muted()) {
             set_host_muted(false);
           } else {
@@ -195,9 +267,11 @@ int main(int argc, char** argv) {
         } else {
           std::string restart_error;
           if (start_capture(restart_error)) {
+            addressability_enabled.store(true, std::memory_order_release);
             set_host_muted(false);
             std::cerr << "[birdie-voice] microphone enabled by user\n";
           } else {
+            addressability_enabled.store(false, std::memory_order_release);
             set_host_muted(true);
             emit_privacy("UNAVAILABLE");
             sink.emit({"component.health.changed", monotonic_ms(),
@@ -215,6 +289,8 @@ int main(int argc, char** argv) {
     }
 
     if (capture_faulted.exchange(false, std::memory_order_acq_rel)) {
+      addressability_enabled.store(false, std::memory_order_release);
+      addressability_worker.discard_pending();
       capture.stop();
       next_restart_attempt =
           std::chrono::steady_clock::now() + std::chrono::seconds(1);
@@ -225,6 +301,7 @@ int main(int argc, char** argv) {
         std::chrono::steady_clock::now() >= next_restart_attempt) {
       std::string restart_error;
       if (start_capture(restart_error)) {
+        addressability_enabled.store(true, std::memory_order_release);
         if (host_is_muted()) set_host_muted(false);
         emit_privacy("ENABLED");
         sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
@@ -232,6 +309,7 @@ int main(int argc, char** argv) {
                     {"status", std::string("READY")},
                     {"error_code", std::string("")}}});
       } else {
+        addressability_enabled.store(false, std::memory_order_release);
         set_host_muted(true);
         emit_privacy("UNAVAILABLE");
         next_restart_attempt =
@@ -272,10 +350,15 @@ int main(int argc, char** argv) {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 
+  addressability_enabled.store(false, std::memory_order_release);
+  addressability_worker.discard_pending();
   capture.stop();
+  addressability_worker.stop();
   set_host_muted(true);
   std::cerr << "[birdie-voice] dropped best-effort IPC events: "
             << core_sink.dropped_best_effort() << '\n';
+  std::cerr << "[birdie-voice] dropped addressability jobs: "
+            << addressability_worker.dropped_jobs() << '\n';
   return 0;
 #endif
 }
