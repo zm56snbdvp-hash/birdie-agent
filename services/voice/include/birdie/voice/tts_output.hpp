@@ -46,6 +46,11 @@ class DisabledTtsOutput final : public ITtsOutput {
   [[nodiscard]] TtsResult speak(const TtsRequest& request) override;
 };
 
+#ifdef _WIN32
+[[nodiscard]] std::unique_ptr<ITtsOutput> create_windows_sapi_tts(
+    long rate, unsigned long volume);
+#endif
+
 struct TtsProviderConfig {
   std::string provider{"disabled"};
   long rate{0};
