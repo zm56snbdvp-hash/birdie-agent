@@ -16,7 +16,12 @@ namespace birdie::voice {
 struct CoreCommand {
   std::string request_id;
   std::string name;
-  bool enabled{false};
+  std::optional<bool> enabled;
+  std::string turn_id;
+  std::string output_id;
+  std::string text;
+  std::string language{"und"};
+  std::string data_classification{"operational"};
 };
 
 class CoreIpcEventSink final : public IEventSink {
