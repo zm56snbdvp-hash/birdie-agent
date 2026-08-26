@@ -3,13 +3,28 @@
   "productName": "Birdie",
   "version": "0.1.0-alpha.0",
   "identifier": "com.birdieandbreakfast.birdie.desktop",
-  "build": { "beforeDevCommand": "npm run dev", "beforeBuildCommand": "npm run build", "devUrl": "http://localhost:1420", "frontendDist": "../dist" },
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devUrl": "http://127.0.0.1:1420",
+    "frontendDist": "../dist"
+  },
   "app": {
     "windows": [{
-      "label": "core", "title": "Birdie", "width": 260, "height": 260,
-      "decorations": false, "transparent": true, "shadow": false,
-      "resizable": false, "maximizable": false, "minimizable": false,
-      "alwaysOnTop": true, "skipTaskbar": true, "focus": false, "visible": true
+      "label": "core",
+      "title": "Birdie",
+      "width": 260,
+      "height": 260,
+      "decorations": false,
+      "transparent": true,
+      "shadow": false,
+      "resizable": false,
+      "maximizable": false,
+      "minimizable": false,
+      "alwaysOnTop": true,
+      "skipTaskbar": true,
+      "focus": false,
+      "visible": true
     }],
     "security": { "csp": null }
   },
