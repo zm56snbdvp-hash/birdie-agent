@@ -58,3 +58,10 @@ jobs:
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib
       - name: Check Tauri desktop executable
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Verify native build did not mutate watched source files
+        shell: pwsh
+        run: |
+          git diff --exit-code -- apps/desktop/src-tauri
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The Tauri build mutated source files and can cause an infinite dev rebuild loop.'
+          }
