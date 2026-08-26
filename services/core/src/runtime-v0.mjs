@@ -46,22 +46,36 @@ export class BirdieRuntimeV0 {
         }
         return this.#setPresence(PresenceState.IDLE, event, reason, null);
       }
-      case 'voice.activation.accepted':
+      case 'voice.activation.accepted': {
         if (this.pendingBargeIn) {
           const oldTurn = this.turns.activeTurnId;
-          if (oldTurn && this.turns.isCurrent(oldTurn)) this.turns.transition(oldTurn, TurnStatus.INTERRUPTED);
+          if (oldTurn && this.turns.isCurrent(oldTurn)) {
+            this.turns.transition(oldTurn, TurnStatus.INTERRUPTED);
+          }
           this.pendingBargeIn = false;
         }
-        return this.#setPresence(PresenceState.LISTENING, event, 'voice.activation.accepted', null);
+        const turnId = event.turn_id ?? event.payload?.turn_id ?? null;
+        if (turnId) {
+          this.turns.create(turnId, { timestampUtc: event.timestamp_utc });
+          this.turns.transition(turnId, TurnStatus.CAPTURING);
+        }
+        return this.#setPresence(
+          PresenceState.LISTENING,
+          event,
+          'voice.activation.accepted',
+          turnId,
+        );
+      }
       case 'voice.input.cancelled':
         this.pendingBargeIn = false;
+        if (event.turn_id && this.turns.isCurrent(event.turn_id)) {
+          this.turns.transition(event.turn_id, TurnStatus.CANCELLED);
+        }
         return this.#setPresence(PresenceState.IDLE, event, 'voice.input.cancelled', null);
-      case 'voice.utterance.finalized': {
-        if (!event.turn_id) throw new Error('TURN.ID_REQUIRED');
-        this.turns.create(event.turn_id, { timestampUtc: event.timestamp_utc });
-        this.turns.transition(event.turn_id, TurnStatus.PROCESSING);
-        return this.#setPresence(PresenceState.THINKING, event, 'voice.utterance.finalized', event.turn_id);
-      }
+      case 'voice.utterance.captured':
+        return this.#markTurnProcessing(event, 'voice.utterance.captured');
+      case 'voice.utterance.finalized':
+        return this.#markTurnProcessing(event, 'voice.utterance.finalized');
       case 'voice.output.started':
         this.turns.assertCurrent(event.turn_id);
         this.turns.transition(event.turn_id, TurnStatus.OUTPUTTING);
@@ -77,6 +91,26 @@ export class BirdieRuntimeV0 {
       default:
         return { accepted: true, ignored: event.name };
     }
+  }
+
+  #markTurnProcessing(event, reason) {
+    if (!event.turn_id) throw new Error('TURN.ID_REQUIRED');
+    let turn = this.turns.get(event.turn_id);
+    if (!turn) {
+      turn = this.turns.create(event.turn_id, {
+        timestampUtc: event.timestamp_utc,
+      });
+    }
+    if (turn.status !== TurnStatus.PROCESSING) {
+      this.turns.assertCurrent(event.turn_id);
+      this.turns.transition(event.turn_id, TurnStatus.PROCESSING);
+    }
+    return this.#setPresence(
+      PresenceState.THINKING,
+      event,
+      reason,
+      event.turn_id,
+    );
   }
 
   #setPresence(state, event, reason, turnId = event.turn_id ?? this.turns.activeTurnId) {
