@@ -1,6 +1,6 @@
-# Birdie Voice Host v0.3
+# Birdie Voice Host v0.5
 
-Native, local-first foundation for Birdie Desktop Alpha voice input and addressability.
+Native, local-first Voice Runtime for Birdie Desktop Alpha.
 
 ## Current vertical slice
 
@@ -8,48 +8,59 @@ Native, local-first foundation for Birdie Desktop Alpha voice input and addressa
 - Windows WASAPI shared-mode capture at 16 kHz mono float
 - RAM-only circular pre-roll buffer
 - adaptive energy-VAD baseline behind a replaceable boundary
-- strict separation of speech activity, addressability decision and utterance endpointing
-- replaceable local `IGateStt` interface
-- fail-closed `UnavailableGateStt` default provider
-- optional in-process `whisper.cpp` Gate-STT provider
-- reviewed and pinned `whisper.cpp` source revision
-- bounded asynchronous Gate-STT worker outside the WASAPI callback
-- deterministic transcript- and acoustic-evidence pipeline
+- optional in-process `whisper.cpp` provider on a pinned reviewed revision
+- separate bounded workers for Addressability and full accepted-turn transcription
 - explicit `ACCEPT`, `REJECT` and `ABSTAIN` lifecycle
-- stale-result protection through Activity-IDs
-- maximum 30 Hz normalized input-level events
+- stale-result protection through Activity- and Turn-IDs
 - real WASAPI mute/restart control through Birdie Core
-- output-aware speech candidates for later production Barge-in
-- deterministic Windows CI for both the fallback and native Whisper builds
+- content-classified `voice.utterance.finalized` events
+- content-classified `voice.output.play` commands from Birdie Core
+- bounded `TtsOutputWorker`
+- optional Windows SAPI output using the installed system voice
+- deterministic Voice, IPC, Conversation-STT and TTS tests
+- native Windows CI for fallback and Whisper builds
 
-The energy VAD is an engineering baseline, **not** the production Silero model. The local Gate-STT backend is integrated, but model weights remain an explicit local setup step and are never committed to the repository.
+The energy VAD is an engineering baseline, not the production Silero model. Windows SAPI is an integration voice, not Birdies final voice. Barge-in is deliberately disabled until an acoustic echo-cancellation reference path exists.
 
-## Fastest real Windows test
+## Fastest complete local Windows test
 
 From the repository root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass `
   -File .\scripts\run-birdie-desktop-alpha.ps1 `
-  -GateSttProvider WhisperCpp `
-  -SetupWhisperCpp `
-  -GateSttModelName base `
-  -GateSttLanguage de
+  -FullVoiceDemo
 ```
 
-This command:
+The command prepares the reviewed Whisper source and verified multilingual `base` model, builds the native Voice Host and explicitly enables the deterministic Development-Brain plus Windows SAPI.
 
-1. checks out the reviewed `whisper.cpp` commit `978113305b2ead22249b881deafa131dc8884911`;
-2. downloads the multilingual `base` model from the official whisper.cpp model location;
-3. verifies the model against the SHA-1 published by the pinned whisper.cpp source tree;
-4. builds Birdie Voice with `BIRDIE_WITH_WHISPER_CPP=ON`;
-5. starts Birdie Desktop, Core and Voice together.
+After Birdie reaches `IDLE`, say:
 
-The default model is `base` because it is multilingual and small enough for the first Gate-STT test. `small` is available as a later accuracy benchmark but is substantially larger.
+> Birdie, bist du da?
 
-## Manual setup
+Expected flow:
 
-Source and model can also be prepared separately:
+```text
+WASAPI
+→ VAD
+→ Gate-STT
+→ ACCEPT
+→ full local Conversation-STT
+→ Birdie Core
+→ deterministic Development-Brain
+→ voice.output.play
+→ Windows SAPI
+→ voice.output.started
+→ SPEAKING
+→ voice.output.completed
+→ IDLE
+```
+
+This verifies the complete local orchestration path but does not claim production AI quality or Birdies final voice.
+
+## Reproducible Whisper setup
+
+Source and model can be prepared separately:
 
 ```powershell
 powershell -ExecutionPolicy Bypass `
@@ -64,11 +75,11 @@ third_party/whisper.cpp
 models/whisper/ggml-base.bin
 ```
 
-Both paths are ignored by Git. The helper refuses a dirty source checkout, a non-official origin, an unexpected source revision or a model hash mismatch.
+The helper verifies official origin, reviewed commit and the model SHA published by the pinned whisper.cpp source tree. Both paths are ignored by Git.
 
-## Fail-closed mode
+## Fail-closed defaults
 
-Without a configured local decoder, qualifying speech follows:
+Without an explicitly configured local decoder:
 
 ```text
 Speech Candidate
@@ -78,7 +89,7 @@ Speech Candidate
 → no Birdie turn
 ```
 
-This remains the default when `GateSttProvider` is not explicitly set to `WhisperCpp`. The Voice Host never pretends it understood speech because a model is missing.
+Without an explicitly configured Brain provider, no response text is generated. Without an explicitly configured TTS provider, no speech is attempted. Missing components therefore reduce capability instead of silently bypassing policy.
 
 ## Development-only auto-accept
 
@@ -88,42 +99,23 @@ powershell -ExecutionPolicy Bypass `
   -DevelopmentAutoAccept
 ```
 
-`DevelopmentAutoAccept` deliberately treats qualifying speech as addressed to Birdie only to exercise the downstream Presence and capture path. It cannot be combined with the real Whisper provider and is invalid for privacy, DDSD, false-accept, wake-word or release testing.
-
-## Addressability pipeline
-
-For triggerless candidates:
-
-```text
-WASAPI
-→ VAD
-→ bounded GateSttRequest
-→ one-slot worker
-→ local IGateStt
-→ transcript + acoustic evidence
-→ RuleBasedAddressabilityGate
-→ ACCEPT / REJECT / ABSTAIN
-→ VoiceHost lifecycle event
-```
-
-An explicit activation such as click, hotkey or a future verified wake word is a separate evidence source. Merely transcribing the words “Hey Birdie” is not treated as a trusted wake-word detection.
+This deliberately accepts qualifying candidates only to exercise Presence and capture. It cannot be combined with the real Whisper provider and is invalid for privacy, DDSD, wake-word or release testing.
 
 ## Privacy invariants
 
-- no disk audio writes
-- no network calls from the Voice Host during inference
-- pre-roll exists only in process memory
+- no temporary audio files
+- no cloud request in the Voice Host
+- pre-roll and utterance PCM exist only in process memory
 - raw PCM never enters Birdie Core or Tauri
-- Gate-STT runs outside the WASAPI callback
-- Gate transcripts never leave the local Evidence Pipeline
-- Gate transcripts are not logged or emitted as Runtime events
-- Gate PCM and transcript buffers are overwritten before release
-- reject, abstain, timeout or mute clears buffered audio
-- an older pending Gate-STT job is wiped before a newer one replaces it
-- stale asynchronous decisions cannot resolve a newer Activity-ID
-- mute, capture failure and shutdown invalidate pending addressability work
-- model absence, load failure or inference failure maps to fail-closed behavior
-- the event sink emits operational metadata, never PCM or Gate transcripts
+- Gate-STT and Conversation-STT run outside the WASAPI callback
+- the short Gate transcript never leaves the local Addressability pipeline
+- only an accepted full transcript may cross into Core, classified as `content`
+- transcript content classified as `operational` is rejected
+- Voice output text must remain `content` or `sensitive`
+- audio and transcript buffers are overwritten before release where owned by the worker
+- stale asynchronous decisions cannot resolve a newer Activity- or Turn-ID
+- mute, capture failure and shutdown invalidate pending work
+- the Voice publisher does not receive Desktop snapshots or its own realtime projection
 
 ## Build and test
 
@@ -148,13 +140,13 @@ ctest --test-dir build/voice -C Release --output-on-failure
 
 ## Remaining product gaps
 
-The following are deliberately not claimed as complete:
-
-- measured German false-accept and false-reject calibration on Kevin’s target PC
-- commercial “Hey Birdie” wake-word model
+- real Birdie AI provider instead of the deterministic Development-Brain
+- Kevins final Birdie voice instead of Windows SAPI
+- measured German false-accept and false-reject calibration on the target PC
+- commercial dedicated “Hey Birdie” wake-word model
 - media/loopback correlation
 - overlap and multi-speaker detection
 - optional speaker verification
 - structured follow-up context from Birdie Core
-- full accepted-turn Brain/STT/TTS loop
 - production AEC and full-duplex barge-in
+- hardened packaging and installer release gate
