@@ -72,6 +72,10 @@ struct VoiceConfig {
   double speech_stop_threshold{0.35};
   std::size_t start_window_frames{3};
   std::size_t start_required_frames{2};
+
+  // Full-duplex candidates remain opt-in until an AEC reference path is
+  // integrated. This prevents Birdie's own speaker output from waking Birdie.
+  bool barge_in_enabled{false};
 };
 
 class IEventSink {
