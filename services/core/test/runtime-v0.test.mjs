@@ -54,8 +54,10 @@ test('normal turn distinguishes capture from finalized transcript', () => {
 
   runtime.apply(evt('voice.output.started', 6, { turn_id: 'turn-1' }));
   runtime.apply(evt('voice.output.completed', 7, { turn_id: 'turn-1' }));
-  assert.equal(runtime.getSnapshot().presence.state, 'IDLE');
-  assert.equal(runtime.getSnapshot().activeTurn, null);
+  snapshot = runtime.getSnapshot();
+  assert.equal(snapshot.presence.state, 'IDLE');
+  assert.equal(snapshot.presence.activeTurnId, null);
+  assert.equal(snapshot.activeTurn, null);
 });
 
 test('full transcription failure cancels the same capturing turn', () => {
@@ -76,8 +78,10 @@ test('full transcription failure cancels the same capturing turn', () => {
     },
   }));
 
-  assert.equal(runtime.getSnapshot().presence.state, 'IDLE');
-  assert.equal(runtime.getSnapshot().activeTurn, null);
+  const snapshot = runtime.getSnapshot();
+  assert.equal(snapshot.presence.state, 'IDLE');
+  assert.equal(snapshot.presence.activeTurnId, null);
+  assert.equal(snapshot.activeTurn, null);
   assert.equal(
     runtime.turns.get('turn-cancelled').status,
     'CANCELLED',
