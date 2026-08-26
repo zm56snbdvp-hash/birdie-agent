@@ -1,9 +1,9 @@
 # Birdie Desktop Alpha – lokaler Entwicklungsstart
 
-Birdie Desktop läuft auf dem normalen Windows 11. Der Desktop-Host beaufsichtigt im Entwicklungsmodus zwei lokale Prozesse:
+Birdie Desktop läuft auf einem normalen Windows 11. Der Desktop-Host beaufsichtigt im Entwicklungsmodus zwei lokale Prozesse:
 
 - `birdie-core`: kanonischer Runtime- und Presence-State über `\\.\pipe\birdie.core.control.v1`
-- `birdie-voice-host`: WASAPI Capture, lokaler Speech Candidate, Voice Events und Audioausgabe
+- `birdie-voice-host`: WASAPI Capture, Speech Candidates, lokale Addressability und Voice Events
 
 ## Voraussetzungen
 
@@ -31,6 +31,51 @@ Der Launcher:
 4. lässt Tauri `birdie-core` und `birdie-voice` beaufsichtigen,
 5. beendet beide Child-Prozesse beim expliziten Birdie-Quit.
 
+## Verbindlicher lokaler Voice-Pfad
+
+```text
+WASAPI microphone
+→ adaptive local VAD
+→ voice.activity.started
+→ bounded GateSttRequest in Voice RAM
+→ one-slot AddressabilityWorker
+→ local IGateStt boundary
+→ transcript-derived + acoustic evidence
+→ ACCEPT / REJECT / ABSTAIN
+→ VoiceHost lifecycle event
+→ Birdie Core named pipe
+→ canonical Presence projector
+→ Tauri bridge
+→ Birdie Presence renderer
+```
+
+Privacy-Grenzen:
+
+- Der WASAPI-Callback führt keinen STT-Decoder aus.
+- Gate-STT läuft ausschließlich im lokalen Voice-Worker.
+- Roh-PCM wird weder an Birdie Core noch an Tauri übertragen.
+- Das Gate-Transkript verlässt die Evidence Pipeline nicht und wird weder geloggt noch als Runtime-Event veröffentlicht.
+- Gate-Audio und Gate-Transkript werden vor der Freigabe ihrer lokalen Buffer überschrieben.
+- Die Workerqueue enthält höchstens einen wartenden Kandidaten; ein älterer wartender Kandidat wird vor dem Ersetzen gelöscht.
+- Verspätete Ergebnisse können wegen der Activity-ID keinen neueren Kandidaten aktivieren.
+- Mute, Capture-Fehler und Shutdown sperren neue Entscheidungen und löschen wartendes Gate-Audio.
+
+## Verhalten ohne lokales Decoder-Modell
+
+Die Pipeline ist live verdrahtet, aber der standardmäßige Provider ist derzeit `UnavailableGateStt`. Damit gilt im normalen Alpha-Modus:
+
+```text
+IDLE
+→ SPEECH_DETECTED
+→ Gate-STT UNAVAILABLE
+→ ABSTAIN
+→ IDLE
+```
+
+Birdie behauptet also nicht, Sprache verstanden zu haben. Es entsteht kein Turn, keine Antwort und kein Cloud-Upload.
+
+Eine explizite Aktivierung – beispielsweise Klick, Hotkey oder später ein verifiziertes Wake-Word – besitzt einen dokumentierten `BYPASSED`-Pfad und kann ohne Gate-STT akzeptiert werden. Triggerlose Sprache darf diesen Pfad nicht verwenden.
+
 ## Development Wake Demo
 
 ```powershell
@@ -39,22 +84,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\run-birdie-desktop-alpha.ps1 
 
 `DevelopmentAutoAccept` ist ausschließlich für den visuellen End-to-End-Loop. In diesem Modus kann jeder qualifizierende Sprachkandidat als an Birdie gerichtet gelten. Der Launcher zeigt deshalb einen Privacy-Warnhinweis.
 
-Der Modus ist **nicht** für Privacy-, DDSD- oder False-Accept-Tests zugelassen.
+Der Modus ist **nicht** für Privacy-, DDSD-, False-Accept- oder Produktfreigabe-Tests zugelassen.
 
-## Verbindlicher Live-Pfad
-
-```text
-WASAPI microphone
-→ birdie-voice-host
-→ runtime.event.publish
-→ Birdie Core named pipe
-→ canonical Presence projector
-→ runtime.presence.changed
-→ Tauri bridge
-→ Birdie Presence renderer
-```
-
-Normaler Alpha-Trace:
+Mit diesem ausdrücklichen Demo-Bypass kann der bekannte Alpha-Trace dargestellt werden:
 
 ```text
 IDLE
@@ -79,4 +111,16 @@ IDLE
 
 ## Aktuelle Grenze
 
-Der lokale Transport, VAD-/Candidate-Flow, State-Projektion, Presence-Rendering und die Prozessintegration sind implementiert. Hochwertige lokale Gate-STT, Wake-Word-Modell und DDSD-Fusionsentscheidung werden als nächste Voice-Schicht ergänzt. Bis dahin ist `DevelopmentAutoAccept` nur eine ausdrücklich markierte Integrationshilfe, keine fertige Adressatenerkennung.
+Implementiert sind lokaler Transport, WASAPI, VAD-/Candidate-Flow, bounded Gate-STT-Schnittstelle, fail-closed Provider, asynchrone Evidence Pipeline, ACCEPT/REJECT/ABSTAIN, State-Projektion, Presence-Rendering und Prozessintegration.
+
+Noch nicht implementiert beziehungsweise noch nicht produktionskalibriert sind:
+
+- ein tatsächlich transkribierendes lokales Gate-STT-Modell und dessen Lizenz-/Modellpaketierung;
+- eigenes kommerziell freigegebenes „Hey Birdie“-Wake-Word-Modell;
+- Medien-/Loopback-Korrelation;
+- Overlap-/Mehrsprecher-Erkennung;
+- optionaler Speaker-Verifier;
+- strukturierte Follow-up-Fenster aus Birdie Core;
+- deutsches Realwelt-Testkorpus und kalibrierte Schwellenwerte;
+- vollständige Brain-/TTS-Antwort nach einem akzeptierten Turn;
+- produktionsreife AEC-basierte Full-Duplex-Unterbrechung.
