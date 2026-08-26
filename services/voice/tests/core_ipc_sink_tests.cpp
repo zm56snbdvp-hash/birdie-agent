@@ -17,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <utility>
+#include <vector>
 
 namespace {
 
@@ -64,6 +65,23 @@ void write_all(HANDLE pipe, const std::string& message) {
   }
 }
 
+std::vector<CoreCommand> wait_for_commands(
+    CoreIpcEventSink& sink,
+    const std::size_t count,
+    const std::chrono::milliseconds timeout = 3s) {
+  std::vector<CoreCommand> commands;
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+  while (commands.size() < count &&
+         std::chrono::steady_clock::now() < deadline) {
+    if (auto command = sink.try_pop_command()) {
+      commands.push_back(std::move(*command));
+    } else {
+      std::this_thread::sleep_for(10ms);
+    }
+  }
+  return commands;
+}
+
 void test_voice_event_and_core_command_round_trip() {
   const std::wstring pipe_name = unique_pipe_name(L"roundtrip");
   std::promise<std::pair<std::string, std::string>> received_promise;
@@ -99,11 +117,22 @@ void test_voice_event_and_core_command_round_trip() {
       const std::string responses =
           "{\"type\":\"runtime.event.ack\",\"requestId\":\"test\"}\n"
           "{\"type\":\"voice.command\",\"requestId\":\"mic-off\","
-          "\"payload\":{\"name\":\"voice.mute.set\",\"enabled\":false}}\n";
+          "\"payload\":{\"name\":\"voice.mute.set\",\"enabled\":false}}\n"
+          "{\"type\":\"voice.command\",\"requestId\":\"output-1\","
+          "\"payload\":{\"name\":\"voice.output.play\","
+          "\"turn_id\":\"turn-content-1\","
+          "\"output_id\":\"output-content-1\","
+          "\"text\":\"Ich bin da.\",\"language\":\"de-DE\","
+          "\"data_classification\":\"content\"}}\n"
+          "{\"type\":\"voice.command\",\"requestId\":\"invalid-output\","
+          "\"payload\":{\"name\":\"voice.output.play\","
+          "\"turn_id\":\"turn-invalid\",\"output_id\":\"out-invalid\","
+          "\"text\":\"should be rejected\",\"language\":\"de\","
+          "\"data_classification\":\"operational\"}}\n";
       write_all(pipe, responses);
       FlushFileBuffers(pipe);
       received_promise.set_value({hello, event});
-      std::this_thread::sleep_for(250ms);
+      std::this_thread::sleep_for(350ms);
       DisconnectNamedPipe(pipe);
       CloseHandle(pipe);
     } catch (...) {
@@ -115,7 +144,7 @@ void test_voice_event_and_core_command_round_trip() {
     std::this_thread::sleep_for(5ms);
   }
 
-  std::optional<CoreCommand> command;
+  std::vector<CoreCommand> commands;
   {
     CoreIpcEventSink sink("test-session", "test-trace", pipe_name, 4);
     const auto deadline = std::chrono::steady_clock::now() + 3s;
@@ -139,13 +168,12 @@ void test_voice_event_and_core_command_round_trip() {
 
     require(received.wait_for(3s) == std::future_status::ready,
             "Birdie Core pipe must receive hello and Voice event");
-
-    const auto command_deadline = std::chrono::steady_clock::now() + 3s;
-    while (!command && std::chrono::steady_clock::now() < command_deadline) {
-      command = sink.try_pop_command();
-      if (!command) std::this_thread::sleep_for(10ms);
-    }
-    require(command.has_value(), "Voice sink must queue Core control command");
+    commands = wait_for_commands(sink, 2);
+    require(commands.size() == 2,
+            "Voice sink must queue valid mute and output commands only");
+    std::this_thread::sleep_for(100ms);
+    require(!sink.try_pop_command().has_value(),
+            "operationally-classified output content must be rejected");
   }
 
   server.join();
@@ -180,12 +208,30 @@ void test_voice_event_and_core_command_round_trip() {
   require(event.find("Birdie, öffne den Kalender") != std::string::npos,
           "content payload must be serialized for the authorized Core client");
 
-  require(command->request_id == "mic-off",
-          "Voice command must preserve request id");
-  require(command->name == "voice.mute.set",
-          "Voice command must use canonical command name");
-  require(!command->enabled,
-          "Voice command must preserve requested microphone state");
+  const CoreCommand& mute = commands[0];
+  require(mute.request_id == "mic-off",
+          "mute command must preserve request id");
+  require(mute.name == "voice.mute.set",
+          "mute command must use canonical name");
+  require(mute.enabled.has_value() && !*mute.enabled,
+          "mute command must preserve requested microphone state");
+  require(mute.text.empty(),
+          "mute command must never carry output content");
+
+  const CoreCommand& output = commands[1];
+  require(output.request_id == "output-1",
+          "output command must preserve request id");
+  require(output.name == "voice.output.play",
+          "output command must use canonical name");
+  require(!output.enabled.has_value(),
+          "output command must not masquerade as a mute command");
+  require(output.turn_id == "turn-content-1" &&
+              output.output_id == "output-content-1",
+          "output command must preserve turn and output identity");
+  require(output.text == "Ich bin da." && output.language == "de-DE",
+          "output command must preserve bounded content and language");
+  require(output.data_classification == "content",
+          "output content must remain classified across the pipe");
 }
 
 void test_disconnected_level_events_are_dropped() {
