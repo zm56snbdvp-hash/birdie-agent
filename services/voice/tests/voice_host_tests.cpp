@@ -10,6 +10,9 @@
 namespace {
 
 using birdie::voice::ActivationMode;
+using birdie::voice::AddressabilityConfidenceBand;
+using birdie::voice::AddressabilityDecision;
+using birdie::voice::AddressabilityResult;
 using birdie::voice::AudioFrame;
 using birdie::voice::IEventSink;
 using birdie::voice::PreRollBuffer;
@@ -72,6 +75,16 @@ VoiceConfig test_config() {
   return config;
 }
 
+AddressabilityResult abstain_result() {
+  return {
+      AddressabilityDecision::Abstain,
+      AddressabilityConfidenceBand::High,
+      0.5,
+      1,
+      "ADDRESSABILITY.GATE_STT_UNAVAILABLE",
+  };
+}
+
 void test_pre_roll_is_bounded_and_ordered() {
   PreRollBuffer buffer(1'000, 5);
   const std::vector<float> samples{1, 2, 3, 4, 5, 6, 7};
@@ -101,6 +114,46 @@ void test_activity_is_not_automatic_activation() {
           "rejected candidate must return to quiet");
   require(has_event(sink, "voice.activation.rejected"),
           "rejection must be explicit");
+}
+
+void test_candidate_snapshot_is_bounded_and_identified() {
+  RecordingSink sink;
+  VoiceHost host(test_config(), sink, [](UtteranceAudio) {});
+  host.set_output_active(true, "output-snapshot", "turn-snapshot");
+  host.process(frame(0.2F, 0));
+  host.process(frame(0.2F, 10));
+  host.process(frame(0.2F, 20));
+
+  const auto snapshot = host.candidate_audio_snapshot();
+  require(snapshot.has_value(),
+          "SpeechCandidate must expose one local Gate-STT snapshot");
+  require(snapshot->activity_id == host.active_activity_id(),
+          "snapshot must preserve activity identity");
+  require(snapshot->samples.size() <= 30,
+          "snapshot must remain bounded by configured pre-roll");
+  require(snapshot->sample_rate == 1'000 && snapshot->channels == 1,
+          "snapshot must preserve canonical audio format");
+  require(snapshot->barge_in_candidate,
+          "snapshot must preserve local barge-in context");
+}
+
+void test_abstain_clears_candidate_snapshot() {
+  RecordingSink sink;
+  VoiceHost host(test_config(), sink, [](UtteranceAudio) {});
+  host.process(frame(0.2F, 0));
+  host.process(frame(0.2F, 10));
+  host.process(frame(0.2F, 20));
+  require(host.candidate_audio_snapshot().has_value(),
+          "candidate must exist before ABSTAIN");
+
+  require(host.resolve_addressability(abstain_result()),
+          "ABSTAIN must resolve the active candidate");
+  require(host.phase() == VoicePhase::Quiet,
+          "ABSTAIN must return VoiceHost to Quiet");
+  require(!host.candidate_audio_snapshot().has_value(),
+          "ABSTAIN must remove access to candidate audio");
+  require(has_event(sink, "voice.activation.abstained"),
+          "ABSTAIN must emit the canonical lifecycle event");
 }
 
 void test_accept_preserves_pre_roll_and_endpoints() {
@@ -162,6 +215,8 @@ void test_mute_clears_active_candidate() {
   require(host.muted(), "mute state must be authoritative");
   require(host.phase() == VoicePhase::Quiet,
           "mute must cancel the active candidate");
+  require(!host.candidate_audio_snapshot().has_value(),
+          "mute must remove candidate audio access");
   require(has_event(sink, "voice.privacy.changed"),
           "mute must emit a privacy-state event");
 }
@@ -172,6 +227,8 @@ int main() {
   try {
     test_pre_roll_is_bounded_and_ordered();
     test_activity_is_not_automatic_activation();
+    test_candidate_snapshot_is_bounded_and_identified();
+    test_abstain_clears_candidate_snapshot();
     test_accept_preserves_pre_roll_and_endpoints();
     test_output_activity_is_marked_as_barge_in_candidate();
     test_mute_clears_active_candidate();
