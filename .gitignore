@@ -10,6 +10,7 @@ build/
 apps/desktop/dist/
 apps/desktop/node_modules/
 apps/desktop/src-tauri/target/
+.birdie/logs/
 
 # Reviewed local third-party source and model weights are provisioned by script
 third_party/

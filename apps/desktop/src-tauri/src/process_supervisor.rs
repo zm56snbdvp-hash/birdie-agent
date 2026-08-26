@@ -12,6 +12,9 @@ use std::{
 };
 use tauri::{AppHandle, Emitter};
 
+const EVENT_SUPERVISOR_COMPONENT_CHANGED: &str =
+  "supervisor:component-changed";
+
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
@@ -59,7 +62,7 @@ impl ProcessSupervisor {
     let voice_managed = specs.iter().any(|spec| spec.component == "birdie-voice");
     if specs.is_empty() {
       let _ = app.emit(
-        "supervisor.component.changed",
+        EVENT_SUPERVISOR_COMPONENT_CHANGED,
         SupervisorEvent {
           component: "birdie-runtime",
           status: "NOT_CONFIGURED",
@@ -179,7 +182,7 @@ fn spawn_worker(
         if !component_enabled.load(Ordering::Acquire) {
           if !disabled_reported {
             let _ = app.emit(
-              "supervisor.component.changed",
+              EVENT_SUPERVISOR_COMPONENT_CHANGED,
               SupervisorEvent {
                 component: spec.component,
                 status: "STOPPED_BY_USER",
@@ -215,7 +218,7 @@ fn spawn_worker(
             let pid = child.id();
             *child_slot.lock().expect("supervised child poisoned") = Some(child);
             let _ = app.emit(
-              "supervisor.component.changed",
+              EVENT_SUPERVISOR_COMPONENT_CHANGED,
               SupervisorEvent {
                 component: spec.component,
                 status: "RUNNING",
@@ -235,7 +238,7 @@ fn spawn_worker(
                 }
                 *guard = None;
                 let _ = app.emit(
-                  "supervisor.component.changed",
+                  EVENT_SUPERVISOR_COMPONENT_CHANGED,
                   SupervisorEvent {
                     component: spec.component,
                     status: "STOPPED",
@@ -269,7 +272,7 @@ fn spawn_worker(
                 *child_slot.lock().expect("supervised child poisoned") = None;
                 restart_count = restart_count.saturating_add(1);
                 let _ = app.emit(
-                  "supervisor.component.changed",
+                  EVENT_SUPERVISOR_COMPONENT_CHANGED,
                   SupervisorEvent {
                     component: spec.component,
                     status: "RESTART_PENDING",
@@ -287,7 +290,7 @@ fn spawn_worker(
           Err(_) => {
             restart_count = restart_count.saturating_add(1);
             let _ = app.emit(
-              "supervisor.component.changed",
+              EVENT_SUPERVISOR_COMPONENT_CHANGED,
               SupervisorEvent {
                 component: spec.component,
                 status: "RESTART_PENDING",

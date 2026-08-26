@@ -2,8 +2,10 @@ mod process_supervisor;
 
 use process_supervisor::ProcessSupervisor;
 use std::{
-  fs::OpenOptions,
+  env,
+  fs::{File, OpenOptions},
   io::{BufRead, BufReader, Write},
+  path::PathBuf,
   sync::Mutex,
   thread,
   time::{Duration, SystemTime, UNIX_EPOCH},
@@ -18,8 +20,20 @@ use tauri::{
 
 const CONTRACT_VERSION: &str = "1.0";
 const CORE_PIPE: &str = r"\\.\pipe\birdie.core.control.v1";
+const BUILD_ID: &str = match option_env!("BIRDIE_DESKTOP_BUILD_ID") {
+  Some(value) => value,
+  None => "development-unversioned",
+};
+pub(crate) const EVENT_RUNTIME_PRESENCE_CHANGED: &str =
+  "runtime:presence-changed";
+pub(crate) const EVENT_RUNTIME_SNAPSHOT: &str = "runtime:snapshot";
+pub(crate) const EVENT_RUNTIME_DISCONNECTED: &str = "runtime:disconnected";
+pub(crate) const EVENT_RUNTIME_CONNECTED: &str = "runtime:connected";
+pub(crate) const EVENT_RUNTIME_AUDIO_INPUT: &str = "runtime:audio-input";
+pub(crate) const EVENT_RUNTIME_AUDIO_OUTPUT: &str = "runtime:audio-output";
+pub(crate) const EVENT_RUNTIME_IPC_ERROR: &str = "runtime:ipc-error";
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PresenceSnapshot {
   revision: u64,
@@ -28,7 +42,7 @@ struct PresenceSnapshot {
   reason: String,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeSnapshot {
   #[serde(default = "default_lifecycle")]
@@ -36,6 +50,10 @@ struct RuntimeSnapshot {
   presence: PresenceSnapshot,
   #[serde(default = "default_microphone_state")]
   microphone_state: String,
+  #[serde(default = "default_brain_state")]
+  brain_state: String,
+  #[serde(default)]
+  bridge_revision: u64,
 }
 
 fn default_lifecycle() -> String {
@@ -46,9 +64,119 @@ fn default_microphone_state() -> String {
   "UNAVAILABLE".into()
 }
 
+fn default_brain_state() -> String {
+  "UNAVAILABLE".into()
+}
+
+struct DiagnosticLog {
+  path: PathBuf,
+  file: Mutex<File>,
+}
+
+impl DiagnosticLog {
+  fn open() -> Result<Self, String> {
+    let path = env::var_os("BIRDIE_DESKTOP_DIAGNOSTIC_LOG")
+      .map(PathBuf::from)
+      .unwrap_or_else(default_diagnostic_path);
+    if let Some(parent) = path.parent() {
+      std::fs::create_dir_all(parent).map_err(|error| {
+        format!(
+          "DESKTOP.DIAGNOSTIC.CREATE_DIR_FAILED path={} error={error}",
+          parent.display(),
+        )
+      })?;
+    }
+    let file = OpenOptions::new()
+      .create(true)
+      .append(true)
+      .open(&path)
+      .map_err(|error| {
+        format!(
+          "DESKTOP.DIAGNOSTIC.OPEN_FAILED path={} error={error}",
+          path.display(),
+        )
+      })?;
+    Ok(Self {
+      path,
+      file: Mutex::new(file),
+    })
+  }
+
+  fn append(&self, event: &str, detail: impl AsRef<str>) {
+    let timestamp = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .map(|duration| duration.as_millis())
+      .unwrap_or(0);
+    let detail = compact_detail(detail.as_ref());
+    let line = format!("{timestamp} {event} {detail}\n");
+    let mut file = self.file.lock().unwrap_or_else(|_| {
+      panic!(
+        "DESKTOP.DIAGNOSTIC.LOCK_POISONED path={}",
+        self.path.display(),
+      )
+    });
+    file.write_all(line.as_bytes()).unwrap_or_else(|error| {
+      panic!(
+        "DESKTOP.DIAGNOSTIC.WRITE_FAILED path={} error={error}",
+        self.path.display(),
+      )
+    });
+    file.flush().unwrap_or_else(|error| {
+      panic!(
+        "DESKTOP.DIAGNOSTIC.FLUSH_FAILED path={} error={error}",
+        self.path.display(),
+      )
+    });
+  }
+}
+
+fn default_diagnostic_path() -> PathBuf {
+  PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    .join("../../..")
+    .join(".birdie/logs/desktop-runtime-diagnostic.log")
+}
+
+fn compact_detail(detail: &str) -> String {
+  detail
+    .replace('\r', " ")
+    .replace('\n', " ")
+    .chars()
+    .take(2_000)
+    .collect()
+}
+
+fn snapshot_summary(snapshot: &RuntimeSnapshot) -> String {
+  format!(
+    "bridgeRevision={} lifecycle={} presence.state={} presence.revision={} microphoneState={} brainState={}",
+    snapshot.bridge_revision,
+    snapshot.lifecycle,
+    snapshot.presence.state,
+    snapshot.presence.revision,
+    snapshot.microphone_state,
+    snapshot.brain_state,
+  )
+}
+
+fn replace_authoritative_snapshot(
+  current: &mut RuntimeSnapshot,
+  mut next: RuntimeSnapshot,
+) {
+  next.bridge_revision = current.bridge_revision.saturating_add(1);
+  *current = next;
+}
+
+fn transition_to_disconnected(snapshot: &mut RuntimeSnapshot) {
+  snapshot.bridge_revision = snapshot.bridge_revision.saturating_add(1);
+  snapshot.lifecycle = "DEGRADED".into();
+  snapshot.microphone_state = "UNAVAILABLE".into();
+  snapshot.presence.state = "OFFLINE".into();
+  snapshot.presence.reason = "runtime.ipc.disconnected".into();
+}
+
 struct RuntimeState {
   snapshot: Mutex<RuntimeSnapshot>,
   writer: Mutex<Option<std::fs::File>>,
+  diagnostic: DiagnosticLog,
 }
 
 #[tauri::command]
@@ -56,12 +184,20 @@ fn runtime_get_snapshot(
   state: State<'_, RuntimeState>,
   last_revision: i64,
 ) -> RuntimeSnapshot {
-  let _ = last_revision;
-  state
+  state.diagnostic.append(
+    "TAURI_INVOKE",
+    format!("command=runtime_get_snapshot lastRevision={last_revision}"),
+  );
+  let snapshot = state
     .snapshot
     .lock()
     .expect("runtime state poisoned")
-    .clone()
+    .clone();
+  state.diagnostic.append(
+    "TAURI_INVOKE_RESULT",
+    format!("command=runtime_get_snapshot {}", snapshot_summary(&snapshot)),
+  );
+  snapshot
 }
 
 #[tauri::command]
@@ -81,7 +217,31 @@ fn runtime_set_microphone_enabled(
       "enabled": enabled,
     },
   });
-  send_pipe_message(&state.writer, &command)
+  state.diagnostic.append(
+    "TAURI_INVOKE",
+    format!("command=runtime_set_microphone_enabled enabled={enabled}"),
+  );
+  let result = send_pipe_message(&state.writer, &command);
+  match &result {
+    Ok(()) => state.diagnostic.append(
+      "TAURI_INVOKE_RESULT",
+      "command=runtime_set_microphone_enabled result=OK",
+    ),
+    Err(error) => state.diagnostic.append(
+      "ERROR",
+      format!("stage=runtime_set_microphone_enabled error={error}"),
+    ),
+  }
+  result
+}
+
+#[tauri::command]
+fn runtime_log_frontend(
+  state: State<'_, RuntimeState>,
+  stage: String,
+  detail: String,
+) {
+  state.diagnostic.append(&stage, format!("source=js {detail}"));
 }
 
 fn send_pipe_message(
@@ -137,155 +297,320 @@ fn mark_runtime_disconnected(app: &tauri::AppHandle) {
       .snapshot
       .lock()
       .expect("runtime state poisoned");
-    snapshot.lifecycle = "DEGRADED".into();
-    snapshot.microphone_state = "UNAVAILABLE".into();
-    snapshot.presence.revision = snapshot.presence.revision.saturating_add(1);
-    snapshot.presence.state = "OFFLINE".into();
-    snapshot.presence.reason = "runtime.ipc.disconnected".into();
+    transition_to_disconnected(&mut snapshot);
     snapshot.clone()
   };
 
-  let _ = app.emit(
-    "runtime.disconnected",
-    json!({ "reason": "RUNTIME.IPC.DISCONNECTED" }),
+  app.state::<RuntimeState>().diagnostic.append(
+    "RUNTIME_DISCONNECTED",
+    snapshot_summary(&snapshot),
   );
-  let _ = app.emit("runtime.snapshot", snapshot);
+
+  if let Err(error) = app.emit(
+    EVENT_RUNTIME_DISCONNECTED,
+    json!({
+      "reason": "RUNTIME.IPC.DISCONNECTED",
+      "bridgeRevision": snapshot.bridge_revision,
+    }),
+  ) {
+    app.state::<RuntimeState>().diagnostic.append(
+      "ERROR",
+      format!("stage=emit.runtime.disconnected error={error}"),
+    );
+  }
+  if let Err(error) = app.emit(EVENT_RUNTIME_SNAPSHOT, snapshot) {
+    app.state::<RuntimeState>().diagnostic.append(
+      "ERROR",
+      format!("stage=emit.runtime.snapshot.disconnected error={error}"),
+    );
+  }
 }
 
 fn start_core_ipc(app: tauri::AppHandle) {
-  thread::spawn(move || loop {
-    match OpenOptions::new().read(true).write(true).open(CORE_PIPE) {
-      Ok(file) => {
-        let writer = match file.try_clone() {
-          Ok(writer) => writer,
-          Err(_) => {
-            thread::sleep(Duration::from_millis(500));
-            continue;
-          }
-        };
+  thread::spawn(move || {
+    let mut attempt = 0_u64;
+    loop {
+      attempt = attempt.saturating_add(1);
+      app.state::<RuntimeState>().diagnostic.append(
+        "PIPE_CONNECT_ATTEMPT",
+        format!("attempt={attempt} pipe={CORE_PIPE}"),
+      );
+      let mut opened_session = false;
 
-        {
-          let runtime = app.state::<RuntimeState>();
-          *runtime
-            .writer
-            .lock()
-            .expect("runtime writer poisoned") = Some(writer);
-        }
-
-        let hello_result = {
-          let runtime = app.state::<RuntimeState>();
-          send_pipe_message(&runtime.writer, &desktop_hello())
-        };
-        if hello_result.is_err() {
-          clear_runtime_writer(&app);
-          thread::sleep(Duration::from_millis(500));
-          continue;
-        }
-
-        let reader = BufReader::new(file);
-        for line in reader.lines() {
-          let Ok(line) = line else { break };
-          let Ok(message) = serde_json::from_str::<Value>(&line) else {
-            continue;
+      match OpenOptions::new().read(true).write(true).open(CORE_PIPE) {
+        Ok(file) => {
+          opened_session = true;
+          app.state::<RuntimeState>().diagnostic.append(
+            "PIPE_CONNECTED",
+            format!("attempt={attempt} pipe={CORE_PIPE}"),
+          );
+          let writer = match file.try_clone() {
+            Ok(writer) => writer,
+            Err(error) => {
+              app.state::<RuntimeState>().diagnostic.append(
+                "ERROR",
+                format!("stage=pipe.try_clone error={error}"),
+              );
+              clear_runtime_writer(&app);
+              mark_runtime_disconnected(&app);
+              thread::sleep(Duration::from_millis(750));
+              continue;
+            }
           };
 
-          match message.get("type").and_then(Value::as_str) {
-            Some("component.hello.ack") => {
-              let accepted = message
-                .pointer("/payload/accepted")
-                .and_then(Value::as_bool)
-                .unwrap_or(false);
-              if accepted {
-                let _ = app.emit(
-                  "runtime.connected",
-                  json!({
-                    "pipe": CORE_PIPE,
-                    "contractVersion": CONTRACT_VERSION,
-                    "role": "desktop",
-                  }),
-                );
-                let runtime = app.state::<RuntimeState>();
-                let _ = send_pipe_message(
-                  &runtime.writer,
-                  &desktop_snapshot_request(),
-                );
-              }
+          {
+            let runtime = app.state::<RuntimeState>();
+            *runtime
+              .writer
+              .lock()
+              .expect("runtime writer poisoned") = Some(writer);
+          }
+
+          let hello_result = {
+            let runtime = app.state::<RuntimeState>();
+            send_pipe_message(&runtime.writer, &desktop_hello())
+          };
+          match hello_result {
+            Ok(()) => app.state::<RuntimeState>().diagnostic.append(
+              "HELLO_SENT",
+              format!(
+                "component=birdie-desktop role=desktop contractVersion={CONTRACT_VERSION}"
+              ),
+            ),
+            Err(error) => {
+              app.state::<RuntimeState>().diagnostic.append(
+                "ERROR",
+                format!("stage=hello.write error={error}"),
+              );
+              clear_runtime_writer(&app);
+              mark_runtime_disconnected(&app);
+              thread::sleep(Duration::from_millis(750));
+              continue;
             }
-            Some("runtime.snapshot") => {
-              if let Some(payload) = message.get("payload") {
-                if let Ok(next) =
-                  serde_json::from_value::<RuntimeSnapshot>(payload.clone())
-                {
-                  let snapshot = {
-                    let runtime = app.state::<RuntimeState>();
-                    let mut snapshot = runtime
-                      .snapshot
-                      .lock()
-                      .expect("runtime state poisoned");
-                    *snapshot = next;
-                    snapshot.clone()
-                  };
-                  let _ = app.emit("runtime.snapshot", snapshot);
+          }
+
+          let reader = BufReader::new(file);
+          for line_result in reader.lines() {
+            let line = match line_result {
+              Ok(line) => line,
+              Err(error) => {
+                app.state::<RuntimeState>().diagnostic.append(
+                  "ERROR",
+                  format!("stage=pipe.read error={error}"),
+                );
+                break;
+              }
+            };
+            let message = match serde_json::from_str::<Value>(&line) {
+              Ok(message) => message,
+              Err(error) => {
+                app.state::<RuntimeState>().diagnostic.append(
+                  "ERROR",
+                  format!(
+                    "stage=pipe.json error={error} line={}",
+                    compact_detail(&line)
+                  ),
+                );
+                continue;
+              }
+            };
+
+            match message.get("type").and_then(Value::as_str) {
+              Some("component.hello.ack") => {
+                let accepted = message
+                  .pointer("/payload/accepted")
+                  .and_then(Value::as_bool)
+                  .unwrap_or(false);
+                app.state::<RuntimeState>().diagnostic.append(
+                  "HELLO_ACK",
+                  format!("accepted={accepted} payload={}", message["payload"]),
+                );
+                if accepted {
+                  if let Err(error) = app.emit(
+                    EVENT_RUNTIME_CONNECTED,
+                    json!({
+                      "pipe": CORE_PIPE,
+                      "contractVersion": CONTRACT_VERSION,
+                      "role": "desktop",
+                    }),
+                  ) {
+                    app.state::<RuntimeState>().diagnostic.append(
+                      "ERROR",
+                      format!("stage=emit.runtime.connected error={error}"),
+                    );
+                  }
+                  let runtime = app.state::<RuntimeState>();
+                  match send_pipe_message(
+                    &runtime.writer,
+                    &desktop_snapshot_request(),
+                  ) {
+                    Ok(()) => runtime.diagnostic.append(
+                      "SNAPSHOT_REQUEST_SENT",
+                      "type=runtime.snapshot.request",
+                    ),
+                    Err(error) => runtime.diagnostic.append(
+                      "ERROR",
+                      format!("stage=snapshot.request error={error}"),
+                    ),
+                  }
+                } else {
+                  app.state::<RuntimeState>().diagnostic.append(
+                    "ERROR",
+                    "stage=hello.ack error=CONTRACT.HELLO_REJECTED",
+                  );
                 }
               }
-            }
-            Some("runtime.presence.changed") => {
-              if let Some(payload) = message.get("payload") {
-                if let Ok(presence) =
-                  serde_json::from_value::<PresenceSnapshot>(payload.clone())
-                {
-                  let changed = {
-                    let runtime = app.state::<RuntimeState>();
-                    let mut snapshot = runtime
-                      .snapshot
-                      .lock()
-                      .expect("runtime state poisoned");
-                    if presence.revision > snapshot.presence.revision {
-                      snapshot.presence = presence.clone();
-                      true
-                    } else {
-                      false
+              Some("runtime.snapshot") => {
+                if let Some(payload) = message.get("payload") {
+                  app.state::<RuntimeState>().diagnostic.append(
+                    "SNAPSHOT_RECEIVED",
+                    format!("payload={payload}"),
+                  );
+                  match serde_json::from_value::<RuntimeSnapshot>(payload.clone()) {
+                    Ok(next) => {
+                      let snapshot = {
+                        let runtime = app.state::<RuntimeState>();
+                        let mut snapshot = runtime
+                          .snapshot
+                          .lock()
+                          .expect("runtime state poisoned");
+                        replace_authoritative_snapshot(&mut snapshot, next);
+                        snapshot.clone()
+                      };
+                      app.state::<RuntimeState>().diagnostic.append(
+                        "RUST_STATE_UPDATED",
+                        snapshot_summary(&snapshot),
+                      );
+                      if let Err(error) = app.emit(EVENT_RUNTIME_SNAPSHOT, snapshot) {
+                        app.state::<RuntimeState>().diagnostic.append(
+                          "ERROR",
+                          format!("stage=emit.runtime.snapshot error={error}"),
+                        );
+                      }
                     }
-                  };
-                  if changed {
-                    let _ = app.emit("runtime.presence.changed", presence);
+                    Err(error) => app.state::<RuntimeState>().diagnostic.append(
+                      "ERROR",
+                      format!("stage=snapshot.deserialize error={error} payload={payload}"),
+                    ),
                   }
                 }
               }
-            }
-            Some("runtime.audio.input") => {
-              if let Some(payload) = message.get("payload") {
-                let _ = app.emit("runtime.audio.input", payload.clone());
+              Some("runtime.presence.changed") => {
+                if let Some(payload) = message.get("payload") {
+                  match serde_json::from_value::<PresenceSnapshot>(payload.clone()) {
+                    Ok(presence) => {
+                      let changed = {
+                        let runtime = app.state::<RuntimeState>();
+                        let mut snapshot = runtime
+                          .snapshot
+                          .lock()
+                          .expect("runtime state poisoned");
+                        if presence.revision > snapshot.presence.revision {
+                          snapshot.presence = presence.clone();
+                          snapshot.bridge_revision =
+                            snapshot.bridge_revision.saturating_add(1);
+                          Some(snapshot.bridge_revision)
+                        } else {
+                          None
+                        }
+                      };
+                      if let Some(bridge_revision) = changed {
+                        if let Err(error) = app.emit(
+                            EVENT_RUNTIME_PRESENCE_CHANGED,
+                          json!({
+                            "snapshot": presence,
+                            "bridgeRevision": bridge_revision,
+                          }),
+                        ) {
+                          app.state::<RuntimeState>().diagnostic.append(
+                            "ERROR",
+                            format!("stage=emit.runtime.presence.changed error={error}"),
+                          );
+                        }
+                      }
+                    }
+                    Err(error) => app.state::<RuntimeState>().diagnostic.append(
+                      "ERROR",
+                      format!("stage=presence.deserialize error={error} payload={payload}"),
+                    ),
+                  }
+                }
               }
-            }
-            Some("runtime.audio.output") => {
-              if let Some(payload) = message.get("payload") {
-                let _ = app.emit("runtime.audio.output", payload.clone());
+              Some("runtime.audio.input") => {
+                if let Some(payload) = message.get("payload") {
+                  if let Err(error) = app.emit(EVENT_RUNTIME_AUDIO_INPUT, payload.clone()) {
+                    app.state::<RuntimeState>().diagnostic.append(
+                      "ERROR",
+                      format!("stage=emit.runtime.audio.input error={error}"),
+                    );
+                  }
+                }
               }
-            }
-            Some("error") => {
-              let error = message
-                .get("error")
-                .and_then(Value::as_str)
-                .unwrap_or("RUNTIME.IPC.ERROR");
-              let _ = app.emit(
-                "runtime.ipc.error",
-                json!({ "error": error }),
-              );
-              if error.starts_with("CONTRACT.") {
-                break;
+              Some("runtime.audio.output") => {
+                if let Some(payload) = message.get("payload") {
+                  if let Err(error) = app.emit(EVENT_RUNTIME_AUDIO_OUTPUT, payload.clone()) {
+                    app.state::<RuntimeState>().diagnostic.append(
+                      "ERROR",
+                      format!("stage=emit.runtime.audio.output error={error}"),
+                    );
+                  }
+                }
               }
+              Some("runtime.command.ack") => {
+                app.state::<RuntimeState>().diagnostic.append(
+                  "RUNTIME_COMMAND_ACK",
+                  format!("payload={}", message["payload"]),
+                );
+              }
+              Some("error") => {
+                let error = message
+                  .get("error")
+                  .and_then(Value::as_str)
+                  .unwrap_or("RUNTIME.IPC.ERROR");
+                app.state::<RuntimeState>().diagnostic.append(
+                  "ERROR",
+                  format!("stage=core.message error={error} message={message}"),
+                );
+                if let Err(emit_error) = app.emit(
+                  EVENT_RUNTIME_IPC_ERROR,
+                  json!({ "error": error }),
+                ) {
+                  app.state::<RuntimeState>().diagnostic.append(
+                    "ERROR",
+                    format!("stage=emit.runtime.ipc.error error={emit_error}"),
+                  );
+                }
+                if error.starts_with("CONTRACT.") {
+                  break;
+                }
+              }
+              Some(message_type) => app.state::<RuntimeState>().diagnostic.append(
+                "ERROR",
+                format!("stage=pipe.message error=UNKNOWN_TYPE type={message_type}"),
+              ),
+              None => app.state::<RuntimeState>().diagnostic.append(
+                "ERROR",
+                format!("stage=pipe.message error=MISSING_TYPE message={message}"),
+              ),
             }
-            _ => {}
           }
+          app.state::<RuntimeState>().diagnostic.append(
+            "ERROR",
+            "stage=pipe.read error=EOF",
+          );
         }
+        Err(error) => app.state::<RuntimeState>().diagnostic.append(
+          "ERROR",
+          format!("stage=pipe.open attempt={attempt} error={error}"),
+        ),
       }
-      Err(_) => {}
-    }
 
-    clear_runtime_writer(&app);
-    mark_runtime_disconnected(&app);
-    thread::sleep(Duration::from_millis(750));
+      clear_runtime_writer(&app);
+      if opened_session {
+        mark_runtime_disconnected(&app);
+      }
+      thread::sleep(Duration::from_millis(750));
+    }
   });
 }
 
@@ -312,6 +637,12 @@ fn recover_dev_webview(app: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+  let diagnostic = DiagnosticLog::open()
+    .unwrap_or_else(|error| panic!("{error}"));
+  diagnostic.append(
+    "DESKTOP_START",
+    format!("pid={} buildId={BUILD_ID}", std::process::id()),
+  );
   tauri::Builder::default()
     .manage(RuntimeState {
       snapshot: Mutex::new(RuntimeSnapshot {
@@ -322,12 +653,16 @@ pub fn run() {
           reason: "runtime.not_connected".into(),
         },
         microphone_state: "UNAVAILABLE".into(),
+        brain_state: "UNAVAILABLE".into(),
+        bridge_revision: 0,
       }),
       writer: Mutex::new(None),
+      diagnostic,
     })
     .invoke_handler(tauri::generate_handler![
       runtime_get_snapshot,
       runtime_set_microphone_enabled,
+      runtime_log_frontend,
     ])
     .plugin(tauri_plugin_single_instance::init(|app, _, _| {
       if let Some(window) = app.get_webview_window("core") {
@@ -388,4 +723,121 @@ pub fn run() {
     })
     .run(tauri::generate_context!())
     .expect("Birdie desktop runtime failed");
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  fn ready_snapshot(core_revision: u64, bridge_revision: u64) -> RuntimeSnapshot {
+    RuntimeSnapshot {
+      lifecycle: "READY".into(),
+      presence: PresenceSnapshot {
+        revision: core_revision,
+        state: "IDLE".into(),
+        reason: "runtime.required_components_ready".into(),
+      },
+      microphone_state: "ENABLED".into(),
+      brain_state: "READY".into(),
+      bridge_revision,
+    }
+  }
+
+  #[test]
+  fn real_core_ready_snapshot_deserializes_and_keeps_required_fields() {
+    let payload = json!({
+      "lifecycle": "READY",
+      "presence": {
+        "revision": 7,
+        "state": "IDLE",
+        "reason": "runtime.required_components_ready",
+        "since": "2026-08-26T20:00:00.000Z",
+        "activeTurnId": null,
+        "microphone": "ENABLED",
+        "connectivity": "CONNECTED"
+      },
+      "activeTurn": null,
+      "microphoneState": "ENABLED",
+      "brainState": "READY",
+      "futureCoreField": { "allowed": true }
+    });
+
+    let snapshot: RuntimeSnapshot =
+      serde_json::from_value(payload).expect("Core snapshot must deserialize");
+    assert_eq!(snapshot.lifecycle, "READY");
+    assert_eq!(snapshot.presence.state, "IDLE");
+    assert_eq!(snapshot.presence.revision, 7);
+    assert_eq!(snapshot.microphone_state, "ENABLED");
+    assert_eq!(snapshot.brain_state, "READY");
+    assert_eq!(snapshot.bridge_revision, 0);
+
+    let encoded = serde_json::to_value(&snapshot).expect("snapshot must serialize");
+    assert_eq!(encoded["microphoneState"], "ENABLED");
+    assert_eq!(encoded["brainState"], "READY");
+    assert_eq!(encoded["bridgeRevision"], 0);
+    assert!(encoded.get("microphone_state").is_none());
+  }
+
+  #[test]
+  fn authoritative_snapshot_advances_bridge_revision_without_rewriting_core_revision() {
+    let mut current = ready_snapshot(9, 12);
+    let next = ready_snapshot(2, 0);
+
+    replace_authoritative_snapshot(&mut current, next);
+
+    assert_eq!(current.bridge_revision, 13);
+    assert_eq!(current.presence.revision, 2);
+    assert_eq!(current.presence.state, "IDLE");
+    assert_eq!(current.microphone_state, "ENABLED");
+  }
+
+  #[test]
+  fn disconnect_and_reconnect_use_bridge_revision_not_core_revision() {
+    let mut snapshot = ready_snapshot(9, 40);
+
+    transition_to_disconnected(&mut snapshot);
+    assert_eq!(snapshot.bridge_revision, 41);
+    assert_eq!(snapshot.presence.revision, 9);
+    assert_eq!(snapshot.presence.state, "OFFLINE");
+    assert_eq!(snapshot.microphone_state, "UNAVAILABLE");
+
+    replace_authoritative_snapshot(&mut snapshot, ready_snapshot(2, 0));
+    assert_eq!(snapshot.bridge_revision, 42);
+    assert_eq!(snapshot.presence.revision, 2);
+    assert_eq!(snapshot.presence.state, "IDLE");
+    assert_eq!(snapshot.microphone_state, "ENABLED");
+  }
+
+  #[test]
+  fn desktop_handshake_and_snapshot_request_match_the_core_contract() {
+    let hello = desktop_hello();
+    assert_eq!(hello["type"], "component.hello");
+    assert_eq!(hello["payload"]["component"], "birdie-desktop");
+    assert_eq!(hello["payload"]["role"], "desktop");
+    assert_eq!(hello["payload"]["contractVersion"], CONTRACT_VERSION);
+
+    let request = desktop_snapshot_request();
+    assert_eq!(request["type"], "runtime.snapshot.request");
+    assert_eq!(request["payload"], json!({}));
+  }
+
+  #[test]
+  fn emitted_event_names_satisfy_tauri_v2_grammar() {
+    let names = [
+      EVENT_RUNTIME_PRESENCE_CHANGED,
+      EVENT_RUNTIME_SNAPSHOT,
+      EVENT_RUNTIME_DISCONNECTED,
+      EVENT_RUNTIME_CONNECTED,
+      EVENT_RUNTIME_AUDIO_INPUT,
+      EVENT_RUNTIME_AUDIO_OUTPUT,
+      EVENT_RUNTIME_IPC_ERROR,
+    ];
+    for name in names {
+      assert!(!name.is_empty());
+      assert!(!name.contains('.'));
+      assert!(name.chars().all(|character| {
+        character.is_alphanumeric() || matches!(character, '-' | '/' | ':' | '_')
+      }));
+    }
+  }
 }

@@ -8,6 +8,7 @@ on:
       - 'packages/protocol/**'
       - 'services/core/**'
       - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
+      - 'scripts/run-birdie-desktop-embedded.ps1'
       - 'tests/desktop-alpha/**'
       - '.github/workflows/birdie-desktop-alpha.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'packages/protocol/**'
       - 'services/core/**'
       - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
+      - 'scripts/run-birdie-desktop-embedded.ps1'
       - 'tests/desktop-alpha/**'
       - '.github/workflows/birdie-desktop-alpha.yml'
 
@@ -42,10 +44,14 @@ jobs:
           node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/barge-in-rejected.json
       - name: Walking skeleton
         run: node tests/desktop-alpha/walking-skeleton.mjs
+      - name: Embedded launcher contract
+        run: node --test tests/desktop-alpha/embedded-launcher-contract.test.mjs
 
   windows-desktop-build:
     runs-on: windows-latest
     timeout-minutes: 20
+    env:
+      BIRDIE_DESKTOP_BUILD_ID: ci-${{ github.sha }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,14 +63,21 @@ jobs:
         run: |
           $tokens = $null
           $errors = $null
-          [void][System.Management.Automation.Language.Parser]::ParseFile(
-            (Resolve-Path 'scripts/repair-and-run-birdie-desktop-alpha.ps1'),
-            [ref]$tokens,
-            [ref]$errors
-          )
-          if ($errors.Count -gt 0) {
-            $errors | ForEach-Object { Write-Error $_.Message }
-            throw 'Desktop recovery launcher parser validation failed.'
+          foreach ($script in @(
+            'scripts/repair-and-run-birdie-desktop-alpha.ps1',
+            'scripts/run-birdie-desktop-embedded.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "Desktop launcher parser validation failed: $script"
+            }
           }
       - name: Validate managed Tauri frontend override
         shell: pwsh
@@ -75,12 +88,61 @@ jobs:
           }
       - name: Install desktop dependencies
         run: npm install --prefix apps/desktop --include=optional --no-audit --no-fund
+      - name: Test Desktop RuntimeBridge
+        run: npm test --prefix apps/desktop
       - name: Build Presence frontend
         run: npm run build --prefix apps/desktop
+      - name: Verify frontend build identity
+        shell: pwsh
+        run: |
+          $match = Get-ChildItem 'apps/desktop/dist' -Recurse -File |
+            Select-String -SimpleMatch $env:BIRDIE_DESKTOP_BUILD_ID -Quiet
+          if (-not $match) {
+            throw 'Built frontend does not contain BIRDIE_DESKTOP_BUILD_ID.'
+          }
       - name: Test Tauri host library
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib
-      - name: Check Tauri desktop executable
-        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Build Tauri desktop executable
+        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Smoke embedded Tauri bridge and current frontend
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:RUNNER_TEMP 'birdie-desktop-ci-diagnostic.log'
+          Remove-Item $diagnostic -Force -ErrorAction SilentlyContinue
+          $env:BIRDIE_DESKTOP_DIAGNOSTIC_LOG = $diagnostic
+          $env:BIRDIE_MANAGE_CORE = '0'
+          $env:BIRDIE_MANAGE_VOICE = '0'
+          $executable = Resolve-Path 'apps/desktop/src-tauri/target/debug/birdie-desktop.exe'
+          $desktop = Start-Process -FilePath $executable -PassThru
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(30)
+            $proof = $null
+            do {
+              $desktop.Refresh()
+              if ($desktop.HasExited) {
+                throw "Tauri desktop exited during bridge smoke test: $($desktop.ExitCode)"
+              }
+              if (Test-Path -LiteralPath $diagnostic) {
+                $proof = Get-Content -LiteralPath $diagnostic -Raw
+                $nativeReady = $proof.Contains("DESKTOP_START pid=$($desktop.Id) buildId=$env:BIRDIE_DESKTOP_BUILD_ID")
+                $frontendReady = $proof.Contains("DESKTOP_FRONTEND source=js buildId=$env:BIRDIE_DESKTOP_BUILD_ID")
+                $invokeReady = $proof.Contains('TAURI_INVOKE_RESULT source=js command=runtime_get_snapshot origin=connect.pre-listeners')
+                $listenersReady = $proof.Contains('TAURI_LISTEN_RESULT source=js event=runtime:ipc-error result=OK')
+                if ($nativeReady -and $frontendReady -and $invokeReady -and $listenersReady) { break }
+              }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+
+            if (-not ($nativeReady -and $frontendReady -and $invokeReady -and $listenersReady)) {
+              if ($proof) { Write-Host $proof }
+              throw 'Embedded Tauri bridge did not produce native/frontend/invoke/listener proof.'
+            }
+          }
+          finally {
+            if ($desktop -and -not $desktop.HasExited) {
+              Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
       - name: Verify native build did not mutate watched source files
         shell: pwsh
         run: |

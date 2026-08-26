@@ -1,0 +1,8 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "birdie-desktop-runtime",
+  "description": "Allow the Birdie Presence WebView to receive native runtime events.",
+  "windows": ["core"],
+  "platforms": ["windows"],
+  "permissions": ["core:event:default"]
+}

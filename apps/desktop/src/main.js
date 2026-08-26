@@ -1,15 +1,21 @@
 import * as THREE from 'three';
 import './styles.css';
-import { RuntimeBridge } from './runtime-bridge.js';
+import {
+  RuntimeBridge,
+  formatDiagnosticError,
+} from './runtime-bridge.js';
+
+const frontendBuildId = __BIRDIE_DESKTOP_BUILD_ID__;
 
 const app = document.querySelector('#app');
-app.innerHTML = `<canvas id="birdie-core" aria-label="Birdie startet"></canvas><section id="panel" hidden><strong>BIRDIE</strong><span id="state">STARTING</span><small id="runtime-status">Runtime verbindet…</small><small id="component-status">Core · Voice</small><button id="mic-toggle" type="button" disabled>Mikrofon wird initialisiert…</button></section>`;
+app.innerHTML = `<canvas id="birdie-core" aria-label="Birdie startet"></canvas><section id="panel" hidden><strong>BIRDIE</strong><span id="state">STARTING</span><small id="runtime-status">Runtime verbindet…</small><small id="component-status">Core · Voice</small><small id="diagnostic-status">Build ${frontendBuildId}</small><button id="mic-toggle" type="button" disabled>Mikrofon wird initialisiert…</button></section>`;
 
 const canvas = document.querySelector('#birdie-core');
 const panel = document.querySelector('#panel');
 const stateLabel = document.querySelector('#state');
 const runtimeStatus = document.querySelector('#runtime-status');
 const componentStatus = document.querySelector('#component-status');
+const diagnosticStatus = document.querySelector('#diagnostic-status');
 const micToggle = document.querySelector('#mic-toggle');
 
 const scene = new THREE.Scene();
@@ -177,29 +183,79 @@ function renderComponents() {
   componentStatus.textContent = `Core ${core} · Voice ${voice}`;
 }
 
+function renderBridgeError(stage, error) {
+  const detail = formatDiagnosticError(error);
+  runtimeReady = false;
+  runtimeStatus.textContent = `Bridge-Fehler: ${stage}`;
+  runtimeStatus.title = detail;
+  diagnosticStatus.textContent = detail;
+  diagnosticStatus.title = detail;
+  diagnosticStatus.dataset.error = 'true';
+  applyPresence({ state: 'ERROR' });
+  renderMicrophone();
+}
+
 const bridge = new RuntimeBridge({
-  onPresence: applyPresence,
+  onPresence(snapshot) {
+    applyPresence(snapshot);
+    bridge.reportDiagnostic(
+      'MAIN_STATE',
+      `presence.state=${presenceState} presence.revision=${snapshot?.revision ?? 'missing'}`,
+    );
+    bridge.reportDiagnostic(
+      'DOM_STATE',
+      `state=${stateLabel.textContent} runtime=${runtimeStatus.textContent} microphone=${micToggle.textContent}`,
+    );
+  },
   onAudioInput: applyInputAudio,
   onAudioOutput: applyOutputAudio,
   onSnapshot(snapshot) {
     if (snapshot?.microphoneState) confirmMicrophone(snapshot.microphoneState);
+    bridge.reportDiagnostic(
+      'MAIN_STATE',
+      `snapshot.microphoneState=${snapshot?.microphoneState ?? 'missing'} snapshot.brainState=${snapshot?.brainState ?? 'missing'}`,
+    );
   },
-  onStatus(status) {
+  onStatus(status, metadata) {
     runtimeReady = status === 'READY';
     runtimeStatus.textContent = runtimeReady
       ? 'Wake-on-Speak · Local first'
       : status === 'OFFLINE'
         ? 'Runtime offline'
         : 'Runtime verbindet…';
+    runtimeStatus.title = metadata?.reason ?? '';
     if (status === 'OFFLINE') applyPresence({ state: 'OFFLINE' });
     renderMicrophone();
+    bridge.reportDiagnostic(
+      'MAIN_STATE',
+      `runtime.status=${status} runtimeReady=${runtimeReady} reason=${metadata?.reason ?? 'missing'}`,
+    );
+    bridge.reportDiagnostic(
+      'DOM_STATE',
+      `state=${stateLabel.textContent} runtime=${runtimeStatus.textContent} microphone=${micToggle.textContent}`,
+    );
   },
   onComponent(component) {
     if (!component?.component) return;
     components.set(component.component, component);
     renderComponents();
   },
+  onDiagnostic({ stage, detail }) {
+    if (stage === 'ERROR') diagnosticStatus.dataset.error = 'true';
+    if (stage === 'ERROR' || diagnosticStatus.dataset.error !== 'true') {
+      diagnosticStatus.textContent = `${stage}: ${detail}`;
+      diagnosticStatus.title = detail;
+    }
+  },
+  onError({ stage, error }) {
+    renderBridgeError(stage, error);
+  },
 });
+
+bridge.reportDiagnostic(
+  'DESKTOP_FRONTEND',
+  `buildId=${frontendBuildId} location=${window.location.href}`,
+);
 
 canvas.addEventListener('click', () => {
   panel.hidden = !panel.hidden;
@@ -218,20 +274,24 @@ micToggle.addEventListener('click', async () => {
 
   try {
     await bridge.setMicrophoneEnabled(microphoneTarget);
-  } catch {
+  } catch (error) {
     clearTimeout(microphoneTimeout);
     microphoneTimeout = null;
     microphoneTarget = null;
-    runtimeStatus.textContent = 'Mikrofonbefehl fehlgeschlagen';
-    renderMicrophone();
+    bridge.reportDiagnostic(
+      'ERROR',
+      `stage=main.microphone exception=${formatDiagnosticError(error)}`,
+    );
+    renderBridgeError('main.microphone', error);
   }
 });
 
-bridge.connect().catch(() => {
-  runtimeReady = false;
-  runtimeStatus.textContent = 'Runtime offline';
-  applyPresence({ state: 'OFFLINE' });
-  renderMicrophone();
+bridge.connect().catch((error) => {
+  bridge.reportDiagnostic(
+    'ERROR',
+    `stage=main.connect exception=${formatDiagnosticError(error)}`,
+  );
+  renderBridgeError('main.connect', error);
 });
 
 function approach(current, target, attack, release) {
