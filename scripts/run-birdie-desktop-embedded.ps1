@@ -8,14 +8,17 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $desktopDir = Join-Path $repoRoot 'apps/desktop'
 $tauriDir = Join-Path $desktopDir 'src-tauri'
 $desktopExe = Join-Path $tauriDir 'target/debug/birdie-desktop.exe'
+$coreScript = Join-Path $repoRoot 'services/core/src/server-main.mjs'
 $voiceExe = Join-Path $repoRoot 'build/voice/Release/birdie-voice-host.exe'
 $whisperModel = Join-Path $repoRoot 'models/whisper/ggml-base.bin'
 $whisperSetup = Join-Path $PSScriptRoot 'setup-birdie-whisper-cpp.ps1'
 
 function Require-Command([string]$Name) {
-  if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
+  $command = Get-Command $Name -ErrorAction SilentlyContinue
+  if (-not $command) {
     throw "Required command '$Name' was not found in PATH."
   }
+  return $command.Source
 }
 
 function Stop-BirdieProcesses {
@@ -36,13 +39,16 @@ function Stop-BirdieProcesses {
     }
 }
 
-Require-Command 'node'
-Require-Command 'npm'
-Require-Command 'cargo'
+$nodeExe = Require-Command 'node'
+Require-Command 'npm' | Out-Null
+Require-Command 'cargo' | Out-Null
 
 Set-Location $repoRoot
 Stop-BirdieProcesses
 
+if (-not (Test-Path -LiteralPath $coreScript -PathType Leaf)) {
+  throw "Birdie Core entrypoint was not found: $coreScript"
+}
 if (-not (Test-Path -LiteralPath $voiceExe -PathType Leaf)) {
   throw "Birdie Voice executable was not found: $voiceExe"
 }
@@ -92,6 +98,10 @@ if (-not (Test-Path -LiteralPath $desktopExe -PathType Leaf)) {
   throw "Embedded Birdie executable was not produced: $desktopExe"
 }
 
+# Make the child-process contract explicit. The desktop supervisor must not
+# depend on PATH or implicit repo-root discovery during this hardware test.
+$env:BIRDIE_CORE_PROGRAM = $nodeExe
+$env:BIRDIE_CORE_SCRIPT = (Resolve-Path -LiteralPath $coreScript).Path
 $env:BIRDIE_VOICE_EXE = (Resolve-Path -LiteralPath $voiceExe).Path
 $env:BIRDIE_MANAGE_CORE = '1'
 $env:BIRDIE_MANAGE_VOICE = '1'
@@ -109,6 +119,8 @@ $env:BIRDIE_GATE_STT_FLASH_ATTN = '0'
 
 Write-Host 'Starting embedded Birdie Desktop...' -ForegroundColor Green
 Write-Host 'No Vite server and no localhost are used in this mode.' -ForegroundColor Cyan
+Write-Host "Core: $env:BIRDIE_CORE_PROGRAM $env:BIRDIE_CORE_SCRIPT" -ForegroundColor DarkGray
+Write-Host "Voice: $env:BIRDIE_VOICE_EXE" -ForegroundColor DarkGray
 Write-Host 'Say clearly "Birdie, bist du da?" after Presence reaches IDLE.' -ForegroundColor Cyan
 
 & $desktopExe
