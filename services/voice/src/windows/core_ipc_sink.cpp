@@ -29,6 +29,9 @@ namespace {
 
 using namespace std::chrono_literals;
 constexpr std::size_t kMaximumIncomingBuffer = 256 * 1024;
+constexpr std::size_t kMaximumCommandIdBytes = 256;
+constexpr std::size_t kMaximumLanguageBytes = 32;
+constexpr std::size_t kMaximumOutputTextBytes = 16 * 1024;
 constexpr std::string_view kContractVersion = "1.0";
 
 std::string escape_json(const std::string_view input) {
@@ -186,16 +189,20 @@ std::optional<std::string> json_string(const std::string_view json,
       switch (current) {
         case '"': result.push_back('"'); break;
         case '\\': result.push_back('\\'); break;
+        case 'b': result.push_back('\b'); break;
+        case 'f': result.push_back('\f'); break;
         case 'n': result.push_back('\n'); break;
         case 'r': result.push_back('\r'); break;
         case 't': result.push_back('\t'); break;
-        default: result.push_back(current); break;
+        default: return std::nullopt;
       }
       escaped = false;
     } else if (current == '\\') {
       escaped = true;
     } else if (current == '"') {
       return result;
+    } else if (static_cast<unsigned char>(current) < 0x20) {
+      return std::nullopt;
     } else {
       result.push_back(current);
     }
@@ -212,15 +219,55 @@ std::optional<bool> json_bool(const std::string_view json,
   return std::nullopt;
 }
 
+bool valid_identifier(const std::optional<std::string>& value) {
+  return value && !value->empty() && value->size() <= kMaximumCommandIdBytes;
+}
+
 std::optional<CoreCommand> parse_core_command(const std::string_view line) {
   if (json_string(line, "type") != std::optional<std::string>{"voice.command"}) {
     return std::nullopt;
   }
+
+  const auto request_id = json_string(line, "requestId");
   const auto name = json_string(line, "name");
-  const auto enabled = json_bool(line, "enabled");
-  if (!name || !enabled) return std::nullopt;
-  return CoreCommand{
-      json_string(line, "requestId").value_or(std::string{}), *name, *enabled};
+  if (!request_id || request_id->size() > kMaximumCommandIdBytes || !name) {
+    return std::nullopt;
+  }
+
+  CoreCommand command;
+  command.request_id = *request_id;
+  command.name = *name;
+
+  if (*name == "voice.mute.set") {
+    const auto enabled = json_bool(line, "enabled");
+    if (!enabled) return std::nullopt;
+    command.enabled = *enabled;
+    return command;
+  }
+
+  if (*name != "voice.output.play") return std::nullopt;
+
+  const auto turn_id = json_string(line, "turn_id");
+  const auto output_id = json_string(line, "output_id");
+  const auto output_text = json_string(line, "text");
+  const auto language = json_string(line, "language");
+  const auto classification = json_string(line, "data_classification");
+
+  if (!valid_identifier(turn_id) || !valid_identifier(output_id) ||
+      !output_text || output_text->empty() ||
+      output_text->size() > kMaximumOutputTextBytes || !language ||
+      language->empty() || language->size() > kMaximumLanguageBytes ||
+      !classification ||
+      (*classification != "content" && *classification != "sensitive")) {
+    return std::nullopt;
+  }
+
+  command.turn_id = *turn_id;
+  command.output_id = *output_id;
+  command.text = *output_text;
+  command.language = *language;
+  command.data_classification = *classification;
+  return command;
 }
 
 }  // namespace
