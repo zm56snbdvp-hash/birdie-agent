@@ -224,8 +224,40 @@ AddressabilityEvaluation AddressabilityEvidencePipeline::evaluate(
   AddressabilityEvaluation evaluation;
   evaluation.activity_id = request.activity_id;
 
-  if (request.activity_id.empty() || request.samples.empty() ||
-      request.sample_rate == 0 || request.channels != 1) {
+  if (request.activity_id.empty()) {
+    evaluation.gate_stt_status = GateSttStatus::Failed;
+    evaluation.gate_stt_error_code = "VOICE.GATE_STT.MISSING_ACTIVITY_ID";
+    evaluation.result = terminal_result(
+        AddressabilityDecision::Abstain,
+        AddressabilityConfidenceBand::Low,
+        0.5,
+        "ADDRESSABILITY.MISSING_ACTIVITY_ID");
+    return evaluation;
+  }
+
+  if (context.explicit_activation) {
+    AddressabilityEvidence evidence;
+    evidence.explicit_activation = true;
+    evidence.recently_active = context.recently_active;
+    evidence.acoustic_proximity = unit(
+        context.acoustic_proximity.value_or(
+            estimate_acoustic_proximity(request)));
+    evidence.speaker_match = unit(context.speaker_match.value_or(0.0));
+    evidence.media_likelihood = unit(context.media_likelihood.value_or(
+        config_.unknown_media_likelihood));
+    evidence.overlap_likelihood = unit(context.overlap_likelihood.value_or(
+        config_.unknown_overlap_likelihood));
+
+    evaluation.gate_stt_status = GateSttStatus::Bypassed;
+    evaluation.gate_stt_error_code.clear();
+    evaluation.no_speech_probability = 0.0;
+    evaluation.evidence = evidence;
+    evaluation.result = gate_.evaluate(evidence);
+    return evaluation;
+  }
+
+  if (request.samples.empty() || request.sample_rate == 0 ||
+      request.channels != 1) {
     evaluation.gate_stt_status = GateSttStatus::Failed;
     evaluation.gate_stt_error_code = "VOICE.GATE_STT.INVALID_AUDIO";
     evaluation.result = terminal_result(
@@ -299,6 +331,15 @@ AddressabilityEvaluation AddressabilityEvidencePipeline::evaluate(
     return evaluation;
   }
 
+  if (stt.status != GateSttStatus::Transcript) {
+    evaluation.result = terminal_result(
+        AddressabilityDecision::Abstain,
+        AddressabilityConfidenceBand::Low,
+        0.5,
+        "ADDRESSABILITY.UNKNOWN_GATE_STT_STATUS");
+    return evaluation;
+  }
+
   const std::string normalized = normalize_text(stt.transcript);
   if (normalized.empty()) {
     evaluation.result = terminal_result(
@@ -310,7 +351,6 @@ AddressabilityEvaluation AddressabilityEvidencePipeline::evaluate(
   }
 
   AddressabilityEvidence evidence;
-  evidence.explicit_activation = context.explicit_activation;
   evidence.direct_address = direct_address(normalized);
   evidence.follow_up_window = context.follow_up_window;
   evidence.follow_up_semantics_match =
