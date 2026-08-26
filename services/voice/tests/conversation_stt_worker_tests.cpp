@@ -147,7 +147,7 @@ class BlockingStt final : public IGateStt {
   std::vector<std::string> seen;
 };
 
-void test_pending_queue_replaces_older_accepted_turn() {
+void test_saturated_queue_rejects_new_turn_without_replacing_old_one() {
   BlockingStt provider;
   std::mutex results_mutex;
   std::vector<std::string> completed;
@@ -162,9 +162,10 @@ void test_pending_queue_replaces_older_accepted_turn() {
   require(worker.submit(utterance("first")), "first job must submit");
   provider.wait_until_started();
   require(worker.submit(utterance("second")), "second job must queue");
-  require(worker.submit(utterance("third")), "third job must replace second");
+  require(!worker.submit(utterance("third")),
+          "third accepted turn must be explicitly rejected when saturated");
   require(worker.dropped_jobs() == 1,
-          "replaced pending utterance must increment dropped counter");
+          "rejected new utterance must increment dropped counter");
 
   provider.release();
   const auto deadline = std::chrono::steady_clock::now() + 3s;
@@ -174,7 +175,7 @@ void test_pending_queue_replaces_older_accepted_turn() {
       if (completed.size() >= 2) break;
     }
     if (std::chrono::steady_clock::now() >= deadline) {
-      throw std::runtime_error("replacement queue test timed out");
+      throw std::runtime_error("saturation queue test timed out");
     }
     std::this_thread::sleep_for(10ms);
   }
@@ -182,11 +183,11 @@ void test_pending_queue_replaces_older_accepted_turn() {
   worker.stop();
   std::scoped_lock lock(results_mutex);
   require(completed.size() == 2,
-          "only active and newest pending utterance may complete");
+          "active and already queued turns must complete exactly once");
   require(completed[0] == "activity-first",
           "active utterance must complete first");
-  require(completed[1] == "activity-third",
-          "newest pending utterance must replace older pending work");
+  require(completed[1] == "activity-second",
+          "existing queued turn must not be silently replaced");
 }
 
 class ConcurrencyProbeStt final : public IGateStt {
@@ -242,7 +243,7 @@ void test_invalid_utterance_fails_before_decoder() {
 int main() {
   try {
     test_successful_full_transcription_preserves_turn_metadata();
-    test_pending_queue_replaces_older_accepted_turn();
+    test_saturated_queue_rejects_new_turn_without_replacing_old_one();
     test_serialized_provider_prevents_concurrent_native_inference();
     test_invalid_utterance_fails_before_decoder();
     std::cout << "birdie-conversation-stt-worker-tests: PASS\n";
