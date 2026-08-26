@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <limits>
 #include <stdexcept>
 #include <string>
 
@@ -112,8 +113,8 @@ void test_media_and_overlap_are_vetoes() {
 void test_non_finite_inputs_are_safe() {
   RuleBasedAddressabilityGate gate;
   AddressabilityEvidence evidence;
-  evidence.assistant_intent = 0.0 / 0.0;
-  evidence.acoustic_proximity = 1.0 / 0.0;
+  evidence.assistant_intent = std::numeric_limits<double>::quiet_NaN();
+  evidence.acoustic_proximity = std::numeric_limits<double>::infinity();
 
   const AddressabilityResult result = gate.evaluate(evidence);
   require(result.decision == AddressabilityDecision::Reject,
