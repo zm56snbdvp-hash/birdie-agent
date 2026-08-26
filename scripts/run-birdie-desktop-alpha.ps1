@@ -6,6 +6,18 @@ param(
   [string]$VoiceConfiguration = 'Release',
   [ValidateSet('Unavailable', 'WhisperCpp')]
   [string]$GateSttProvider = 'Unavailable',
+  [switch]$SetupWhisperCpp,
+  [ValidateSet(
+    'tiny', 'tiny.en',
+    'base', 'base.en',
+    'small', 'small.en',
+    'medium', 'medium.en',
+    'large-v1',
+    'large-v2', 'large-v2-q5_0',
+    'large-v3', 'large-v3-q5_0',
+    'large-v3-turbo', 'large-v3-turbo-q5_0'
+  )]
+  [string]$GateSttModelName = 'base',
   [string]$WhisperCppSource,
   [string]$GateSttModel,
   [ValidateRange(1, 64)]
@@ -23,6 +35,9 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $voiceBuild = Join-Path $repoRoot 'build/voice'
 $voiceExe = Join-Path $voiceBuild "$VoiceConfiguration/birdie-voice-host.exe"
 $desktopDir = Join-Path $repoRoot 'apps/desktop'
+$defaultWhisperSource = Join-Path $repoRoot 'third_party/whisper.cpp'
+$defaultWhisperModelDirectory = Join-Path $repoRoot 'models/whisper'
+$setupWhisperScript = Join-Path $PSScriptRoot 'setup-birdie-whisper-cpp.ps1'
 
 function Require-Command([string]$Name) {
   if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {
@@ -57,11 +72,46 @@ Require-Command 'cargo'
 if ($DevelopmentAutoAccept -and $GateSttProvider -eq 'WhisperCpp') {
   throw 'DevelopmentAutoAccept bypasses Addressability and cannot be combined with GateSttProvider=WhisperCpp.'
 }
+if ($SetupWhisperCpp -and $GateSttProvider -ne 'WhisperCpp') {
+  throw 'SetupWhisperCpp requires GateSttProvider=WhisperCpp.'
+}
+if ($SetupWhisperCpp -and -not [string]::IsNullOrWhiteSpace($GateSttModel)) {
+  throw 'SetupWhisperCpp manages the model path. Use GateSttModelName instead of GateSttModel for this mode.'
+}
 
 $resolvedWhisperCppSource = $null
 $resolvedGateSttModel = $null
 if ($GateSttProvider -eq 'WhisperCpp') {
   Require-Command 'git'
+
+  if ([string]::IsNullOrWhiteSpace($WhisperCppSource)) {
+    $WhisperCppSource = $defaultWhisperSource
+  }
+  if ([string]::IsNullOrWhiteSpace($GateSttModel)) {
+    $GateSttModel = Join-Path $defaultWhisperModelDirectory "ggml-$GateSttModelName.bin"
+  }
+
+  if ($SetupWhisperCpp) {
+    if (-not (Test-Path -LiteralPath $setupWhisperScript -PathType Leaf)) {
+      throw "Birdie Whisper setup helper was not found: $setupWhisperScript"
+    }
+
+    Write-Host 'Preparing reviewed whisper.cpp source and verified model...' -ForegroundColor Green
+    & $setupWhisperScript `
+      -Model $GateSttModelName `
+      -SourceDirectory $WhisperCppSource `
+      -ModelDirectory $defaultWhisperModelDirectory | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+      throw "Birdie Whisper setup failed with exit code $LASTEXITCODE."
+    }
+  }
+
+  if (-not (Test-Path -LiteralPath $WhisperCppSource -PathType Container) -or
+      -not (Test-Path -LiteralPath $GateSttModel -PathType Leaf)) {
+    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -GateSttProvider WhisperCpp -SetupWhisperCpp -GateSttModelName $GateSttModelName -GateSttLanguage de"
+    throw "Local Whisper source/model is missing. Run: $setupCommand"
+  }
+
   $resolvedWhisperCppSource = Resolve-ExistingDirectory $WhisperCppSource 'WhisperCppSource'
   $resolvedGateSttModel = Resolve-ExistingFile $GateSttModel 'GateSttModel'
 
@@ -89,7 +139,8 @@ if (-not $SkipVoiceBuild) {
   $cmakeArguments = @(
     '-S', (Join-Path $repoRoot 'services/voice'),
     '-B', $voiceBuild,
-    '-A', 'x64'
+    '-A', 'x64',
+    '-DGGML_NATIVE=OFF'
   )
   if ($GateSttProvider -eq 'WhisperCpp') {
     $cmakeArguments += '-DBIRDIE_WITH_WHISPER_CPP=ON'
