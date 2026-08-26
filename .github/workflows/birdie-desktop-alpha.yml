@@ -66,6 +66,13 @@ jobs:
             $errors | ForEach-Object { Write-Error $_.Message }
             throw 'Desktop recovery launcher parser validation failed.'
           }
+      - name: Validate managed Tauri frontend override
+        shell: pwsh
+        run: |
+          $config = Get-Content 'apps/desktop/src-tauri/tauri.managed-dev.conf.json' -Raw | ConvertFrom-Json
+          if ($null -ne $config.build.beforeDevCommand) {
+            throw 'Managed Tauri config must set beforeDevCommand to null.'
+          }
       - name: Install desktop dependencies
         run: npm install --prefix apps/desktop --include=optional --no-audit --no-fund
       - name: Build Presence frontend
