@@ -42,8 +42,9 @@ export class DevelopmentAcknowledgementBrain {
       });
     }
 
-    const language = String(request?.language ?? '').toLowerCase();
-    const text = language.startsWith('de')
+    const language = cleanText(request?.language, 32) || 'und';
+    const languageKey = language.toLowerCase();
+    const text = languageKey.startsWith('de')
       ? 'Ich bin da. Der lokale Birdie Dialogpfad funktioniert.'
       : 'I am here. The local Birdie conversation path is working.';
 
@@ -51,7 +52,7 @@ export class DevelopmentAcknowledgementBrain {
       status: BrainStatus.COMPLETED,
       turnId,
       text,
-      language: language || 'und',
+      language,
       provider: 'development-ack',
       model: 'deterministic-v1',
       errorCode: null,
