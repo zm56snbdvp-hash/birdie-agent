@@ -33,6 +33,7 @@ test('normal turn distinguishes capture from finalized transcript', () => {
   assert.equal(snapshot.presence.state, 'THINKING');
   assert.equal(snapshot.presence.reason, 'voice.utterance.captured');
   assert.equal(snapshot.activeTurn.status, 'PROCESSING');
+  const revisionAfterCapture = snapshot.presence.revision;
 
   runtime.apply(evt('voice.utterance.finalized', 5, {
     turn_id: 'turn-1',
@@ -41,7 +42,12 @@ test('normal turn distinguishes capture from finalized transcript', () => {
   }));
   snapshot = runtime.getSnapshot();
   assert.equal(snapshot.presence.state, 'THINKING');
-  assert.equal(snapshot.presence.reason, 'voice.utterance.finalized');
+  assert.equal(
+    snapshot.presence.reason,
+    'voice.utterance.captured',
+    'internal STT completion must not manufacture a second visible transition',
+  );
+  assert.equal(snapshot.presence.revision, revisionAfterCapture);
   assert.equal(snapshot.activeTurn.id, 'turn-1');
   assert.equal(snapshot.activeTurn.status, 'PROCESSING');
   assert.equal(runtime.turns.turns.size, 1);
