@@ -136,15 +136,19 @@ void test_gate_stt_snapshot_and_stale_resolution() {
   std::uint64_t at = 10;
   create_candidate(host, at, 0.10F);
 
-  const auto request = host.gate_stt_request();
+  require(!host.gate_stt_request().has_value(),
+          "default Gate-STT age must be checked before copying PCM");
+  const auto request = host.gate_stt_request(0);
   require(request.has_value(),
-          "active candidate must expose a bounded Gate-STT request");
+          "active candidate must expose a bounded Gate-STT request when due");
   require(request->activity_id == host.active_activity_id(),
           "Gate-STT request must carry the current activity id");
   require(!request->samples.empty(),
           "Gate-STT request must contain local candidate PCM");
   require(request->samples.size() <= 16'000 * 1'200 / 1'000,
           "Gate-STT request must stay within configured pre-roll capacity");
+  require(!host.gate_stt_request(0).has_value(),
+          "one activity must issue at most one Gate-STT PCM snapshot");
 
   require(!host.resolve_addressability(
               "activity-stale", abstain_result()),
@@ -157,7 +161,7 @@ void test_gate_stt_snapshot_and_stale_resolution() {
           "matching activity id must resolve current candidate");
   require(host.phase() == VoicePhase::Quiet,
           "matching ABSTAIN must return VoiceHost to Quiet");
-  require(!host.gate_stt_request().has_value(),
+  require(!host.gate_stt_request(0).has_value(),
           "resolved candidate must no longer expose Gate-STT audio");
 }
 
@@ -166,7 +170,7 @@ void test_resolution_requires_active_candidate() {
   VoiceHost host(VoiceConfig{}, sink, {});
   require(!host.resolve_addressability(abstain_result()),
           "addressability decision outside SpeechCandidate must be ignored");
-  require(!host.gate_stt_request().has_value(),
+  require(!host.gate_stt_request(0).has_value(),
           "Quiet VoiceHost must not expose Gate-STT audio");
   require(sink.events.empty(),
           "ignored decision must not emit lifecycle events");
