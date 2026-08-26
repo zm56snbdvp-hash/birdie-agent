@@ -124,7 +124,7 @@ void test_candidate_snapshot_is_bounded_and_identified() {
   host.process(frame(0.2F, 10));
   host.process(frame(0.2F, 20));
 
-  const auto snapshot = host.candidate_audio_snapshot();
+  const auto snapshot = host.gate_stt_request(0);
   require(snapshot.has_value(),
           "SpeechCandidate must expose one local Gate-STT snapshot");
   require(snapshot->activity_id == host.active_activity_id(),
@@ -135,6 +135,8 @@ void test_candidate_snapshot_is_bounded_and_identified() {
           "snapshot must preserve canonical audio format");
   require(snapshot->barge_in_candidate,
           "snapshot must preserve local barge-in context");
+  require(!host.gate_stt_request(0).has_value(),
+          "one activity must expose at most one PCM snapshot");
 }
 
 void test_abstain_clears_candidate_snapshot() {
@@ -143,14 +145,14 @@ void test_abstain_clears_candidate_snapshot() {
   host.process(frame(0.2F, 0));
   host.process(frame(0.2F, 10));
   host.process(frame(0.2F, 20));
-  require(host.candidate_audio_snapshot().has_value(),
+  require(host.gate_stt_request(0).has_value(),
           "candidate must exist before ABSTAIN");
 
   require(host.resolve_addressability(abstain_result()),
           "ABSTAIN must resolve the active candidate");
   require(host.phase() == VoicePhase::Quiet,
           "ABSTAIN must return VoiceHost to Quiet");
-  require(!host.candidate_audio_snapshot().has_value(),
+  require(!host.gate_stt_request(0).has_value(),
           "ABSTAIN must remove access to candidate audio");
   require(has_event(sink, "voice.activation.abstained"),
           "ABSTAIN must emit the canonical lifecycle event");
@@ -211,11 +213,13 @@ void test_mute_clears_active_candidate() {
   host.process(frame(0.2F, 0));
   host.process(frame(0.2F, 10));
   host.process(frame(0.2F, 20));
+  require(host.gate_stt_request(0).has_value(),
+          "candidate must expose PCM before mute");
   host.set_muted(true);
   require(host.muted(), "mute state must be authoritative");
   require(host.phase() == VoicePhase::Quiet,
           "mute must cancel the active candidate");
-  require(!host.candidate_audio_snapshot().has_value(),
+  require(!host.gate_stt_request(0).has_value(),
           "mute must remove candidate audio access");
   require(has_event(sink, "voice.privacy.changed"),
           "mute must emit a privacy-state event");
