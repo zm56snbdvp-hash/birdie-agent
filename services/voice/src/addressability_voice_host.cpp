@@ -49,6 +49,16 @@ bool VoiceHost::resolve_addressability(
   return false;
 }
 
+void VoiceHost::handle_input_unavailable(std::string reason) {
+  if (phase_ != VoicePhase::Quiet) {
+    finish_activity(last_frame_ms_, std::move(reason));
+  }
+  reset_interaction(true);
+  gate_stt_activity_id_.clear();
+  vad_.reset();
+  last_level_event_ms_ = 0;
+}
+
 std::optional<GateSttRequest> VoiceHost::gate_stt_request(
     const std::uint64_t minimum_candidate_ms) {
   if (muted_ || phase_ != VoicePhase::SpeechCandidate ||
