@@ -11,6 +11,20 @@ void wipe(std::string& value) noexcept {
   value.clear();
 }
 
+ConversationTranscript cancelled_transcript(
+    const UtteranceAudio& utterance,
+    std::string error_code) {
+  ConversationTranscript transcript;
+  transcript.status = GateSttStatus::Failed;
+  transcript.activity_id = utterance.activity_id;
+  transcript.utterance_id = utterance.utterance_id;
+  transcript.turn_id = utterance.turn_id;
+  transcript.duration_ms = utterance.duration_ms;
+  transcript.ended_ms = utterance.ended_ms;
+  transcript.error_code = std::move(error_code);
+  return transcript;
+}
+
 }  // namespace
 
 ConversationSttWorker::ConversationSttWorker(
@@ -44,24 +58,45 @@ bool ConversationSttWorker::submit(UtteranceAudio utterance) {
 }
 
 void ConversationSttWorker::discard_pending() noexcept {
-  std::scoped_lock lock(mutex_);
-  if (!pending_) return;
-  secure_clear(*pending_);
-  pending_.reset();
-  dropped_jobs_.fetch_add(1, std::memory_order_relaxed);
+  std::optional<ConversationTranscript> cancelled;
+  {
+    std::scoped_lock lock(mutex_);
+    if (!pending_) return;
+    cancelled = cancelled_transcript(
+        *pending_, "VOICE.CONVERSATION_STT.CANCELLED");
+    secure_clear(*pending_);
+    pending_.reset();
+    dropped_jobs_.fetch_add(1, std::memory_order_relaxed);
+  }
+
+  try {
+    if (cancelled && callback_) callback_(std::move(*cancelled));
+  } catch (...) {
+    if (cancelled) secure_clear(*cancelled);
+  }
 }
 
 void ConversationSttWorker::stop() noexcept {
+  std::optional<ConversationTranscript> cancelled;
   {
     std::scoped_lock lock(mutex_);
     if (stopping_) return;
     stopping_ = true;
     if (pending_) {
+      cancelled = cancelled_transcript(
+          *pending_, "VOICE.CONVERSATION_STT.STOPPED");
       secure_clear(*pending_);
       pending_.reset();
       dropped_jobs_.fetch_add(1, std::memory_order_relaxed);
     }
   }
+
+  try {
+    if (cancelled && callback_) callback_(std::move(*cancelled));
+  } catch (...) {
+    if (cancelled) secure_clear(*cancelled);
+  }
+
   wake_.notify_all();
   if (thread_.joinable()) thread_.join();
 }
