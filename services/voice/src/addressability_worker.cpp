@@ -1,5 +1,6 @@
 #include "birdie/voice/addressability_worker.hpp"
 
+#include <stdexcept>
 #include <utility>
 
 namespace birdie::voice {
@@ -58,7 +59,13 @@ void AddressabilityWorker::stop() noexcept {
     }
   }
   wake_.notify_all();
-  if (thread_.joinable()) thread_.join();
+  if (thread_.joinable()) {
+    try {
+      thread_.join();
+    } catch (...) {
+      // Destruction remains fail-closed. No pending PCM survives this point.
+    }
+  }
 }
 
 std::uint64_t AddressabilityWorker::dropped_jobs() const noexcept {
