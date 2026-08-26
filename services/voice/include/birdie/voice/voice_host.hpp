@@ -132,6 +132,7 @@ class VoiceHost {
       ActivationMode accepted_mode = ActivationMode::WakeOnSpeak);
   void set_output_active(bool active, std::string output_id = {}, std::string turn_id = {});
   void set_muted(bool muted);
+  void handle_input_unavailable(std::string reason);
 
   // Returns at most one PCM snapshot per activity. The minimum-age check is
   // performed before copying the circular pre-roll, keeping the WASAPI callback
