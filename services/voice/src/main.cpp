@@ -1,5 +1,6 @@
 #include "birdie/voice/addressability_pipeline.hpp"
 #include "birdie/voice/addressability_worker.hpp"
+#include "birdie/voice/gate_stt_provider.hpp"
 #include "birdie/voice/voice_host.hpp"
 
 #ifdef _WIN32
@@ -66,7 +67,7 @@ int main(int argc, char** argv) {
   const bool stdout_events = has_argument(argc, argv, "--stdout-events");
 
   if (!capture_microphone) {
-    std::cout << "Birdie Voice Host v0.2\n"
+    std::cout << "Birdie Voice Host v0.3\n"
               << "Usage: birdie-voice-host --mic [--dev-auto-accept] "
                  "[--stdout-events]\n";
     return 0;
@@ -116,10 +117,19 @@ int main(int argc, char** argv) {
     host.handle_input_unavailable(std::move(reason));
   };
 
+  auto gate_stt_config =
+      birdie::voice::load_gate_stt_provider_config_from_environment();
+  if (development_auto_accept) {
+    // The marked visual integration bypass must not initialize or retain a
+    // production model that will never be consulted.
+    gate_stt_config.provider = "unavailable";
+  }
+  auto gate_stt_selection =
+      birdie::voice::create_gate_stt_provider(std::move(gate_stt_config));
+
   std::atomic<bool> addressability_enabled{true};
-  birdie::voice::UnavailableGateStt gate_stt;
   birdie::voice::AddressabilityEvidencePipeline addressability_pipeline(
-      gate_stt);
+      *gate_stt_selection.provider);
   birdie::voice::AddressabilityWorker addressability_worker(
       addressability_pipeline,
       [&](birdie::voice::AddressabilityEvaluation evaluation) {
@@ -154,8 +164,14 @@ int main(int argc, char** argv) {
     std::cerr << "[birdie-voice] WARNING: --dev-auto-accept is active; "
                  "all qualifying speech candidates are treated as addressed.\n";
   } else {
-    std::cerr << "[birdie-voice] Gate-STT is fail-closed until a local decoder "
-                 "is configured; unresolved speech will ABSTAIN.\n";
+    std::cerr << "[birdie-voice] Gate-STT provider="
+              << gate_stt_selection.info.active_provider
+              << " status=" << gate_stt_selection.info.status
+              << " model=" << gate_stt_selection.info.model_id;
+    if (!gate_stt_selection.info.error_code.empty()) {
+      std::cerr << " error=" << gate_stt_selection.info.error_code;
+    }
+    std::cerr << '\n';
   }
 
   birdie::voice::WasapiCapture capture;
@@ -170,12 +186,22 @@ int main(int argc, char** argv) {
   };
 
   auto emit_component_ready = [&] {
+    const std::string gate_stt_status = development_auto_accept
+        ? "BYPASSED"
+        : gate_stt_selection.info.status;
+    const std::string gate_stt_provider = development_auto_accept
+        ? "development-auto-accept"
+        : gate_stt_selection.info.active_provider;
     sink.emit({"component.ready", monotonic_ms(), std::nullopt,
                {{"component", std::string("birdie-voice")},
                 {"contract_version", std::string("1.0")},
                 {"capture", std::string("WASAPI_SHARED_16K_MONO")},
                 {"addressability", std::string("LOCAL_ACCEPT_REJECT_ABSTAIN")},
-                {"gate_stt", std::string("UNCONFIGURED_FAIL_CLOSED")},
+                {"gate_stt", gate_stt_status},
+                {"gate_stt_provider", gate_stt_provider},
+                {"gate_stt_model", gate_stt_selection.info.model_id},
+                {"gate_stt_error_code",
+                 gate_stt_selection.info.error_code},
                 {"development_auto_accept", development_auto_accept}}});
   };
 
