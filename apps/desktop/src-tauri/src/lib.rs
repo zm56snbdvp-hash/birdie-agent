@@ -47,13 +47,13 @@ struct RuntimeState {
 }
 
 #[tauri::command]
-fn runtime_get_snapshot(state: State<'_, RuntimeState>, last_revision: i64) -> RuntimeSnapshot {
+fn runtime_get_snapshot(state: State<'_, Arc<RuntimeState>>, last_revision: i64) -> RuntimeSnapshot {
   let _ = last_revision;
   state.snapshot.lock().expect("runtime state poisoned").clone()
 }
 
 #[tauri::command]
-fn runtime_set_microphone_enabled(state: State<'_, RuntimeState>, enabled: bool) -> Result<(), String> {
+fn runtime_set_microphone_enabled(state: State<'_, Arc<RuntimeState>>, enabled: bool) -> Result<(), String> {
   let nonce = SystemTime::now()
     .duration_since(UNIX_EPOCH)
     .map_err(|error| format!("SYSTEM.CLOCK_ERROR:{error}"))?
@@ -121,9 +121,6 @@ fn start_core_ipc(app: tauri::AppHandle, shared: Arc<RuntimeState>) {
                   "contractVersion": CONTRACT_VERSION,
                   "role": "desktop",
                 }));
-                // Always ask for a fresh authoritative snapshot after the
-                // handshake. This makes desktop reconnect deterministic even
-                // when the server's unsolicited initial snapshot raced startup.
                 let _ = send_pipe_message(&shared.writer, &desktop_snapshot_request());
               }
             }
