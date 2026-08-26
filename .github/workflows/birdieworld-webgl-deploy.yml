@@ -83,6 +83,7 @@ jobs:
 
       - name: Verify WebGL output and unchanged tracked source
         run: |
+          sudo chown -R "$(id -u):$(id -g)" clients/unity/BirdieWorld/Builds/WebGL
           test -f clients/unity/BirdieWorld/Builds/WebGL/index.html
           test -z "$(git status --porcelain --untracked-files=no)"
 
