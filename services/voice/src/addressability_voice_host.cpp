@@ -49,9 +49,11 @@ bool VoiceHost::resolve_addressability(
   return false;
 }
 
-std::optional<GateSttRequest> VoiceHost::gate_stt_request() const {
+std::optional<GateSttRequest> VoiceHost::gate_stt_request(
+    const std::uint64_t minimum_candidate_ms) const {
   if (muted_ || phase_ != VoicePhase::SpeechCandidate ||
-      activity_id_.empty()) {
+      activity_id_.empty() || last_frame_ms_ < candidate_started_ms_ ||
+      last_frame_ms_ - candidate_started_ms_ < minimum_candidate_ms) {
     return std::nullopt;
   }
 
