@@ -22,6 +22,7 @@ add_library(birdie_voice STATIC
   src/addressability_pipeline.cpp
   src/addressability_voice_host.cpp
   src/addressability_worker.cpp
+  src/conversation_stt_worker.cpp
   src/gate_stt.cpp
   src/gate_stt_provider.cpp
   src/voice_host.cpp
@@ -130,6 +131,19 @@ target_link_libraries(
 add_test(
   NAME birdie-addressability-worker-tests
   COMMAND birdie-addressability-worker-tests
+)
+
+add_executable(
+  birdie-conversation-stt-worker-tests
+  tests/conversation_stt_worker_tests.cpp
+)
+target_link_libraries(
+  birdie-conversation-stt-worker-tests
+  PRIVATE birdie_voice
+)
+add_test(
+  NAME birdie-conversation-stt-worker-tests
+  COMMAND birdie-conversation-stt-worker-tests
 )
 
 add_executable(
