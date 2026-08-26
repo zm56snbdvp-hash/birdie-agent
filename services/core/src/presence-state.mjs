@@ -42,13 +42,17 @@ export function projectPresence(current, nextState, meta = {}) {
   assertAlphaState(nextState);
   if (current.state === nextState && !meta.forceRevision) return current;
 
+  const hasTurnId = Object.prototype.hasOwnProperty.call(meta, 'turnId');
+
   return {
     ...current,
     state: nextState,
     revision: current.revision + 1,
     reason: meta.reason ?? 'runtime.unspecified',
     since: meta.timestampUtc ?? new Date().toISOString(),
-    activeTurnId: meta.turnId ?? current.activeTurnId ?? null,
+    // An explicit null is meaningful: the terminal transition owns clearing
+    // the correlation. Only an omitted turnId inherits the previous value.
+    activeTurnId: hasTurnId ? meta.turnId : (current.activeTurnId ?? null),
     microphone: meta.microphone ?? current.microphone,
     connectivity: meta.connectivity ?? current.connectivity,
   };
