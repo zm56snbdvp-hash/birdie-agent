@@ -7,7 +7,15 @@ namespace birdie::voice {
 bool VoiceHost::resolve_addressability(
     const AddressabilityResult& result,
     const ActivationMode accepted_mode) {
-  if (muted_ || phase_ != VoicePhase::SpeechCandidate) {
+  return resolve_addressability(activity_id_, result, accepted_mode);
+}
+
+bool VoiceHost::resolve_addressability(
+    const std::string_view expected_activity_id,
+    const AddressabilityResult& result,
+    const ActivationMode accepted_mode) {
+  if (muted_ || phase_ != VoicePhase::SpeechCandidate ||
+      expected_activity_id.empty() || expected_activity_id != activity_id_) {
     return false;
   }
 
@@ -39,6 +47,23 @@ bool VoiceHost::resolve_addressability(
   }
 
   return false;
+}
+
+std::optional<GateSttRequest> VoiceHost::gate_stt_request() const {
+  if (muted_ || phase_ != VoicePhase::SpeechCandidate ||
+      activity_id_.empty()) {
+    return std::nullopt;
+  }
+
+  GateSttRequest request;
+  request.activity_id = activity_id_;
+  request.samples = pre_roll_.snapshot();
+  request.sample_rate = config_.sample_rate;
+  request.channels = 1;
+  request.candidate_started_ms = candidate_started_ms_;
+  request.captured_through_ms = last_frame_ms_;
+  request.barge_in_candidate = output_active_;
+  return request;
 }
 
 }  // namespace birdie::voice
