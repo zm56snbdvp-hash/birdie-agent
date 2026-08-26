@@ -147,6 +147,19 @@ add_test(
 )
 
 add_executable(
+  birdie-conversation-stt-cancellation-tests
+  tests/conversation_stt_cancellation_tests.cpp
+)
+target_link_libraries(
+  birdie-conversation-stt-cancellation-tests
+  PRIVATE birdie_voice
+)
+add_test(
+  NAME birdie-conversation-stt-cancellation-tests
+  COMMAND birdie-conversation-stt-cancellation-tests
+)
+
+add_executable(
   birdie-whisper-cpp-gate-stt-tests
   tests/whisper_cpp_gate_stt_tests.cpp
 )
