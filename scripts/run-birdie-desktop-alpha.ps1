@@ -74,6 +74,80 @@ function Resolve-ExistingFile([string]$Path, [string]$Label) {
   return (Resolve-Path -LiteralPath $Path).Path
 }
 
+function Get-BirdieVisualStudioGenerator {
+  $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+  if (-not (Test-Path -LiteralPath $vswhere -PathType Leaf)) {
+    throw @"
+Birdie requires the Microsoft C++ Build Tools. Install them from an elevated PowerShell with:
+
+winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --source winget --accept-package-agreements --accept-source-agreements --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+
+Then reopen PowerShell, return to the repository, run 'git pull', and start -FullVoiceDemo again.
+"@
+  }
+
+  $installationPath = (& $vswhere `
+      -latest `
+      -products '*' `
+      -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+      -property installationPath 2>$null | Select-Object -First 1)
+  $installationVersion = (& $vswhere `
+      -latest `
+      -products '*' `
+      -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+      -property installationVersion 2>$null | Select-Object -First 1)
+
+  if ([string]::IsNullOrWhiteSpace($installationPath) -or
+      [string]::IsNullOrWhiteSpace($installationVersion)) {
+    throw @"
+Visual Studio is present, but the x64 C++ toolchain is missing. Open Visual Studio Installer and add 'Desktop development with C++', or run from an elevated PowerShell:
+
+winget install --id Microsoft.VisualStudio.2022.BuildTools --exact --source winget --accept-package-agreements --accept-source-agreements --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+"@
+  }
+
+  $major = [int]($installationVersion.Split('.')[0])
+  $generator = switch ($major) {
+    18 { 'Visual Studio 18 2026' }
+    17 { 'Visual Studio 17 2022' }
+    default {
+      throw "Unsupported Visual Studio C++ toolchain version '$installationVersion' at '$installationPath'."
+    }
+  }
+
+  $cmakeHelp = (& cmake --help 2>&1 | Out-String)
+  if ($cmakeHelp -notmatch [regex]::Escape($generator)) {
+    throw "Installed CMake does not support generator '$generator'. Update CMake and retry."
+  }
+
+  return $generator
+}
+
+function Reset-IncompatibleCMakeCache(
+  [string]$BuildDirectory,
+  [string]$ExpectedGenerator
+) {
+  $cachePath = Join-Path $BuildDirectory 'CMakeCache.txt'
+  if (-not (Test-Path -LiteralPath $cachePath -PathType Leaf)) {
+    return
+  }
+
+  $generatorLine = Get-Content -LiteralPath $cachePath -ErrorAction SilentlyContinue |
+    Where-Object { $_ -like 'CMAKE_GENERATOR:INTERNAL=*' } |
+    Select-Object -First 1
+  $cachedGenerator = if ($generatorLine) {
+    $generatorLine.Substring('CMAKE_GENERATOR:INTERNAL='.Length)
+  }
+  else {
+    $null
+  }
+
+  if ($cachedGenerator -ne $ExpectedGenerator) {
+    Write-Host "Resetting incompatible CMake cache: '$cachedGenerator' -> '$ExpectedGenerator'" -ForegroundColor Yellow
+    Remove-Item -LiteralPath $BuildDirectory -Recurse -Force
+  }
+}
+
 Require-Command 'node'
 Require-Command 'npm'
 Require-Command 'cargo'
@@ -172,11 +246,15 @@ if ($GateSttProvider -eq 'WhisperCpp') {
 
 if (-not $SkipVoiceBuild) {
   Require-Command 'cmake'
-  Write-Host 'Building Birdie Voice Host...' -ForegroundColor Green
+  $cmakeGenerator = Get-BirdieVisualStudioGenerator
+  Reset-IncompatibleCMakeCache $voiceBuild $cmakeGenerator
+
+  Write-Host "Building Birdie Voice Host with $cmakeGenerator (x64)..." -ForegroundColor Green
 
   $cmakeArguments = @(
     '-S', (Join-Path $repoRoot 'services/voice'),
     '-B', $voiceBuild,
+    '-G', $cmakeGenerator,
     '-A', 'x64',
     '-DGGML_NATIVE=OFF'
   )
