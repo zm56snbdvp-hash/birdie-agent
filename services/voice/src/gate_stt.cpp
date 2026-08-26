@@ -45,6 +45,7 @@ void secure_clear(GateSttResult& result) noexcept {
 
 const char* gate_stt_status_name(const GateSttStatus status) noexcept {
   switch (status) {
+    case GateSttStatus::Bypassed: return "BYPASSED";
     case GateSttStatus::Transcript: return "TRANSCRIPT";
     case GateSttStatus::NoSpeech: return "NO_SPEECH";
     case GateSttStatus::Unavailable: return "UNAVAILABLE";
