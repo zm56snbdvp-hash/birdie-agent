@@ -18,15 +18,20 @@ export class RuntimeBridge {
     this.onAudioOutput = onAudioOutput;
     this.lastRevision = -1;
     this.unlisten = [];
+    this.refreshTimer = null;
+    this.refreshInFlight = false;
   }
 
   async connect() {
     this.onStatus?.('CONNECTING');
 
-    const stopPresence = await listen('runtime.presence.changed', ({ payload }) => {
-      const snapshot = payload?.snapshot ?? payload;
-      this.#applyPresence(snapshot);
-    });
+    const stopPresence = await listen(
+      'runtime.presence.changed',
+      ({ payload }) => {
+        const snapshot = payload?.snapshot ?? payload;
+        this.#applyPresence(snapshot);
+      },
+    );
     const stopSnapshot = await listen('runtime.snapshot', ({ payload }) => {
       this.#applySnapshot(payload);
     });
@@ -36,11 +41,7 @@ export class RuntimeBridge {
     const stopConnected = await listen('runtime.connected', async () => {
       this.onStatus?.('CONNECTING');
       this.lastRevision = -1;
-      try {
-        await this.requestSnapshot();
-      } catch {
-        this.onStatus?.('OFFLINE');
-      }
+      await this.#refreshSnapshotSafely();
     });
     const stopSupervisor = await listen(
       'supervisor.component.changed',
@@ -64,7 +65,11 @@ export class RuntimeBridge {
       stopAudioInput,
       stopAudioOutput,
     );
-    await this.requestSnapshot();
+
+    await this.#refreshSnapshotSafely();
+    this.refreshTimer = window.setInterval(() => {
+      void this.#refreshSnapshotSafely();
+    }, 750);
   }
 
   async requestSnapshot() {
@@ -80,7 +85,23 @@ export class RuntimeBridge {
   }
 
   dispose() {
+    if (this.refreshTimer !== null) {
+      window.clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
     for (const stop of this.unlisten.splice(0)) stop();
+  }
+
+  async #refreshSnapshotSafely() {
+    if (this.refreshInFlight) return;
+    this.refreshInFlight = true;
+    try {
+      await this.requestSnapshot();
+    } catch {
+      this.onStatus?.('OFFLINE');
+    } finally {
+      this.refreshInFlight = false;
+    }
   }
 
   #applySnapshot(snapshot) {
