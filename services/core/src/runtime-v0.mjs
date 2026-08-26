@@ -53,6 +53,9 @@ export class BirdieRuntimeV0 {
           this.pendingBargeIn = false;
         }
         return this.#setPresence(PresenceState.LISTENING, event, 'voice.activation.accepted', null);
+      case 'voice.input.cancelled':
+        this.pendingBargeIn = false;
+        return this.#setPresence(PresenceState.IDLE, event, 'voice.input.cancelled', null);
       case 'voice.utterance.finalized': {
         if (!event.turn_id) throw new Error('TURN.ID_REQUIRED');
         this.turns.create(event.turn_id, { timestampUtc: event.timestamp_utc });
