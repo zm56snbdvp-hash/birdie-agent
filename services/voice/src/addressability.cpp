@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <utility>
 
 namespace birdie::voice {
 namespace {
@@ -88,6 +89,7 @@ AddressabilityResult RuleBasedAddressabilityGate::evaluate(
   }
 
   std::size_t positive_families = 0;
+  positive_families += raw.direct_address ? 1U : 0U;
   positive_families += intent >= policy_.positive_family_threshold ? 1U : 0U;
   positive_families += proximity >= policy_.positive_family_threshold ? 1U : 0U;
   positive_families += asr >= policy_.positive_family_threshold ? 1U : 0U;
@@ -95,6 +97,7 @@ AddressabilityResult RuleBasedAddressabilityGate::evaluate(
   positive_families += raw.recently_active ? 1U : 0U;
 
   double score =
+      (raw.direct_address ? 0.18 : 0.0) +
       intent * 0.34 +
       proximity * 0.18 +
       asr * 0.16 +
