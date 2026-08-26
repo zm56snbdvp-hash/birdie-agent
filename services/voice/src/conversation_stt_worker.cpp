@@ -32,14 +32,10 @@ bool ConversationSttWorker::submit(UtteranceAudio utterance) {
 
   {
     std::scoped_lock lock(mutex_);
-    if (stopping_) {
+    if (stopping_ || pending_) {
       secure_clear(utterance);
-      return false;
-    }
-    if (pending_) {
-      secure_clear(*pending_);
-      pending_.reset();
       dropped_jobs_.fetch_add(1, std::memory_order_relaxed);
+      return false;
     }
     pending_ = std::move(utterance);
   }
