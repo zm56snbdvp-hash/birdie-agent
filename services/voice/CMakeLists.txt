@@ -25,6 +25,7 @@ add_library(birdie_voice STATIC
   src/conversation_stt_worker.cpp
   src/gate_stt.cpp
   src/gate_stt_provider.cpp
+  src/tts_output.cpp
   src/voice_host.cpp
   src/whisper_cpp_gate_stt.cpp
   src/whisper_cpp_runtime.cpp
@@ -68,7 +69,13 @@ if(BIRDIE_WITH_WHISPER_CPP)
 endif()
 
 if(WIN32)
-  target_sources(birdie_voice PRIVATE src/windows/core_ipc_sink.cpp)
+  target_sources(
+    birdie_voice
+    PRIVATE
+      src/windows/core_ipc_sink.cpp
+      src/windows/sapi_tts.cpp
+  )
+  target_link_libraries(birdie_voice PRIVATE ole32 sapi)
 endif()
 
 if(MSVC)
@@ -157,6 +164,19 @@ target_link_libraries(
 add_test(
   NAME birdie-conversation-stt-cancellation-tests
   COMMAND birdie-conversation-stt-cancellation-tests
+)
+
+add_executable(
+  birdie-tts-output-tests
+  tests/tts_output_tests.cpp
+)
+target_link_libraries(
+  birdie-tts-output-tests
+  PRIVATE birdie_voice
+)
+add_test(
+  NAME birdie-tts-output-tests
+  COMMAND birdie-tts-output-tests
 )
 
 add_executable(
