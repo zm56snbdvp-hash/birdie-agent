@@ -133,7 +133,8 @@ class VoiceHost {
   void set_output_active(bool active, std::string output_id = {}, std::string turn_id = {});
   void set_muted(bool muted);
 
-  [[nodiscard]] std::optional<GateSttRequest> gate_stt_request() const;
+  [[nodiscard]] std::optional<GateSttRequest> gate_stt_request(
+      std::uint64_t minimum_candidate_ms = 0) const;
   [[nodiscard]] VoicePhase phase() const noexcept;
   [[nodiscard]] bool muted() const noexcept;
   [[nodiscard]] bool output_active() const noexcept;
