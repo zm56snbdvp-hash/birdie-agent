@@ -8,8 +8,16 @@
   <style>
     :root { color-scheme: dark; background: #07130f; }
     * { box-sizing: border-box; }
-    html, body, #birdieworld { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
     body { background: radial-gradient(circle at 50% 30%, #123525, #07130f 62%); }
+    #birdieworld {
+      position: fixed;
+      top: env(safe-area-inset-top, 0px);
+      right: env(safe-area-inset-right, 0px);
+      bottom: env(safe-area-inset-bottom, 0px);
+      left: env(safe-area-inset-left, 0px);
+      overflow: hidden;
+    }
     #unity-canvas { width: 100%; height: 100%; display: block; background: #07130f; }
     #loading {
       position: fixed; inset: 0; display: grid; place-content: center; gap: 16px;
@@ -21,6 +29,10 @@
     #progress > span { display: block; width: 0; height: 100%; background: #d39b40; transition: width .12s linear; }
     #loading.ready { opacity: 0; pointer-events: none; }
     #loading.error { color: #ffcfbd; letter-spacing: normal; }
+    @media (orientation: portrait) {
+      #loading { padding: 24px; }
+      #progress { width: min(300px, 76vw); }
+    }
   </style>
 </head>
 <body>

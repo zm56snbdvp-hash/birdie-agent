@@ -68,7 +68,7 @@ The WebGL build intentionally has Unity compression disabled for Beta 01 so it c
 
 ## Art implementation
 
-`BirdieWorldBetaBootstrap` now wires the cinematic opener, start menu, character form, authenticated persistence and completion screen without committing placeholder fantasy lore. The approved cinematic train artwork should be imported as the background/preview asset layer, followed by a proper 3D human avatar prefab.
+`BirdieWorldBetaBootstrap` now wires the cinematic opener, start menu, character form, authenticated persistence and completion screen without committing placeholder fantasy lore. Character Creation includes a lightweight human live-preview that reacts to name, story and signature color without adding downloadable art dependencies. The approved cinematic train artwork should be imported as the background asset layer, followed by a production 3D human avatar prefab that keeps the same preview contract.
 
 Target opener composition:
 
@@ -84,7 +84,10 @@ Target creation composition:
 - character shown inside the Birdie Express
 - three-step progress: Charakter / Anpassen / Bestätigen
 - name, story, look, color
-- account-backed save is wired; later: real-time avatar parts
+- account-backed save is wired
+- human live-preview and selected-choice states react immediately
+- portrait layouts stack the journey/creator panels and the WebGL shell respects mobile safe areas
+- later: production 3D avatar parts behind the existing preview/profile contract
 
 ## Private review and later public-beta gate
 

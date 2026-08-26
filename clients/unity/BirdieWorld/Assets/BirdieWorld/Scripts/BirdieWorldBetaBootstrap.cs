@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -18,6 +19,11 @@ namespace BirdieWorld
         private GameObject startScreen;
         private GameObject creatorScreen;
         private GameObject readyScreen;
+        private RectTransform startVisualLayout;
+        private RectTransform startMenuLayout;
+        private RectTransform creatorPreviewLayout;
+        private RectTransform creatorFormLayout;
+        private RectTransform readyCardLayout;
         private InputField nameField;
         private Text statusText;
         private Text readyNameText;
@@ -28,10 +34,15 @@ namespace BirdieWorld
         private CharacterStore store;
         private BirdieWorldCharacterPersistence persistence;
         private BirdieWorldAuthSession authSession;
+        private BirdieWorldAvatarPreview avatarPreview;
+        private readonly Dictionary<string, GameObject> storyChoices = new();
+        private readonly Dictionary<string, GameObject> colorChoices = new();
         private CharacterProfile pendingUnboundDraft;
         private bool profileIsAccountScoped;
         private bool accountProfileReady;
         private int profileRevision;
+        private int layoutWidth;
+        private int layoutHeight;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureBootstrap()
@@ -52,8 +63,14 @@ namespace BirdieWorld
             BuildStartScreen();
             BuildCreatorScreen();
             BuildReadyScreen();
+            ApplyResponsiveLayout(true);
             Show(startScreen);
             BuildCinematicOpener();
+        }
+
+        private void Update()
+        {
+            ApplyResponsiveLayout();
         }
 
         private void OnDestroy()
@@ -110,6 +127,7 @@ namespace BirdieWorld
             startScreen = Fullscreen("Start", ink);
 
             var visual = Panel(startScreen.transform, "JourneyVisual", new Vector2(0f, 0f), new Vector2(0.58f, 1f), forest);
+            startVisualLayout = visual.GetComponent<RectTransform>();
             Label(visual.transform, "B", 56, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.78f), new Vector2(0.22f, 0.94f));
             Label(visual.transform, "BIRDIE & BREAKFAST", 45, gold, TextAnchor.MiddleCenter, new Vector2(0.15f, 0.63f), new Vector2(0.92f, 0.78f));
             Label(visual.transform, "DEINE WELT. DEIN BIRDIE. DEIN ABENTEUER.", 20, ivory, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.57f), new Vector2(0.94f, 0.64f));
@@ -118,6 +136,7 @@ namespace BirdieWorld
                 23, ivory, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.27f), new Vector2(0.90f, 0.54f));
 
             var menu = Panel(startScreen.transform, "Menu", new Vector2(0.58f, 0f), Vector2.one, panel);
+            startMenuLayout = menu.GetComponent<RectTransform>();
             Label(menu.transform, "BIRDIEWORLD", 52, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.89f));
             Label(menu.transform, "BETA · DEIN ERSTER SCHRITT IN DIE WELT", 18, ivory, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.66f), new Vector2(0.92f, 0.73f));
             Button(menu.transform, "REISE BEGINNEN", "Steig ein und entdecke die Welt", new Vector2(0.12f, 0.46f), new Vector2(0.88f, 0.61f), () => Show(creatorScreen));
@@ -130,11 +149,15 @@ namespace BirdieWorld
             creatorScreen = Fullscreen("Creator", ink);
             creatorInteraction = creatorScreen.AddComponent<CanvasGroup>();
             var preview = Panel(creatorScreen.transform, "Preview", Vector2.zero, new Vector2(0.48f, 1f), forest);
+            creatorPreviewLayout = preview.GetComponent<RectTransform>();
             Label(preview.transform, "BIRDIE EXPRESS · CHARACTER CABIN", 18, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.84f), new Vector2(0.92f, 0.92f));
             Label(preview.transform, "DEIN BIRDIE", 48, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.66f), new Vector2(0.92f, 0.82f));
-            Label(preview.transform, "3D CHARACTER PREVIEW\n\nDer Avatar-Renderer kommt als nächster Asset-Layer.\nProfil, Auswahl und Speicherung funktionieren bereits.", 22, ivory, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.34f), new Vector2(0.88f, 0.65f));
+            avatarPreview = preview.AddComponent<BirdieWorldAvatarPreview>();
+            avatarPreview.Build(preview.transform, font);
+            Label(preview.transform, "DEIN LOOK REAGIERT DIREKT AUF DEINE AUSWAHL.", 14, ivory, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.055f), new Vector2(0.90f, 0.11f));
 
             var form = Panel(creatorScreen.transform, "Form", new Vector2(0.48f, 0f), Vector2.one, panel);
+            creatorFormLayout = form.GetComponent<RectTransform>();
             Label(form.transform, "BIRDIE ERSTELLEN", 34, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.88f), new Vector2(0.92f, 0.97f));
             Label(form.transform, "1  CHARAKTER        2  ANPASSEN        3  BESTÄTIGEN", 17, ivory, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.82f), new Vector2(0.92f, 0.88f));
             Label(form.transform, "WER BIST DU?", 29, gold, TextAnchor.MiddleLeft, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.80f));
@@ -146,6 +169,7 @@ namespace BirdieWorld
             {
                 profile.displayName = value;
                 profileRevision++;
+                RefreshCreatorPreview();
             });
 
             Label(form.transform, "WÄHLE DEINE STORY", 17, gold, TextAnchor.MiddleLeft, new Vector2(0.08f, 0.57f), new Vector2(0.92f, 0.63f));
@@ -162,12 +186,14 @@ namespace BirdieWorld
             saveButton = Button(form.transform, "WEITER", "Charakter speichern", new Vector2(0.52f, 0.06f), new Vector2(0.92f, 0.16f), SaveProfile).GetComponent<UnityEngine.UI.Button>();
             Button(form.transform, "ZURÜCK", string.Empty, new Vector2(0.08f, 0.06f), new Vector2(0.34f, 0.16f), () => Show(startScreen));
             statusText = Label(form.transform, string.Empty, 15, ivory, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.005f), new Vector2(0.92f, 0.055f));
+            RefreshCreatorPreview();
         }
 
         private void BuildReadyScreen()
         {
             readyScreen = Fullscreen("Ready", ink);
             var card = Panel(readyScreen.transform, "ReadyCard", new Vector2(0.18f, 0.13f), new Vector2(0.82f, 0.87f), panel);
+            readyCardLayout = card.GetComponent<RectTransform>();
             card.AddComponent<Outline>().effectColor = gold;
             Label(card.transform, "BIRDIE EXPRESS · ANKUNFT", 18, gold, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.82f), new Vector2(0.90f, 0.90f));
             Label(card.transform, "DEIN BIRDIE IST BEREIT.", 44, ivory, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.62f), new Vector2(0.90f, 0.80f));
@@ -206,12 +232,14 @@ namespace BirdieWorld
                     {
                         BirdieWorldCharacterMapper.ApplyServerProfile(profile, serverProfile);
                         nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                        RefreshCreatorPreview();
                         profileRevision++;
                         statusText.text = "✓ Dein Konto-Birdie wurde geladen.";
                     }
                     else if (serverProfile == null && revisionAtLoad == profileRevision)
                     {
                         nameField.SetTextWithoutNotify(string.Empty);
+                        RefreshCreatorPreview();
                         profileRevision++;
                         statusText.text = "Konto verbunden · für dieses Konto erstellst du jetzt ein neues Birdie.";
                     }
@@ -231,6 +259,7 @@ namespace BirdieWorld
                         pendingUnboundDraft = null;
                         profileIsAccountScoped = false;
                         nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                        RefreshCreatorPreview();
                         profileRevision++;
                         SetBusy(false, "Kontosynchronisierung nicht erreichbar · dein unangemeldeter Entwurf bleibt lokal.");
                     }
@@ -263,12 +292,14 @@ namespace BirdieWorld
                     pendingUnboundDraft = null;
                     profileIsAccountScoped = false;
                     nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                    RefreshCreatorPreview();
                 }
                 else
                 {
                     store.Clear();
                     profile = CharacterProfile.CreateDefault();
                     nameField.SetTextWithoutNotify(string.Empty);
+                    RefreshCreatorPreview();
                 }
                 profileRevision++;
                 Show(startScreen);
@@ -285,6 +316,7 @@ namespace BirdieWorld
             store.Clear();
             profile = CharacterProfile.CreateDefault();
             nameField.SetTextWithoutNotify(string.Empty);
+            RefreshCreatorPreview();
             profileRevision++;
             SetBusy(false, "Birdie-Konto getrennt · lokaler Modus ist aktiv.");
             Show(startScreen);
@@ -329,6 +361,7 @@ namespace BirdieWorld
                     accountProfileReady = true;
                     store.Clear();
                     nameField.SetTextWithoutNotify(profile.displayName ?? string.Empty);
+                    RefreshCreatorPreview();
                     profileRevision++;
                     SetBusy(false);
                     ShowReady("Mit deinem Birdie-Konto synchronisiert und auf deinen Geräten verfügbar.");
@@ -357,12 +390,14 @@ namespace BirdieWorld
 
         private void Choice(Transform parent, string title, string value, Vector2 min, Vector2 max)
         {
-            Button(parent, title, string.Empty, min, max, () =>
+            var choice = Button(parent, title, string.Empty, min, max, () =>
             {
                 profile.story = value;
                 profileRevision++;
                 statusText.text = $"Story gewählt: {title}";
+                RefreshCreatorPreview();
             });
+            storyChoices[value] = choice;
         }
 
         private void ColorChoice(Transform parent, string title, string value, Color color, float x)
@@ -372,8 +407,55 @@ namespace BirdieWorld
                 profile.color = value;
                 profileRevision++;
                 statusText.text = $"Farbe gewählt: {title}";
+                RefreshCreatorPreview();
             });
             choice.GetComponent<Image>().color = Color.Lerp(color, panel, 0.25f);
+            colorChoices[value] = choice;
+        }
+
+        private void RefreshCreatorPreview()
+        {
+            avatarPreview?.Apply(profile, nameField?.text);
+            RefreshChoiceStates(storyChoices, profile?.story);
+            RefreshChoiceStates(colorChoices, profile?.color);
+        }
+
+        private void RefreshChoiceStates(Dictionary<string, GameObject> choices, string selectedValue)
+        {
+            foreach (var entry in choices)
+            {
+                var selected = string.Equals(entry.Key, selectedValue, StringComparison.OrdinalIgnoreCase);
+                var outline = entry.Value.GetComponent<Outline>() ?? entry.Value.AddComponent<Outline>();
+                outline.effectColor = selected ? gold : new Color(gold.r, gold.g, gold.b, 0.25f);
+                outline.effectDistance = selected ? new Vector2(3f, -3f) : new Vector2(1f, -1f);
+                var label = entry.Value.GetComponentInChildren<Text>();
+                if (label != null) label.color = selected ? ivory : gold;
+            }
+        }
+
+        private void ApplyResponsiveLayout(bool force = false)
+        {
+            if (!force && layoutWidth == Screen.width && layoutHeight == Screen.height) return;
+            layoutWidth = Screen.width;
+            layoutHeight = Screen.height;
+            var portrait = layoutHeight > layoutWidth;
+
+            if (portrait)
+            {
+                Stretch(startVisualLayout, new Vector2(0f, 0.52f), Vector2.one);
+                Stretch(startMenuLayout, Vector2.zero, new Vector2(1f, 0.52f));
+                Stretch(creatorPreviewLayout, new Vector2(0f, 0.58f), Vector2.one);
+                Stretch(creatorFormLayout, Vector2.zero, new Vector2(1f, 0.58f));
+                Stretch(readyCardLayout, new Vector2(0.07f, 0.12f), new Vector2(0.93f, 0.88f));
+            }
+            else
+            {
+                Stretch(startVisualLayout, Vector2.zero, new Vector2(0.58f, 1f));
+                Stretch(startMenuLayout, new Vector2(0.58f, 0f), Vector2.one);
+                Stretch(creatorPreviewLayout, Vector2.zero, new Vector2(0.48f, 1f));
+                Stretch(creatorFormLayout, new Vector2(0.48f, 0f), Vector2.one);
+                Stretch(readyCardLayout, new Vector2(0.18f, 0.13f), new Vector2(0.82f, 0.87f));
+            }
         }
 
         private GameObject Fullscreen(string name, Color color)
@@ -440,6 +522,7 @@ namespace BirdieWorld
 
         private static void Stretch(RectTransform rt, Vector2 min, Vector2 max)
         {
+            if (rt == null) return;
             rt.anchorMin = min;
             rt.anchorMax = max;
             rt.offsetMin = Vector2.zero;

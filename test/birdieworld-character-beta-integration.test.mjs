@@ -34,11 +34,47 @@ function extractRunBlocks(source) {
 
 test("BirdieWorld Beta wires the cinematic, creator and ready journey", () => {
   const bootstrap = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldBetaBootstrap.cs");
+  const avatar = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldAvatarPreview.cs");
   assert.match(bootstrap, /BuildCinematicOpener\(\)/);
   assert.match(bootstrap, /AddComponent<BirdieWorldCinematicOpener>\(\)/);
   assert.match(bootstrap, /BuildReadyScreen\(\)/);
   assert.match(bootstrap, /ShowReady\(/);
   assert.match(bootstrap, /DEIN BIRDIE IST BEREIT\./);
+  assert.match(bootstrap, /AddComponent<BirdieWorldAvatarPreview>\(\)/);
+  assert.match(bootstrap, /RefreshCreatorPreview\(\)/);
+  assert.doesNotMatch(bootstrap, /3D CHARACTER PREVIEW|Avatar-Renderer kommt/);
+  assert.match(avatar, /HumanAvatarPreview/);
+  assert.match(avatar, /public void Apply\(CharacterProfile profile, string liveName\)/);
+  assert.match(avatar, /StoryName\(profile\.story\)/);
+  assert.match(avatar, /SignatureColor\(profile\.color\)/);
+  assert.doesNotMatch(avatar, /bird mascot|mascot|leni/i);
+});
+
+test("character choices provide immediate visual state without changing the persistence contract", () => {
+  const bootstrap = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldBetaBootstrap.cs");
+  assert.match(bootstrap, /Dictionary<string, GameObject> storyChoices/);
+  assert.match(bootstrap, /Dictionary<string, GameObject> colorChoices/);
+  assert.match(bootstrap, /RefreshChoiceStates\(storyChoices, profile\?\.story\)/);
+  assert.match(bootstrap, /RefreshChoiceStates\(colorChoices, profile\?\.color\)/);
+  assert.match(bootstrap, /profileRevision\+\+;\s*statusText\.text = \$"Story gewählt/);
+  assert.match(bootstrap, /profileRevision\+\+;\s*statusText\.text = \$"Farbe gewählt/);
+});
+
+test("the Unity and WebGL shells adapt to iPhone portrait and safe-area insets", () => {
+  const bootstrap = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldBetaBootstrap.cs");
+  const cinematic = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldCinematicOpener.cs");
+  const template = read("clients/unity/BirdieWorld/Assets/WebGLTemplates/BirdieWorldBeta/index.html");
+  assert.match(bootstrap, /ApplyResponsiveLayout\(true\)/);
+  assert.match(bootstrap, /layoutHeight > layoutWidth/);
+  assert.match(bootstrap, /Stretch\(creatorPreviewLayout, new Vector2\(0f, 0\.58f\), Vector2\.one\)/);
+  assert.match(bootstrap, /Stretch\(creatorFormLayout, Vector2\.zero, new Vector2\(1f, 0\.58f\)\)/);
+  assert.match(cinematic, /ApplyResponsiveLayout\(true\)/);
+  assert.match(cinematic, /layoutHeight>layoutWidth/);
+  assert.match(cinematic, /Stretch\(routeLayout,new Vector2\(\.10f,\.27f\),new Vector2\(\.90f,\.59f\)\)/);
+  assert.match(cinematic, /Stretch\(boardLayout,new Vector2\(\.18f,\.13f\),new Vector2\(\.82f,\.22f\)\)/);
+  assert.match(template, /env\(safe-area-inset-top, 0px\)/);
+  assert.match(template, /env\(safe-area-inset-bottom, 0px\)/);
+  assert.match(template, /@media \(orientation: portrait\)/);
 });
 
 test("authenticated persistence isolates account state from signed-out drafts", () => {
