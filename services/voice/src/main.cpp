@@ -124,31 +124,51 @@ int main(int argc, char** argv) {
   birdie::voice::VoiceConfig config;
   birdie::voice::VoiceHost host(
       config, sink, [&](birdie::voice::UtteranceAudio utterance) {
+        const std::string activity_id = utterance.activity_id;
+        const std::string utterance_id = utterance.utterance_id;
+        const std::string turn_id = utterance.turn_id;
+        const std::uint64_t ended_ms = utterance.ended_ms;
+        const std::uint64_t duration_ms = utterance.duration_ms;
+        const std::uint64_t sample_rate = utterance.sample_rate;
+
         birdie::voice::VoiceEvent captured{
             "voice.utterance.captured",
-            utterance.ended_ms,
-            utterance.turn_id,
-            {{"activity_id", utterance.activity_id},
-             {"utterance_id", utterance.utterance_id},
-             {"duration_ms", utterance.duration_ms},
-             {"sample_rate", static_cast<std::uint64_t>(
-                                 utterance.sample_rate)}},
+            ended_ms,
+            turn_id,
+            {{"activity_id", activity_id},
+             {"utterance_id", utterance_id},
+             {"duration_ms", duration_ms},
+             {"sample_rate", sample_rate}},
         };
         sink.emit(captured);
 
         if (!conversation_stt_enabled.load(std::memory_order_acquire) ||
-            conversation_worker_ptr == nullptr ||
-            !conversation_worker_ptr->submit(std::move(utterance))) {
-          birdie::voice::VoiceEvent cancelled{
+            conversation_worker_ptr == nullptr) {
+          birdie::voice::secure_clear(utterance);
+          sink.emit({
               "voice.input.cancelled",
-              monotonic_ms(),
-              captured.turn_id,
-              {{"utterance_id", std::string("unknown")},
-               {"reason", std::string("conversation_stt_unavailable")},
+              ended_ms,
+              turn_id,
+              {{"activity_id", activity_id},
+               {"utterance_id", utterance_id},
+               {"reason", std::string("conversation_stt_disabled")},
                {"error_code",
-                std::string("VOICE.CONVERSATION_STT.UNAVAILABLE")}},
-          };
-          sink.emit(cancelled);
+                std::string("VOICE.CONVERSATION_STT.DISABLED")}},
+          });
+          return;
+        }
+
+        if (!conversation_worker_ptr->submit(std::move(utterance))) {
+          sink.emit({
+              "voice.input.cancelled",
+              ended_ms,
+              turn_id,
+              {{"activity_id", activity_id},
+               {"utterance_id", utterance_id},
+               {"reason", std::string("conversation_stt_saturated")},
+               {"error_code",
+                std::string("VOICE.CONVERSATION_STT.SATURATED")}},
+          });
         }
       });
   std::mutex host_mutex;
@@ -202,6 +222,21 @@ int main(int argc, char** argv) {
       local_stt,
       [&](birdie::voice::ConversationTranscript transcript) {
         if (!conversation_stt_enabled.load(std::memory_order_acquire)) {
+          sink.emit({
+              "voice.input.cancelled",
+              transcript.ended_ms,
+              transcript.turn_id,
+              {{"activity_id", transcript.activity_id},
+               {"utterance_id", transcript.utterance_id},
+               {"reason", std::string("conversation_stt_invalidated")},
+               {"stt_status",
+                std::string(birdie::voice::gate_stt_status_name(
+                    transcript.status))},
+               {"error_code",
+                transcript.error_code.empty()
+                    ? std::string("VOICE.CONVERSATION_STT.INVALIDATED")
+                    : transcript.error_code}},
+          });
           birdie::voice::secure_clear(transcript);
           return;
         }
@@ -227,7 +262,7 @@ int main(int argc, char** argv) {
           sink.emit(finalized);
           wipe_event_strings(finalized);
         } else {
-          birdie::voice::VoiceEvent cancelled{
+          sink.emit({
               "voice.input.cancelled",
               transcript.ended_ms,
               transcript.turn_id,
@@ -242,8 +277,7 @@ int main(int argc, char** argv) {
                 std::string(birdie::voice::gate_stt_status_name(
                     transcript.status))},
                {"error_code", transcript.error_code}},
-          };
-          sink.emit(cancelled);
+          });
         }
         birdie::voice::secure_clear(transcript);
       });
