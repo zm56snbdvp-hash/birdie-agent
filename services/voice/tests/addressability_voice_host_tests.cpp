@@ -33,9 +33,14 @@ class CollectingSink final : public IEventSink {
   void emit(const VoiceEvent& event) override { events.push_back(event); }
 
   [[nodiscard]] bool contains(const std::string& name) const {
-    return std::any_of(events.begin(), events.end(), [&](const VoiceEvent& event) {
-      return event.name == name;
-    });
+    return count(name) > 0;
+  }
+
+  [[nodiscard]] std::size_t count(const std::string& name) const {
+    return static_cast<std::size_t>(std::count_if(
+        events.begin(), events.end(), [&](const VoiceEvent& event) {
+          return event.name == name;
+        }));
   }
 
   std::vector<VoiceEvent> events;
@@ -165,6 +170,73 @@ void test_gate_stt_snapshot_and_stale_resolution() {
           "resolved candidate must no longer expose Gate-STT audio");
 }
 
+void test_candidate_input_loss_rejects_and_clears_audio() {
+  CollectingSink sink;
+  VoiceHost host(VoiceConfig{}, sink, [](UtteranceAudio) {});
+  std::uint64_t at = 10;
+  create_candidate(host, at, 0.10F);
+  require(host.gate_stt_request(0).has_value(),
+          "candidate must expose one Gate-STT snapshot before failure");
+
+  host.handle_input_unavailable("capture_unavailable");
+
+  require(host.phase() == VoicePhase::Quiet,
+          "capture loss must clear a pending candidate");
+  require(!host.muted(),
+          "device loss must not be misreported as user mute");
+  require(sink.contains("voice.activation.rejected"),
+          "candidate capture loss must emit a rejection lifecycle event");
+  require(!host.gate_stt_request(0).has_value(),
+          "capture loss must remove all candidate PCM access");
+}
+
+void test_listening_input_loss_cancels_without_utterance_handoff() {
+  CollectingSink sink;
+  std::vector<UtteranceAudio> utterances;
+  VoiceHost host(VoiceConfig{}, sink, [&](UtteranceAudio utterance) {
+    utterances.push_back(std::move(utterance));
+  });
+  std::uint64_t at = 10;
+  create_candidate(host, at, 0.10F);
+  require(host.resolve_addressability(accept_result()),
+          "candidate must enter Listening before capture loss");
+  require(host.phase() == VoicePhase::Listening,
+          "accepted candidate must be listening");
+
+  host.handle_input_unavailable("capture_unavailable");
+
+  require(host.phase() == VoicePhase::Quiet,
+          "capture loss must leave Listening immediately");
+  require(!host.muted(),
+          "capture loss remains distinct from user mute");
+  require(sink.contains("voice.input.cancelled"),
+          "accepted input loss must emit voice.input.cancelled");
+  require(utterances.empty(),
+          "partial audio must never reach accepted utterance handoff");
+  require(!host.gate_stt_request(0).has_value(),
+          "cancelled input must expose no Gate-STT PCM");
+}
+
+void test_output_only_input_loss_preserves_output_state() {
+  CollectingSink sink;
+  VoiceHost host(VoiceConfig{}, sink, [](UtteranceAudio) {});
+  host.set_output_active(true, "output-live", "turn-live");
+  require(host.output_active(), "test requires active output");
+  require(host.phase() == VoicePhase::Quiet,
+          "output alone must not create an input candidate");
+
+  host.handle_input_unavailable("capture_unavailable");
+
+  require(host.output_active(),
+          "microphone loss must not stop an unrelated active output");
+  require(host.phase() == VoicePhase::Quiet,
+          "input reset must leave output-only VoiceHost input quiet");
+  require(sink.count("voice.input.cancelled") == 0,
+          "no input cancellation event is needed without active input");
+  require(sink.count("voice.activation.rejected") == 0,
+          "output-only input loss must not fabricate a candidate rejection");
+}
+
 void test_resolution_requires_active_candidate() {
   CollectingSink sink;
   VoiceHost host(VoiceConfig{}, sink, {});
@@ -182,6 +254,9 @@ int main() {
   try {
     test_abstain_clears_candidate_and_pre_roll();
     test_gate_stt_snapshot_and_stale_resolution();
+    test_candidate_input_loss_rejects_and_clears_audio();
+    test_listening_input_loss_cancels_without_utterance_handoff();
+    test_output_only_input_loss_preserves_output_state();
     test_resolution_requires_active_candidate();
     std::cout << "birdie-addressability-voice-host-tests: PASS\n";
     return EXIT_SUCCESS;
