@@ -59,8 +59,10 @@ export class BirdieRuntime {
         return this.#handleUnacceptedActivation(event.name);
       case 'voice.input.cancelled':
         return this.#handleInputCancelled(event);
+      case 'voice.utterance.captured':
+        return this.#markUtteranceProcessing(event, 'voice.utterance.captured');
       case 'voice.utterance.finalized':
-        return this.#finalizeUtterance(event);
+        return this.#markUtteranceProcessing(event, 'voice.utterance.finalized');
       case 'voice.output.started':
         return this.#handleOutputStarted(event);
       case 'voice.output.completed':
@@ -105,22 +107,28 @@ export class BirdieRuntime {
   }
 
   #handleInputCancelled(event) {
-    if (this.activeTurn && !TERMINAL_TURN_STATUSES.has(this.activeTurn.status)) {
+    if (
+      this.activeTurn &&
+      !TERMINAL_TURN_STATUSES.has(this.activeTurn.status) &&
+      (!event.turn_id || event.turn_id === this.activeTurn.turnId)
+    ) {
       this.activeTurn.status = 'CANCELLED';
       this.activeTurn.cancelReason = event.payload?.reason ?? 'voice.input.cancelled';
     }
     return this.#setPresence('IDLE', 'voice.input.cancelled');
   }
 
-  #finalizeUtterance(event) {
+  #markUtteranceProcessing(event, reason) {
     const turnId = event.turn_id;
-    if (!turnId) throw new Error('voice.utterance.finalized requires turn_id');
+    if (!turnId) throw new Error(`${reason} requires turn_id`);
     if (!this.activeTurn || this.activeTurn.turnId !== turnId) {
       this.activeTurn = { turnId, status: 'PROCESSING', outputId: null };
-    } else {
+    } else if (!TERMINAL_TURN_STATUSES.has(this.activeTurn.status)) {
       this.activeTurn.status = 'PROCESSING';
+    } else {
+      return { dropped: 'stale_turn_event', snapshot: this.snapshot() };
     }
-    return this.#setPresence('THINKING', 'voice.utterance.finalized');
+    return this.#setPresence('THINKING', reason);
   }
 
   #handleOutputStarted(event) {
