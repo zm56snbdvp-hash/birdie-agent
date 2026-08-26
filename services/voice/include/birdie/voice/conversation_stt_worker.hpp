@@ -42,8 +42,10 @@ class ConversationSttWorker final {
   ConversationSttWorker(const ConversationSttWorker&) = delete;
   ConversationSttWorker& operator=(const ConversationSttWorker&) = delete;
 
-  // At most one accepted utterance may wait behind the active decoder. A newer
-  // accepted turn replaces and securely clears an older pending turn.
+  // At most one accepted utterance may wait behind the active decoder. Unlike
+  // pre-turn Addressability work, an accepted turn is never silently replaced:
+  // submit returns false and securely clears the new utterance when saturated,
+  // allowing the caller to emit an explicit cancellation for that exact turn.
   bool submit(UtteranceAudio utterance);
   void discard_pending() noexcept;
   void stop() noexcept;
