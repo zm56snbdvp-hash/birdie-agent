@@ -7,6 +7,7 @@
 namespace birdie::voice {
 
 enum class GateSttStatus {
+  Bypassed,
   Transcript,
   NoSpeech,
   Unavailable,
