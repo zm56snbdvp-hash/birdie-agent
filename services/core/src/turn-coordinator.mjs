@@ -38,6 +38,7 @@ export class TurnCoordinator {
     const language = text(event?.payload?.language, 32) || 'und';
     if (!turnId || !transcript) {
       this.#publishFailure(event, turnId, 'BRAIN.REQUEST.INVALID');
+      this.finish(turnId);
       return { failed: 'BRAIN.REQUEST.INVALID' };
     }
 
@@ -68,6 +69,7 @@ export class TurnCoordinator {
         'BRAIN.PROVIDER.EXCEPTION',
         String(error?.message ?? error).slice(0, 512),
       );
+      this.finish(turnId);
       return { failed: 'BRAIN.PROVIDER.EXCEPTION' };
     }
 
@@ -79,12 +81,14 @@ export class TurnCoordinator {
       const errorCode = text(response?.errorCode, 256) ||
         'BRAIN.PROVIDER.FAILED';
       this.#publishFailure(event, turnId, errorCode);
+      this.finish(turnId);
       return { failed: errorCode };
     }
 
     const responseText = text(response.text, 16_000);
     if (!responseText) {
       this.#publishFailure(event, turnId, 'BRAIN.RESPONSE.EMPTY');
+      this.finish(turnId);
       return { failed: 'BRAIN.RESPONSE.EMPTY' };
     }
 
@@ -97,17 +101,30 @@ export class TurnCoordinator {
       language: text(response.language, 32) || language,
     });
 
-    const recipients = Number(this.sendVoiceCommand({
-      name: 'voice.output.play',
-      turn_id: turnId,
-      output_id: outputId,
-      text: responseText,
-      language: text(response.language, 32) || language,
-      data_classification: 'content',
-    })) || 0;
+    let recipients = 0;
+    try {
+      recipients = Number(this.sendVoiceCommand({
+        name: 'voice.output.play',
+        turn_id: turnId,
+        output_id: outputId,
+        text: responseText,
+        language: text(response.language, 32) || language,
+        data_classification: 'content',
+      })) || 0;
+    } catch (error) {
+      this.#publishFailure(
+        event,
+        turnId,
+        'VOICE.OUTPUT.DISPATCH_FAILED',
+        String(error?.message ?? error).slice(0, 512),
+      );
+      this.finish(turnId);
+      return { failed: 'VOICE.OUTPUT.DISPATCH_FAILED' };
+    }
 
     if (recipients < 1) {
       this.#publishFailure(event, turnId, 'VOICE.OUTPUT.UNAVAILABLE');
+      this.finish(turnId);
       return { failed: 'VOICE.OUTPUT.UNAVAILABLE' };
     }
 
@@ -122,13 +139,22 @@ export class TurnCoordinator {
   cancel(turnId) {
     const normalized = text(turnId, 256);
     if (!normalized) return false;
-    this.generations.set(normalized, (this.generations.get(normalized) ?? 0) + 1);
+    this.generations.set(
+      normalized,
+      (this.generations.get(normalized) ?? 0) + 1,
+    );
     return true;
+  }
+
+  finish(turnId) {
+    const normalized = text(turnId, 256);
+    if (!normalized) return false;
+    return this.generations.delete(normalized);
   }
 
   stop() {
     this.stopped = true;
-    for (const turnId of this.generations.keys()) this.cancel(turnId);
+    this.generations.clear();
   }
 
   #isCurrent(turnId, generation) {
