@@ -45,6 +45,7 @@ struct VoiceEvent {
   std::uint64_t monotonic_ms{0};
   std::optional<std::string> turn_id;
   std::vector<std::pair<std::string, EventValue>> payload;
+  std::string data_classification{"operational"};
 };
 
 struct UtteranceAudio {
@@ -52,6 +53,10 @@ struct UtteranceAudio {
   std::vector<float> samples;
   std::uint32_t sample_rate{16'000};
   std::uint64_t duration_ms{0};
+  std::string activity_id;
+  std::string turn_id;
+  std::uint64_t started_ms{0};
+  std::uint64_t ended_ms{0};
 };
 
 struct VoiceConfig {
@@ -171,6 +176,7 @@ class VoiceHost {
   std::string activity_id_;
   std::string gate_stt_activity_id_;
   std::string utterance_id_;
+  std::string turn_id_;
   std::vector<float> utterance_samples_;
 
   std::uint64_t id_sequence_{0};
