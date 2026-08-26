@@ -2,6 +2,7 @@
 #include "birdie/voice/addressability_worker.hpp"
 #include "birdie/voice/conversation_stt_worker.hpp"
 #include "birdie/voice/gate_stt_provider.hpp"
+#include "birdie/voice/tts_output.hpp"
 #include "birdie/voice/voice_host.hpp"
 
 #ifdef _WIN32
@@ -80,7 +81,7 @@ int main(int argc, char** argv) {
   const bool stdout_events = has_argument(argc, argv, "--stdout-events");
 
   if (!capture_microphone) {
-    std::cout << "Birdie Voice Host v0.4\n"
+    std::cout << "Birdie Voice Host v0.5\n"
               << "Usage: birdie-voice-host --mic [--dev-auto-accept] "
                  "[--stdout-events]\n";
     return 0;
@@ -117,11 +118,17 @@ int main(int argc, char** argv) {
   birdie::voice::SerializedGateStt local_stt(
       std::move(gate_stt_selection.provider));
 
+  auto tts_selection = birdie::voice::create_tts_provider(
+      birdie::voice::load_tts_provider_config_from_environment());
+
   std::atomic<bool> addressability_enabled{true};
   std::atomic<bool> conversation_stt_enabled{true};
   birdie::voice::ConversationSttWorker* conversation_worker_ptr = nullptr;
 
   birdie::voice::VoiceConfig config;
+  // Production Barge-in remains disabled until an AEC reference path exists.
+  config.barge_in_enabled = false;
+
   birdie::voice::VoiceHost host(
       config, sink, [&](birdie::voice::UtteranceAudio utterance) {
         const std::string activity_id = utterance.activity_id;
@@ -131,7 +138,7 @@ int main(int argc, char** argv) {
         const std::uint64_t duration_ms = utterance.duration_ms;
         const std::uint64_t sample_rate = utterance.sample_rate;
 
-        birdie::voice::VoiceEvent captured{
+        sink.emit({
             "voice.utterance.captured",
             ended_ms,
             turn_id,
@@ -139,8 +146,7 @@ int main(int argc, char** argv) {
              {"utterance_id", utterance_id},
              {"duration_ms", duration_ms},
              {"sample_rate", sample_rate}},
-        };
-        sink.emit(captured);
+        });
 
         if (!conversation_stt_enabled.load(std::memory_order_acquire) ||
             conversation_worker_ptr == nullptr) {
@@ -283,6 +289,70 @@ int main(int argc, char** argv) {
       });
   conversation_worker_ptr = &conversation_worker;
 
+  birdie::voice::TtsOutputWorker tts_worker(
+      *tts_selection.provider,
+      [&](birdie::voice::TtsWorkerUpdate update) {
+        const std::uint64_t at = monotonic_ms();
+        if (update.stage == birdie::voice::TtsWorkerStage::Started) {
+          {
+            std::scoped_lock lock(host_mutex);
+            host.set_output_active(
+                true, update.output_id, update.turn_id);
+          }
+          sink.emit({
+              "voice.output.started",
+              at,
+              update.turn_id,
+              {{"output_id", update.output_id},
+               {"language", update.language},
+               {"tts_provider", tts_selection.info.active_provider},
+               {"tts_voice", tts_selection.info.voice_id},
+               {"barge_in_enabled", config.barge_in_enabled}},
+          });
+        } else {
+          {
+            std::scoped_lock lock(host_mutex);
+            host.set_output_active(false);
+          }
+
+          if (update.stage == birdie::voice::TtsWorkerStage::Completed) {
+            sink.emit({
+                "voice.output.completed",
+                at,
+                update.turn_id,
+                {{"output_id", update.output_id},
+                 {"duration_ms", update.duration_ms},
+                 {"tts_provider", update.provider},
+                 {"tts_voice", update.voice_id}},
+            });
+          } else if (
+              update.stage == birdie::voice::TtsWorkerStage::Cancelled) {
+            sink.emit({
+                "voice.output.cancelled",
+                at,
+                update.turn_id,
+                {{"output_id", update.output_id},
+                 {"reason", std::string("tts_cancelled")},
+                 {"error_code", update.error_code}},
+            });
+          } else {
+            sink.emit({
+                "voice.output.failed",
+                at,
+                update.turn_id,
+                {{"output_id", update.output_id},
+                 {"tts_provider", update.provider},
+                 {"tts_voice", update.voice_id},
+                 {"error_code",
+                  update.error_code.empty()
+                      ? std::string("VOICE.TTS.FAILED")
+                      : update.error_code}},
+            });
+          }
+        }
+        birdie::voice::secure_clear(update);
+      });
+
   if (development_auto_accept) {
     std::cerr << "[birdie-voice] WARNING: --dev-auto-accept is active; "
                  "all qualifying speech candidates are treated as addressed.\n";
@@ -296,6 +366,14 @@ int main(int argc, char** argv) {
     }
     std::cerr << '\n';
   }
+  std::cerr << "[birdie-voice] Local TTS provider="
+            << tts_selection.info.active_provider
+            << " status=" << tts_selection.info.status
+            << " voice=" << tts_selection.info.voice_id;
+  if (!tts_selection.info.error_code.empty()) {
+    std::cerr << " error=" << tts_selection.info.error_code;
+  }
+  std::cerr << '\n';
 
   birdie::voice::WasapiCapture capture;
   std::atomic<bool> capture_faulted{false};
@@ -325,6 +403,10 @@ int main(int argc, char** argv) {
                 {"stt_provider", stt_provider},
                 {"stt_model", gate_stt_selection.info.model_id},
                 {"stt_error_code", gate_stt_selection.info.error_code},
+                {"tts", tts_selection.info.status},
+                {"tts_provider", tts_selection.info.active_provider},
+                {"tts_voice", tts_selection.info.voice_id},
+                {"barge_in", std::string("DISABLED_NO_AEC")},
                 {"development_auto_accept", development_auto_accept}}});
   };
 
@@ -334,6 +416,10 @@ int main(int argc, char** argv) {
           std::optional<birdie::voice::GateSttRequest> gate_request;
           {
             std::scoped_lock lock(host_mutex);
+            if (host.output_active() && !config.barge_in_enabled) {
+              return;
+            }
+
             host.process(std::move(frame));
 
             if (development_auto_accept &&
@@ -383,6 +469,7 @@ int main(int argc, char** argv) {
     std::cerr << "Could not start Birdie Voice Host: " << start_error << '\n';
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     conversation_worker.stop();
+    tts_worker.stop();
     return 3;
   }
 
@@ -392,9 +479,52 @@ int main(int argc, char** argv) {
   bool previous_core_connection = false;
   while (!stop_requested.load(std::memory_order_acquire)) {
     while (auto command = core_sink.try_pop_command()) {
-      if (command->name != "voice.mute.set") continue;
+      if (command->name == "voice.output.play") {
+        const std::string turn_id = command->turn_id;
+        const std::string output_id = command->output_id;
+        if (tts_selection.info.status != "READY") {
+          sink.emit({
+              "voice.output.failed",
+              monotonic_ms(),
+              turn_id,
+              {{"output_id", output_id},
+               {"tts_provider", tts_selection.info.active_provider},
+               {"error_code",
+                tts_selection.info.error_code.empty()
+                    ? std::string("VOICE.TTS.UNAVAILABLE")
+                    : tts_selection.info.error_code}},
+          });
+          std::fill(command->text.begin(), command->text.end(), '\0');
+          command->text.clear();
+          continue;
+        }
 
-      if (!command->enabled) {
+        birdie::voice::TtsRequest request{
+            std::move(command->turn_id),
+            std::move(command->output_id),
+            std::move(command->text),
+            std::move(command->language),
+            std::move(command->data_classification),
+        };
+        if (!tts_worker.submit(std::move(request))) {
+          sink.emit({
+              "voice.output.failed",
+              monotonic_ms(),
+              turn_id,
+              {{"output_id", output_id},
+               {"tts_provider", tts_selection.info.active_provider},
+               {"error_code", std::string("VOICE.TTS.SATURATED")}},
+          });
+        }
+        continue;
+      }
+
+      if (command->name != "voice.mute.set" ||
+          !command->enabled.has_value()) {
+        continue;
+      }
+
+      if (!*command->enabled) {
         addressability_enabled.store(false, std::memory_order_release);
         conversation_stt_enabled.store(false, std::memory_order_release);
         addressability_worker.discard_pending();
@@ -517,6 +647,7 @@ int main(int argc, char** argv) {
   capture.stop();
   addressability_worker.stop();
   conversation_worker.stop();
+  tts_worker.stop();
   set_host_muted(true);
   std::cerr << "[birdie-voice] dropped best-effort IPC events: "
             << core_sink.dropped_best_effort() << '\n';
@@ -524,6 +655,8 @@ int main(int argc, char** argv) {
             << addressability_worker.dropped_jobs() << '\n';
   std::cerr << "[birdie-voice] dropped conversation STT jobs: "
             << conversation_worker.dropped_jobs() << '\n';
+  std::cerr << "[birdie-voice] rejected TTS jobs: "
+            << tts_worker.rejected_jobs() << '\n';
   return 0;
 #endif
 }
