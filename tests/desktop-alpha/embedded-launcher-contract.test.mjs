@@ -70,6 +70,8 @@ test('Windows CI parses the hardware launcher and verifies embedded build identi
   assert.match(workflow, /DESKTOP_FRONTEND source=js buildId=/);
   assert.match(workflow, /TAURI_LISTEN_RESULT source=js event=runtime:ipc-error result=OK/);
   assert.match(workflow, /Prove live Core named pipe through Rust and embedded WebView/);
+  assert.match(workflow, /ready-runtime-fixture\.mjs/);
+  assert.match(workflow, /READY_RUNTIME_FIXTURE presence=IDLE microphone=ENABLED/);
   assert.match(workflow, /RUST_STATE_UPDATED/);
   assert.match(workflow, /DOM_STATE source=js state=IDLE/);
 });
