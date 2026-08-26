@@ -87,6 +87,9 @@ JsonLineEventSink::JsonLineEventSink(std::ostream& output, std::string session_i
 void JsonLineEventSink::emit(const VoiceEvent& event) {
   std::scoped_lock lock(mutex_);
   const auto sequence = ++sequence_;
+  const std::string classification = event.data_classification.empty()
+      ? "operational"
+      : event.data_classification;
   output_ << '{'
           << "\"contract_version\":\"1.0\","
           << "\"kind\":\"event\","
@@ -104,7 +107,8 @@ void JsonLineEventSink::emit(const VoiceEvent& event) {
   } else {
     output_ << "null";
   }
-  output_ << ",\"data_classification\":\"operational\",\"payload\":{";
+  output_ << ",\"data_classification\":\""
+          << escape_json(classification) << "\",\"payload\":{";
   for (std::size_t i = 0; i < event.payload.size(); ++i) {
     if (i > 0) output_ << ',';
     output_ << '"' << escape_json(event.payload[i].first) << "\":"
@@ -258,10 +262,12 @@ void VoiceHost::process(AudioFrame frame) {
   }
 }
 
-bool VoiceHost::accept_activation(const ActivationMode mode, const double confidence) {
+bool VoiceHost::accept_activation(const ActivationMode mode,
+                                  const double confidence) {
   if (phase_ != VoicePhase::SpeechCandidate || muted_) return false;
   phase_ = VoicePhase::Listening;
   utterance_id_ = "utt-" + std::to_string(++id_sequence_);
+  turn_id_ = "turn-" + utterance_id_;
   utterance_started_ms_ = candidate_started_ms_;
   utterance_samples_ = pre_roll_.snapshot();
   accumulated_silence_ms_ = 0;
@@ -269,13 +275,13 @@ bool VoiceHost::accept_activation(const ActivationMode mode, const double confid
   emit("voice.activation.accepted", last_frame_ms_,
        {{"activity_id", activity_id_},
         {"utterance_id", utterance_id_},
+        {"turn_id", turn_id_},
         {"activation_mode", activation_mode_name(mode)},
         {"confidence", std::clamp(confidence, 0.0, 1.0)},
         {"barge_in", output_active_},
-        {"output_id", active_output_id_}},
-       active_output_turn_id_.empty()
-           ? std::nullopt
-           : std::optional<std::string>(active_output_turn_id_));
+        {"output_id", active_output_id_},
+        {"interrupted_turn_id", active_output_turn_id_}},
+       turn_id_);
   return true;
 }
 
@@ -337,6 +343,7 @@ void VoiceHost::begin_candidate(const std::uint64_t monotonic_ms,
                                 const double confidence) {
   phase_ = VoicePhase::SpeechCandidate;
   activity_id_ = "activity-" + std::to_string(++id_sequence_);
+  gate_stt_activity_id_.clear();
   candidate_started_ms_ = monotonic_ms;
   accumulated_speech_ms_ = static_cast<std::uint32_t>(
       config_.start_required_frames * config_.frame_ms);
@@ -362,8 +369,16 @@ void VoiceHost::finalize_utterance(const std::uint64_t monotonic_ms,
                                    std::string reason) {
   const auto duration_ms = static_cast<std::uint64_t>(
       (utterance_samples_.size() * 1000ULL) / config_.sample_rate);
-  UtteranceAudio utterance{utterance_id_, std::move(utterance_samples_),
-                           config_.sample_rate, duration_ms};
+  UtteranceAudio utterance{
+      utterance_id_,
+      std::move(utterance_samples_),
+      config_.sample_rate,
+      duration_ms,
+      activity_id_,
+      turn_id_,
+      utterance_started_ms_,
+      monotonic_ms,
+  };
   finish_activity(monotonic_ms, std::move(reason));
   reset_interaction(true);
   if (on_utterance_) on_utterance_(std::move(utterance));
@@ -374,7 +389,9 @@ void VoiceHost::reset_interaction(const bool clear_pre_roll) noexcept {
   std::fill(utterance_samples_.begin(), utterance_samples_.end(), 0.0F);
   utterance_samples_.clear();
   activity_id_.clear();
+  gate_stt_activity_id_.clear();
   utterance_id_.clear();
+  turn_id_.clear();
   recent_speech_.clear();
   candidate_started_ms_ = 0;
   utterance_started_ms_ = 0;
