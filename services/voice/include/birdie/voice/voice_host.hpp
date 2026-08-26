@@ -133,8 +133,11 @@ class VoiceHost {
   void set_output_active(bool active, std::string output_id = {}, std::string turn_id = {});
   void set_muted(bool muted);
 
+  // Returns at most one PCM snapshot per activity. The minimum-age check is
+  // performed before copying the circular pre-roll, keeping the WASAPI callback
+  // free from repeated large allocations while a decoder is in flight.
   [[nodiscard]] std::optional<GateSttRequest> gate_stt_request(
-      std::uint64_t minimum_candidate_ms = 0) const;
+      std::uint64_t minimum_candidate_ms = 320);
   [[nodiscard]] VoicePhase phase() const noexcept;
   [[nodiscard]] bool muted() const noexcept;
   [[nodiscard]] bool output_active() const noexcept;
@@ -165,6 +168,7 @@ class VoiceHost {
 
   std::vector<bool> recent_speech_;
   std::string activity_id_;
+  std::string gate_stt_activity_id_;
   std::string utterance_id_;
   std::vector<float> utterance_samples_;
 
