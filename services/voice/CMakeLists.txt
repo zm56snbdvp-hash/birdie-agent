@@ -41,6 +41,19 @@ add_executable(birdie-addressability-tests tests/addressability_tests.cpp)
 target_link_libraries(birdie-addressability-tests PRIVATE birdie_voice)
 add_test(NAME birdie-addressability-tests COMMAND birdie-addressability-tests)
 
+add_executable(
+  birdie-addressability-voice-host-tests
+  tests/addressability_voice_host_tests.cpp
+)
+target_link_libraries(
+  birdie-addressability-voice-host-tests
+  PRIVATE birdie_voice
+)
+add_test(
+  NAME birdie-addressability-voice-host-tests
+  COMMAND birdie-addressability-voice-host-tests
+)
+
 add_executable(birdie-voice-tests tests/voice_host_tests.cpp)
 target_link_libraries(birdie-voice-tests PRIVATE birdie_voice)
 add_test(NAME birdie-voice-tests COMMAND birdie-voice-tests)
