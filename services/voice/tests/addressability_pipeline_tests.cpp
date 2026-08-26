@@ -74,6 +74,28 @@ GateSttResult transcript(
   return result;
 }
 
+void test_explicit_activation_bypasses_gate_stt() {
+  ScriptedGateStt stt(transcript("dieser Decoder darf nicht laufen"));
+  AddressabilityEvidencePipeline pipeline(stt);
+  AddressabilityContext context;
+  context.explicit_activation = true;
+
+  GateSttRequest explicit_request;
+  explicit_request.activity_id = "activity-explicit";
+  const auto evaluation = pipeline.evaluate(
+      std::move(explicit_request), context);
+
+  require(evaluation.gate_stt_status == GateSttStatus::Bypassed,
+          "explicit activation must declare Gate-STT bypass");
+  require(evaluation.result.decision == AddressabilityDecision::Accept,
+          "explicit activation must accept without Gate-STT");
+  require(evaluation.result.reason ==
+              "ADDRESSABILITY.EXPLICIT_ACTIVATION",
+          "explicit activation reason must remain stable");
+  require(stt.calls == 0,
+          "explicit activation must not invoke the local decoder");
+}
+
 void test_direct_address_accepts_with_independent_evidence() {
   ScriptedGateStt stt(transcript("Birdie, öffne bitte den Kalender"));
   AddressabilityEvidencePipeline pipeline(stt);
@@ -185,6 +207,7 @@ void test_oversized_gate_audio_never_reaches_decoder() {
 
 int main() {
   try {
+    test_explicit_activation_bypasses_gate_stt();
     test_direct_address_accepts_with_independent_evidence();
     test_triggerless_imperative_remains_uncertain();
     test_follow_up_context_accepts_short_answer();
