@@ -6,6 +6,7 @@ import {
   IpcRole,
 } from '../../../packages/protocol/src/contract.mjs';
 import { BirdieRuntimeV0 } from './runtime-v0.mjs';
+import { TurnCoordinator } from './turn-coordinator.mjs';
 
 const PIPE_NAME = String.raw`\\.\pipe\birdie.core.control.v1`;
 const MICROPHONE_STATES = new Set([
@@ -13,6 +14,11 @@ const MICROPHONE_STATES = new Set([
   'MUTED_BY_USER',
   'UNAVAILABLE',
   'PERMISSION_DENIED',
+]);
+const DATA_CLASSIFICATIONS = new Set([
+  'operational',
+  'content',
+  'sensitive',
 ]);
 const BEST_EFFORT_VOICE_EVENTS = new Set([
   'voice.input.level',
@@ -34,13 +40,27 @@ function major(version) {
 }
 
 export class BirdieIpcServer extends EventEmitter {
-  constructor({ pipeName = PIPE_NAME } = {}) {
+  constructor({ pipeName = PIPE_NAME, brain = null } = {}) {
     super();
     this.pipeName = pipeName;
     this.runtime = new BirdieRuntimeV0();
     this.server = null;
     this.clients = new Map();
     this.microphoneState = 'UNAVAILABLE';
+    this.internalSequence = 0;
+    this.turnCoordinator = brain
+      ? new TurnCoordinator({
+          brain,
+          sendVoiceCommand: (payload) => this.#sendToRole(IpcRole.VOICE, {
+            type: IpcMessageType.VOICE_COMMAND,
+            requestId: `core-${payload.output_id ?? ++this.internalSequence}`,
+            payload,
+          }),
+          publishInternalEvent: (event) => {
+            this.publish(event, { coordinate: false });
+          },
+        })
+      : null;
   }
 
   async start() {
@@ -56,6 +76,7 @@ export class BirdieIpcServer extends EventEmitter {
   }
 
   async stop() {
+    this.turnCoordinator?.stop();
     for (const socket of this.clients.keys()) socket.destroy();
     this.clients.clear();
     if (!this.server) return;
@@ -70,10 +91,11 @@ export class BirdieIpcServer extends EventEmitter {
       ...snapshot,
       lifecycle: 'READY',
       microphoneState: this.microphoneState,
+      brainState: this.turnCoordinator ? 'READY' : 'UNAVAILABLE',
     };
   }
 
-  publish(event) {
+  publish(event, { coordinate = true } = {}) {
     const result = this.runtime.apply(event);
     if (result?.presenceChanged) {
       this.#broadcastToRoles(PRESENCE_ROLES, {
@@ -110,6 +132,22 @@ export class BirdieIpcServer extends EventEmitter {
           monotonicMs: Number(event.monotonic_ms) || 0,
         },
       });
+    }
+
+    if (coordinate && this.turnCoordinator) {
+      if (event?.name === 'voice.utterance.finalized') {
+        void this.turnCoordinator.handleFinalized(event).catch((error) => {
+          this.#publishCoordinatorFailure(event, error);
+        });
+      } else if (
+        event?.name === 'voice.input.cancelled' ||
+        event?.name === 'voice.output.cancelled' ||
+        event?.name === 'voice.output.failed'
+      ) {
+        this.turnCoordinator.cancel(event.turn_id);
+      } else if (event?.name === 'voice.output.completed') {
+        this.turnCoordinator.finish(event.turn_id);
+      }
     }
 
     return result;
@@ -173,6 +211,14 @@ export class BirdieIpcServer extends EventEmitter {
       if (client.role !== IpcRole.VOICE) {
         return this.#forbidden(socket, message, 'voice.event.publish');
       }
+      const contractError = this.#validateVoiceEvent(message.payload);
+      if (contractError) {
+        return this.#sendError(
+          socket,
+          message.requestId ?? null,
+          contractError,
+        );
+      }
       try {
         const result = this.publish(message.payload);
         if (BEST_EFFORT_VOICE_EVENTS.has(message.payload?.name)) return;
@@ -202,6 +248,22 @@ export class BirdieIpcServer extends EventEmitter {
       message.requestId ?? null,
       'UNKNOWN_MESSAGE_TYPE',
     );
+  }
+
+  #validateVoiceEvent(event) {
+    const classification = event?.data_classification;
+    if (!DATA_CLASSIFICATIONS.has(classification)) {
+      return 'CONTRACT.INVALID_DATA_CLASSIFICATION';
+    }
+    if (
+      event?.payload &&
+      Object.hasOwn(event.payload, 'transcript') &&
+      classification !== 'content' &&
+      classification !== 'sensitive'
+    ) {
+      return 'CONTRACT.CONTENT_CLASSIFICATION_REQUIRED';
+    }
+    return null;
   }
 
   #handleHello(socket, message) {
@@ -298,6 +360,28 @@ export class BirdieIpcServer extends EventEmitter {
         errorCode: recipients > 0 ? null : 'VOICE.UNAVAILABLE',
       },
     });
+  }
+
+  #publishCoordinatorFailure(sourceEvent, error) {
+    const sequence = ++this.internalSequence;
+    this.publish({
+      contract_version: '1.0',
+      kind: 'event',
+      name: 'brain.turn.failed',
+      event_id: `core-coordinator-failure-${sequence}`,
+      source: 'birdie-core',
+      timestamp_utc: new Date().toISOString(),
+      monotonic_ms: sequence,
+      source_sequence: sequence,
+      trace_id: sourceEvent?.trace_id ?? `trace-core-${sequence}`,
+      session_id: sourceEvent?.session_id ?? null,
+      turn_id: sourceEvent?.turn_id ?? null,
+      data_classification: 'operational',
+      payload: {
+        error_code: 'BRAIN.COORDINATOR.EXCEPTION',
+        detail: String(error?.message ?? error).slice(0, 512),
+      },
+    }, { coordinate: false });
   }
 
   #forbidden(socket, message, capability) {
