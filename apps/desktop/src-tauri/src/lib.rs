@@ -86,6 +86,14 @@ fn desktop_hello() -> Value {
   })
 }
 
+fn desktop_snapshot_request() -> Value {
+  json!({
+    "type": "runtime.snapshot.request",
+    "requestId": format!("desktop-snapshot-{}", std::process::id()),
+    "payload": {},
+  })
+}
+
 fn start_core_ipc(app: tauri::AppHandle, shared: Arc<RuntimeState>) {
   thread::spawn(move || loop {
     match OpenOptions::new().read(true).write(true).open(CORE_PIPE) {
@@ -113,6 +121,10 @@ fn start_core_ipc(app: tauri::AppHandle, shared: Arc<RuntimeState>) {
                   "contractVersion": CONTRACT_VERSION,
                   "role": "desktop",
                 }));
+                // Always ask for a fresh authoritative snapshot after the
+                // handshake. This makes desktop reconnect deterministic even
+                // when the server's unsolicited initial snapshot raced startup.
+                let _ = send_pipe_message(&shared.writer, &desktop_snapshot_request());
               }
             }
             Some("runtime.snapshot") => {
@@ -177,9 +189,6 @@ fn recover_dev_webview(app: tauri::AppHandle) {
   if !frontend_url.starts_with("http://127.0.0.1:") { return; }
 
   thread::spawn(move || {
-    // The dev server is managed independently from Tauri. WebView2 can retain
-    // its initial ERR_CONNECTION_REFUSED document if navigation raced Vite.
-    // Force one explicit navigation after the server readiness gate has passed.
     thread::sleep(Duration::from_millis(900));
     if let Some(window) = app.get_webview_window("core") {
       let script = format!(
