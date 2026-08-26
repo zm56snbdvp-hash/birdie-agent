@@ -8,6 +8,12 @@ param(
   [string]$GateSttProvider = 'Unavailable',
   [ValidateSet('Disabled', 'DevelopmentAck')]
   [string]$BrainProvider = 'Disabled',
+  [ValidateSet('Disabled', 'WindowsSapi')]
+  [string]$TtsProvider = 'Disabled',
+  [ValidateRange(-10, 10)]
+  [int]$TtsRate = 0,
+  [ValidateRange(0, 100)]
+  [int]$TtsVolume = 100,
   [switch]$SetupWhisperCpp,
   [ValidateSet(
     'tiny', 'tiny.en',
@@ -80,6 +86,9 @@ if ($SetupWhisperCpp -and $GateSttProvider -ne 'WhisperCpp') {
 if ($SetupWhisperCpp -and -not [string]::IsNullOrWhiteSpace($GateSttModel)) {
   throw 'SetupWhisperCpp manages the model path. Use GateSttModelName instead of GateSttModel for this mode.'
 }
+if ($TtsProvider -eq 'WindowsSapi' -and $BrainProvider -eq 'Disabled') {
+  Write-Warning 'WindowsSapi is enabled while Brain is disabled. Birdie will not receive response text to speak.'
+}
 
 $resolvedWhisperCppSource = $null
 $resolvedGateSttModel = $null
@@ -110,7 +119,7 @@ if ($GateSttProvider -eq 'WhisperCpp') {
 
   if (-not (Test-Path -LiteralPath $WhisperCppSource -PathType Container) -or
       -not (Test-Path -LiteralPath $GateSttModel -PathType Leaf)) {
-    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -GateSttProvider WhisperCpp -SetupWhisperCpp -GateSttModelName $GateSttModelName -GateSttLanguage de -BrainProvider DevelopmentAck"
+    $setupCommand = ".\scripts\run-birdie-desktop-alpha.ps1 -GateSttProvider WhisperCpp -SetupWhisperCpp -GateSttModelName $GateSttModelName -GateSttLanguage de -BrainProvider DevelopmentAck -TtsProvider WindowsSapi"
     throw "Local Whisper source/model is missing. Run: $setupCommand"
   }
 
@@ -176,6 +185,14 @@ $env:BIRDIE_BRAIN_PROVIDER = if ($BrainProvider -eq 'DevelopmentAck') {
 else {
   'disabled'
 }
+$env:BIRDIE_TTS_PROVIDER = if ($TtsProvider -eq 'WindowsSapi') {
+  'windows-sapi'
+}
+else {
+  'disabled'
+}
+$env:BIRDIE_TTS_RATE = [string]$TtsRate
+$env:BIRDIE_TTS_VOLUME = [string]$TtsVolume
 $env:BIRDIE_GATE_STT_THREADS = [string]$GateSttThreads
 $env:BIRDIE_GATE_STT_LANGUAGE = if ([string]::IsNullOrWhiteSpace($GateSttLanguage)) { 'auto' } else { $GateSttLanguage }
 $env:BIRDIE_GATE_STT_USE_GPU = if ($GateSttCpuOnly) { '0' } else { '1' }
@@ -198,6 +215,14 @@ if ($BrainProvider -eq 'DevelopmentAck') {
 }
 else {
   Write-Host 'Brain: disabled (fail-closed)' -ForegroundColor Yellow
+}
+
+if ($TtsProvider -eq 'WindowsSapi') {
+  Write-Warning 'WindowsSapi uses the installed Windows system voice, not Birdies final voice. Barge-in remains disabled until AEC is integrated.'
+  Write-Host "TTS: Windows SAPI · rate=$TtsRate · volume=$TtsVolume" -ForegroundColor Green
+}
+else {
+  Write-Host 'TTS: disabled (fail-closed)' -ForegroundColor Yellow
 }
 
 if ($DevelopmentAutoAccept) {
