@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -49,6 +51,24 @@ class UnavailableGateStt final : public IGateStt {
  public:
   [[nodiscard]] GateSttResult transcribe(
       const GateSttRequest& request) override;
+};
+
+// Gate addressability and full accepted-turn transcription share one native
+// model instance. This boundary guarantees that providers which are not
+// internally thread-safe are never entered concurrently.
+class SerializedGateStt final : public IGateStt {
+ public:
+  explicit SerializedGateStt(std::unique_ptr<IGateStt> provider);
+
+  SerializedGateStt(const SerializedGateStt&) = delete;
+  SerializedGateStt& operator=(const SerializedGateStt&) = delete;
+
+  [[nodiscard]] GateSttResult transcribe(
+      const GateSttRequest& request) override;
+
+ private:
+  std::unique_ptr<IGateStt> provider_;
+  std::mutex mutex_;
 };
 
 void secure_clear(GateSttRequest& request) noexcept;
