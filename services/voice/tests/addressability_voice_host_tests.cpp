@@ -70,6 +70,14 @@ AddressabilityResult accept_result() {
   return result;
 }
 
+void create_candidate(VoiceHost& host, std::uint64_t& at, const float sample) {
+  for (int index = 0; index < 3; ++index, at += 10) {
+    host.process(frame(sample, at));
+  }
+  require(host.phase() == VoicePhase::SpeechCandidate,
+          "speech burst must create an addressability candidate");
+}
+
 void test_abstain_clears_candidate_and_pre_roll() {
   CollectingSink sink;
   std::vector<UtteranceAudio> utterances;
@@ -84,11 +92,7 @@ void test_abstain_clears_candidate_and_pre_roll() {
   });
 
   std::uint64_t at = 10;
-  for (int index = 0; index < 3; ++index, at += 10) {
-    host.process(frame(0.08F, at));
-  }
-  require(host.phase() == VoicePhase::SpeechCandidate,
-          "first speech burst must create a candidate");
+  create_candidate(host, at, 0.08F);
   require(host.resolve_addressability(abstain_result()),
           "ABSTAIN must resolve the active candidate");
   require(host.phase() == VoicePhase::Quiet,
@@ -102,11 +106,7 @@ void test_abstain_clears_candidate_and_pre_roll() {
   // old pre-roll, 0.08 samples from the abstained candidate would leak here.
   host.process(frame(0.0F, at));
   at += 10;
-  for (int index = 0; index < 3; ++index, at += 10) {
-    host.process(frame(0.12F, at));
-  }
-  require(host.phase() == VoicePhase::SpeechCandidate,
-          "second speech burst must create a fresh candidate");
+  create_candidate(host, at, 0.12F);
   require(host.resolve_addressability(
               accept_result(), ActivationMode::WakeOnSpeak),
           "second candidate must be accepted");
@@ -130,11 +130,44 @@ void test_abstain_clears_candidate_and_pre_roll() {
           "audio from an abstained candidate must not leak into the next turn");
 }
 
+void test_gate_stt_snapshot_and_stale_resolution() {
+  CollectingSink sink;
+  VoiceHost host(VoiceConfig{}, sink, [](UtteranceAudio) {});
+  std::uint64_t at = 10;
+  create_candidate(host, at, 0.10F);
+
+  const auto request = host.gate_stt_request();
+  require(request.has_value(),
+          "active candidate must expose a bounded Gate-STT request");
+  require(request->activity_id == host.active_activity_id(),
+          "Gate-STT request must carry the current activity id");
+  require(!request->samples.empty(),
+          "Gate-STT request must contain local candidate PCM");
+  require(request->samples.size() <= 16'000 * 1'200 / 1'000,
+          "Gate-STT request must stay within configured pre-roll capacity");
+
+  require(!host.resolve_addressability(
+              "activity-stale", abstain_result()),
+          "stale asynchronous result must not resolve a newer candidate");
+  require(host.phase() == VoicePhase::SpeechCandidate,
+          "stale result must leave current candidate untouched");
+
+  require(host.resolve_addressability(
+              request->activity_id, abstain_result()),
+          "matching activity id must resolve current candidate");
+  require(host.phase() == VoicePhase::Quiet,
+          "matching ABSTAIN must return VoiceHost to Quiet");
+  require(!host.gate_stt_request().has_value(),
+          "resolved candidate must no longer expose Gate-STT audio");
+}
+
 void test_resolution_requires_active_candidate() {
   CollectingSink sink;
   VoiceHost host(VoiceConfig{}, sink, {});
   require(!host.resolve_addressability(abstain_result()),
           "addressability decision outside SpeechCandidate must be ignored");
+  require(!host.gate_stt_request().has_value(),
+          "Quiet VoiceHost must not expose Gate-STT audio");
   require(sink.events.empty(),
           "ignored decision must not emit lifecycle events");
 }
@@ -144,6 +177,7 @@ void test_resolution_requires_active_candidate() {
 int main() {
   try {
     test_abstain_clears_candidate_and_pre_roll();
+    test_gate_stt_snapshot_and_stale_resolution();
     test_resolution_requires_active_candidate();
     std::cout << "birdie-addressability-voice-host-tests: PASS\n";
     return EXIT_SUCCESS;
