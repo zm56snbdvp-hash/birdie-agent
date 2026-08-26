@@ -1,6 +1,7 @@
 #include "birdie/voice/gate_stt.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace birdie::voice {
 namespace {
@@ -28,8 +29,7 @@ GateSttResult UnavailableGateStt::transcribe(
 
 void secure_clear(GateSttRequest& request) noexcept {
   std::fill(request.samples.begin(), request.samples.end(), 0.0F);
-  request.samples.clear();
-  request.samples.shrink_to_fit();
+  std::vector<float>{}.swap(request.samples);
   wipe(request.activity_id);
   request.candidate_started_ms = 0;
   request.captured_through_ms = 0;
