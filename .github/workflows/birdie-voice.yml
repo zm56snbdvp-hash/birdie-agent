@@ -8,6 +8,8 @@ on:
       - services/voice/**
       - services/core/**
       - packages/protocol/**
+      - scripts/run-birdie-desktop-alpha.ps1
+      - scripts/setup-birdie-whisper-cpp.ps1
       - tests/desktop-alpha/voice-core-process-smoke.mjs
       - .github/workflows/birdie-voice.yml
   pull_request:
@@ -15,11 +17,16 @@ on:
       - services/voice/**
       - services/core/**
       - packages/protocol/**
+      - scripts/run-birdie-desktop-alpha.ps1
+      - scripts/setup-birdie-whisper-cpp.ps1
       - tests/desktop-alpha/voice-core-process-smoke.mjs
       - .github/workflows/birdie-voice.yml
 
 permissions:
   contents: read
+
+env:
+  BIRDIE_REVIEWED_WHISPER_CPP_COMMIT: 978113305b2ead22249b881deafa131dc8884911
 
 jobs:
   windows-build-and-test:
@@ -29,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - name: Configure CMake
         run: cmake -S services/voice -B build/voice -A x64
       - name: Build Release
@@ -41,3 +48,39 @@ jobs:
         run: |
           $env:BIRDIE_VOICE_SMOKE_EXE = (Resolve-Path "build/voice/Release/birdie-voice-core-smoke.exe").Path
           node tests/desktop-alpha/voice-core-process-smoke.mjs
+
+  windows-whisper-cpp-compile:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch reviewed whisper.cpp source
+        shell: pwsh
+        run: |
+          $source = Join-Path $PWD "third_party/whisper.cpp"
+          New-Item -ItemType Directory -Path $source -Force | Out-Null
+          git -C $source init
+          git -C $source remote add origin https://github.com/ggml-org/whisper.cpp.git
+          git -C $source fetch --depth 1 origin $env:BIRDIE_REVIEWED_WHISPER_CPP_COMMIT
+          git -C $source checkout --detach FETCH_HEAD
+          $actual = (git -C $source rev-parse HEAD).Trim()
+          if ($actual -ne $env:BIRDIE_REVIEWED_WHISPER_CPP_COMMIT) {
+            throw "Unexpected whisper.cpp revision: $actual"
+          }
+
+      - name: Configure native whisper.cpp backend
+        shell: pwsh
+        run: |
+          $source = (Resolve-Path "third_party/whisper.cpp").Path
+          cmake -S services/voice -B build/voice-whisper -A x64 `
+            -DBIRDIE_WITH_WHISPER_CPP=ON `
+            "-DBIRDIE_WHISPER_CPP_SOURCE_DIR=$source" `
+            -DGGML_NATIVE=OFF
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build native whisper.cpp Voice Host
+        run: cmake --build build/voice-whisper --config Release --parallel
+
+      - name: Run native-backend contract tests
+        run: ctest --test-dir build/voice-whisper -C Release --output-on-failure
