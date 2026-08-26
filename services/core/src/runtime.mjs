@@ -57,6 +57,8 @@ export class BirdieRuntime {
       case 'voice.activation.rejected':
       case 'voice.activation.abstained':
         return this.#handleUnacceptedActivation(event.name);
+      case 'voice.input.cancelled':
+        return this.#handleInputCancelled(event);
       case 'voice.utterance.finalized':
         return this.#finalizeUtterance(event);
       case 'voice.output.started':
@@ -100,6 +102,14 @@ export class BirdieRuntime {
       return this.#setPresence('SPEAKING', reason);
     }
     return this.#setPresence('IDLE', reason);
+  }
+
+  #handleInputCancelled(event) {
+    if (this.activeTurn && !TERMINAL_TURN_STATUSES.has(this.activeTurn.status)) {
+      this.activeTurn.status = 'CANCELLED';
+      this.activeTurn.cancelReason = event.payload?.reason ?? 'voice.input.cancelled';
+    }
+    return this.#setPresence('IDLE', 'voice.input.cancelled');
   }
 
   #finalizeUtterance(event) {
