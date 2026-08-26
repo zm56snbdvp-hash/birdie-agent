@@ -127,12 +127,14 @@ void test_voice_event_and_core_command_round_trip() {
         "voice sink must report connected only after Core accepts hello");
 
     sink.emit(VoiceEvent{
-        "voice.activity.started",
+        "voice.utterance.finalized",
         42,
-        std::nullopt,
+        std::string("turn-content-1"),
         {{"activity_id", std::string("activity-1")},
-         {"confidence", 0.93},
-         {"barge_in_candidate", true}},
+         {"utterance_id", std::string("utterance-1")},
+         {"transcript", std::string("Birdie, öffne den Kalender")},
+         {"confidence", 0.93}},
+        "content",
     });
 
     require(received.wait_for(3s) == std::future_status::ready,
@@ -160,18 +162,23 @@ void test_voice_event_and_core_command_round_trip() {
   require(event.find("\"type\":\"runtime.event.publish\"") !=
               std::string::npos,
           "message must use runtime.event.publish");
-  require(event.find("\"name\":\"voice.activity.started\"") !=
+  require(event.find("\"name\":\"voice.utterance.finalized\"") !=
               std::string::npos,
-          "message must contain the canonical Voice event name");
+          "message must contain the canonical finalized event name");
   require(event.find("\"source\":\"birdie-voice\"") !=
               std::string::npos,
           "message must identify the Voice producer");
   require(event.find("\"contract_version\":\"1.0\"") !=
               std::string::npos,
           "message must carry the shared contract version");
-  require(event.find("\"barge_in_candidate\":true") !=
+  require(event.find("\"turn_id\":\"turn-content-1\"") !=
               std::string::npos,
-          "message must preserve typed payload values");
+          "message must preserve the canonical turn id");
+  require(event.find("\"data_classification\":\"content\"") !=
+              std::string::npos,
+          "content classification must survive the Windows IPC boundary");
+  require(event.find("Birdie, öffne den Kalender") != std::string::npos,
+          "content payload must be serialized for the authorized Core client");
 
   require(command->request_id == "mic-off",
           "Voice command must preserve request id");
