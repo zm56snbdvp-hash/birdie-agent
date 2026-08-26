@@ -210,7 +210,7 @@ int main(int argc, char** argv) {
           addressability_enabled.store(false, std::memory_order_release);
           sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
                      {{"component", std::string("birdie-voice")},
-                      {"status", std::string("UNAVAILABLE")},
+                      {"status", std::string("DEGRADED")},
                       {"error_code",
                        std::string("VOICE.INPUT.CAPTURE_FAILED")},
                       {"detail", std::move(message)}}});
@@ -272,7 +272,7 @@ int main(int argc, char** argv) {
             sink.emit({"component.health.changed", monotonic_ms(),
                        std::nullopt,
                        {{"component", std::string("birdie-voice")},
-                        {"status", std::string("UNAVAILABLE")},
+                        {"status", std::string("DEGRADED")},
                         {"error_code",
                          std::string("VOICE.INPUT.RESTART_FAILED")},
                         {"detail", restart_error}}});
@@ -303,7 +303,6 @@ int main(int argc, char** argv) {
         } else {
           emit_privacy("ENABLED");
         }
-        emit_component_ready();
         sink.emit({"component.health.changed", monotonic_ms(), std::nullopt,
                    {{"component", std::string("birdie-voice")},
                     {"status", std::string("READY")},
