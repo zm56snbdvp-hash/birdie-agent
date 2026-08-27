@@ -14,6 +14,7 @@ namespace BirdieWorld
         private Image shirt;
         private Image scarf;
         private Image hair;
+        private RawImage portraitArt;
         private Text monogram;
         private Text nameLabel;
         private Text storyLabel;
@@ -27,6 +28,7 @@ namespace BirdieWorld
             frame.effectColor = new Color(brass.r, brass.g, brass.b, 0.55f);
             frame.effectDistance = new Vector2(2f, -2f);
 
+            portraitArt = BirdieWorldArt.Cover(root.transform, "HumanAvatarArt", "BirdieWorldArt/avatar-human", new Vector2(0.12f, 0.06f), new Vector2(0.88f, 0.92f), Color.white);
             aura = Shape(root.transform, "SignatureAura", new Vector2(0.23f, 0.07f), new Vector2(0.77f, 0.88f), brass, true);
             aura.color = new Color(brass.r, brass.g, brass.b, 0.13f);
 
@@ -52,6 +54,7 @@ namespace BirdieWorld
             monogram = Label(figure, "B", 28, font, ink, TextAnchor.MiddleCenter, new Vector2(0.39f, 0.43f), new Vector2(0.61f, 0.58f));
             nameLabel = Label(root.transform, "DEIN BIRDIE", 24, font, ivory, TextAnchor.MiddleCenter, new Vector2(0.05f, 0.01f), new Vector2(0.95f, 0.09f));
             storyLabel = Label(root.transform, "ENTDECKER:IN · FOREST", 13, font, brass, TextAnchor.MiddleCenter, new Vector2(0.05f, 0.90f), new Vector2(0.95f, 0.98f));
+            if (portraitArt != null) figureRoot.SetActive(false);
         }
 
         public void Apply(CharacterProfile profile, string liveName)
@@ -62,6 +65,7 @@ namespace BirdieWorld
             coat.color = signature;
             scarf.color = Color.Lerp(signature, ivory, 0.32f);
             aura.color = new Color(signature.r, signature.g, signature.b, 0.18f);
+            if (portraitArt != null) portraitArt.color = Color.Lerp(Color.white, signature, 0.07f);
             hair.color = HairColor(profile.story);
             shirt.color = string.Equals(profile.style, "midnight", System.StringComparison.OrdinalIgnoreCase)
                 ? new Color(0.055f, 0.075f, 0.09f, 1f)

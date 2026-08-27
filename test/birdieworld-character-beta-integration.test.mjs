@@ -50,6 +50,29 @@ test("BirdieWorld Beta wires the cinematic, creator and ready journey", () => {
   assert.doesNotMatch(avatar, /bird mascot|mascot|leni/i);
 });
 
+test("the final art direction is required at build time and remains runtime-optional", () => {
+  const helper = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldArt.cs");
+  const opener = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldCinematicOpener.cs");
+  const bootstrap = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldBetaBootstrap.cs");
+  const avatar = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldAvatarPreview.cs");
+  const journey = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldFirstJourney.cs");
+  const builder = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Editor/BirdieWorldWebBuild.cs");
+  const assets = ["express-hero.png", "platform-night.png", "express-journey.png", "nest-forecourt.png", "avatar-human.png"];
+  for (const asset of assets) {
+    assert.equal(fs.existsSync(path.join(root, "clients/unity/BirdieWorld/Assets/BirdieWorld/Resources/BirdieWorldArt", asset)), true, asset);
+    assert.match(builder, new RegExp(asset.replace(".", "\\.")));
+  }
+  assert.match(helper, /Resources\.Load<Texture2D>\(resourcePath\)/);
+  assert.match(helper, /if \(texture == null\) return null/);
+  assert.match(opener, /BirdieWorldArt\/express-hero/);
+  assert.match(bootstrap, /BirdieWorldArt\/nest-forecourt/);
+  assert.match(avatar, /BirdieWorldArt\/avatar-human/);
+  assert.match(journey, /BirdieWorldArt\/platform-night/);
+  assert.match(journey, /BirdieWorldArt\/express-journey/);
+  assert.match(journey, /BirdieWorldArt\/nest-forecourt/);
+  assert.match(builder, /ValidateRequiredArt\(\)/);
+});
+
 test("character choices provide immediate visual state without changing the persistence contract", () => {
   const bootstrap = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldBetaBootstrap.cs");
   assert.match(bootstrap, /Dictionary<string, GameObject> storyChoices/);

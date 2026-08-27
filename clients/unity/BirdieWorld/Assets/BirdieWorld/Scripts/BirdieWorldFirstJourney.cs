@@ -185,8 +185,10 @@ namespace BirdieWorld
         private void BuildPlatformScreen()
         {
             platformScreen = Panel(journeyRoot.transform, "ExpressPlatform", Vector2.zero, Vector2.one, ink);
+            BirdieWorldArt.Cover(platformScreen.transform, "PlatformNightArt", "BirdieWorldArt/platform-night", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(platformScreen.transform, "PlatformAtmosphere", Vector2.zero, Vector2.one, new Color(0.004f, 0.015f, 0.011f, 0.34f));
 
-            var header = Panel(platformScreen.transform, "JourneyHeader", new Vector2(0.03f, 0.86f), new Vector2(0.97f, 0.98f), panel);
+            var header = Panel(platformScreen.transform, "JourneyHeader", new Vector2(0.03f, 0.86f), new Vector2(0.97f, 0.98f), new Color(panel.r, panel.g, panel.b, 0.94f));
             headerLayout = header.GetComponent<RectTransform>();
             AddOutline(header, new Color(gold.r, gold.g, gold.b, 0.55f), 1f);
             Label(header.transform, "BIRDIE & BREAKFAST", 25, gold, TextAnchor.MiddleLeft, new Vector2(0.025f, 0.52f), new Vector2(0.49f, 0.92f));
@@ -199,12 +201,12 @@ namespace BirdieWorld
             profileName = Label(header.transform, "DEIN BIRDIE", 21, ivory, TextAnchor.LowerLeft, new Vector2(0.66f, 0.40f), new Vector2(0.97f, 0.87f));
             profileStory = Label(header.transform, "ENTDECKER:IN · NUR ANZEIGE", 12, gold, TextAnchor.UpperLeft, new Vector2(0.66f, 0.10f), new Vector2(0.97f, 0.42f));
 
-            var platform = Panel(platformScreen.transform, "SevenByFivePlatform", new Vector2(0.03f, 0.18f), new Vector2(0.70f, 0.84f), new Color(0.013f, 0.043f, 0.033f, 1f));
+            var platform = Panel(platformScreen.transform, "SevenByFivePlatform", new Vector2(0.03f, 0.18f), new Vector2(0.70f, 0.84f), new Color(0.013f, 0.043f, 0.033f, 0.76f));
             platformLayout = platform.GetComponent<RectTransform>();
             AddOutline(platform, gold, 2f);
             BuildGrid(platform.transform);
 
-            var guide = Panel(platformScreen.transform, "JourneyGuide", new Vector2(0.73f, 0.42f), new Vector2(0.97f, 0.84f), panel);
+            var guide = Panel(platformScreen.transform, "JourneyGuide", new Vector2(0.73f, 0.42f), new Vector2(0.97f, 0.84f), new Color(panel.r, panel.g, panel.b, 0.94f));
             guideLayout = guide.GetComponent<RectTransform>();
             AddOutline(guide, new Color(gold.r, gold.g, gold.b, 0.55f), 1f);
             Label(guide.transform, "DEIN NÄCHSTER SCHRITT", 13, gold, TextAnchor.MiddleLeft, new Vector2(0.07f, 0.86f), new Vector2(0.93f, 0.96f));
@@ -215,7 +217,7 @@ namespace BirdieWorld
             stepLabels[2] = Label(guide.transform, "03  BIRDIE EXPRESS BESTEIGEN", 14, quiet, TextAnchor.MiddleLeft, new Vector2(0.07f, 0.14f), new Vector2(0.93f, 0.25f));
             positionLabel = Label(guide.transform, "POSITION · BAHNSTEIG 1–1", 12, gold, TextAnchor.MiddleLeft, new Vector2(0.07f, 0.04f), new Vector2(0.93f, 0.13f));
 
-            var controls = Panel(platformScreen.transform, "TouchMovement", new Vector2(0.73f, 0.18f), new Vector2(0.97f, 0.39f), new Color(0.018f, 0.053f, 0.041f, 1f));
+            var controls = Panel(platformScreen.transform, "TouchMovement", new Vector2(0.73f, 0.18f), new Vector2(0.97f, 0.39f), new Color(0.018f, 0.053f, 0.041f, 0.94f));
             controlsLayout = controls.GetComponent<RectTransform>();
             Label(controls.transform, "BEWEGEN · WASD / PFEILE / TOUCH · AKTION ↵", 11, quiet, TextAnchor.MiddleCenter, new Vector2(0.04f, 0.82f), new Vector2(0.96f, 0.98f));
             MovementButton(controls.transform, "↑", new Vector2(0.38f, 0.48f), new Vector2(0.62f, 0.80f), 0, 1);
@@ -223,7 +225,7 @@ namespace BirdieWorld
             MovementButton(controls.transform, "↓", new Vector2(0.38f, 0.10f), new Vector2(0.62f, 0.42f), 0, -1);
             MovementButton(controls.transform, "→", new Vector2(0.64f, 0.10f), new Vector2(0.88f, 0.42f), 1, 0);
 
-            var interaction = Panel(platformScreen.transform, "ExactCellInteraction", new Vector2(0.73f, 0.06f), new Vector2(0.97f, 0.15f), new Color(0.07f, 0.10f, 0.075f, 1f));
+            var interaction = Panel(platformScreen.transform, "ExactCellInteraction", new Vector2(0.73f, 0.06f), new Vector2(0.97f, 0.15f), new Color(0.07f, 0.10f, 0.075f, 0.96f));
             interactionLayout = interaction.GetComponent<RectTransform>();
             interactionBackground = interaction.GetComponent<Image>();
             AddOutline(interaction, gold, 2f);
@@ -245,15 +247,16 @@ namespace BirdieWorld
                 var min = new Vector2(x / 7f, y / 5f);
                 var max = new Vector2((x + 1f) / 7f, (y + 1f) / 5f);
                 var blocked = obstacles.Contains(cell);
-                var color = blocked
+                var baseColor = blocked
                     ? new Color(0.055f, 0.061f, 0.049f, 1f)
                     : ((x + y) % 2 == 0 ? forest : forestLight);
+                var color = new Color(baseColor.r, baseColor.g, baseColor.b, blocked ? 0.90f : 0.78f);
                 var tile = Panel(parent, $"Cell_{x}_{y}", min, max, color);
                 var rect = tile.GetComponent<RectTransform>();
                 rect.offsetMin = new Vector2(2f, 2f);
                 rect.offsetMax = new Vector2(-2f, -2f);
                 tile.GetComponent<Image>().raycastTarget = false;
-                Label(tile.transform, $"{x + 1}·{y + 1}", 10, new Color(ivory.r, ivory.g, ivory.b, 0.34f), TextAnchor.LowerRight, new Vector2(0.60f, 0.02f), new Vector2(0.96f, 0.24f));
+                Label(tile.transform, $"{x + 1}·{y + 1}", 10, new Color(ivory.r, ivory.g, ivory.b, 0.17f), TextAnchor.LowerRight, new Vector2(0.60f, 0.02f), new Vector2(0.96f, 0.24f));
                 if (blocked)
                 {
                     Shape(tile.transform, "TravelLuggage", new Vector2(0.23f, 0.30f), new Vector2(0.77f, 0.68f), new Color(0.25f, 0.19f, 0.105f, 1f));
@@ -287,17 +290,19 @@ namespace BirdieWorld
         private void BuildTravelScreen()
         {
             travelScreen = Panel(journeyRoot.transform, "ExpressJourney", Vector2.zero, Vector2.one, ink);
-            var card = Panel(travelScreen.transform, "JourneyWindow", new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), panel);
+            BirdieWorldArt.Cover(travelScreen.transform, "ExpressJourneyArt", "BirdieWorldArt/express-journey", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(travelScreen.transform, "JourneyAtmosphere", Vector2.zero, Vector2.one, new Color(0.004f, 0.012f, 0.010f, 0.28f));
+            var card = Panel(travelScreen.transform, "JourneyWindow", new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), new Color(panel.r, panel.g, panel.b, 0.91f));
             travelCardLayout = card.GetComponent<RectTransform>();
             AddOutline(card, gold, 2f);
             Label(card.transform, "BIRDIE EXPRESS", 17, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.87f), new Vector2(0.92f, 0.96f));
             travelChapter = Label(card.transform, "TIEF DURCH DAS TAL", 38, ivory, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.72f), new Vector2(0.92f, 0.87f));
             travelStatus = Label(card.transform, "ABFAHRT · BAHNSTEIG", 15, quiet, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.63f), new Vector2(0.90f, 0.72f));
 
-            var window = Panel(card.transform, "ValleyAndMountainWindow", new Vector2(0.07f, 0.23f), new Vector2(0.93f, 0.62f), new Color(0.025f, 0.12f, 0.09f, 1f));
+            var window = Panel(card.transform, "ValleyAndMountainWindow", new Vector2(0.07f, 0.23f), new Vector2(0.93f, 0.62f), new Color(0.025f, 0.12f, 0.09f, 0.70f));
             AddOutline(window, new Color(gold.r, gold.g, gold.b, 0.45f), 1f);
-            Shape(window.transform, "Valley", new Vector2(0.00f, 0.00f), new Vector2(0.52f, 0.45f), new Color(0.035f, 0.24f, 0.13f, 1f));
-            Shape(window.transform, "Mountain", new Vector2(0.48f, 0.00f), new Vector2(1.00f, 0.70f), new Color(0.09f, 0.23f, 0.16f, 1f));
+            BirdieWorldArt.Cover(window.transform, "RoutePanoramaArt", "BirdieWorldArt/express-journey", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(window.transform, "RoutePanoramaTint", Vector2.zero, Vector2.one, new Color(0.004f, 0.012f, 0.010f, 0.12f));
             Label(window.transform, "TAL", 12, new Color(ivory.r, ivory.g, ivory.b, 0.65f), TextAnchor.LowerLeft, new Vector2(0.04f, 0.08f), new Vector2(0.30f, 0.28f));
             Label(window.transform, "BERGKAMM", 12, new Color(ivory.r, ivory.g, ivory.b, 0.65f), TextAnchor.UpperRight, new Vector2(0.70f, 0.67f), new Vector2(0.96f, 0.88f));
 
@@ -320,7 +325,9 @@ namespace BirdieWorld
         private void BuildArrivalScreen()
         {
             arrivalScreen = Panel(journeyRoot.transform, "NestForecourtArrival", Vector2.zero, Vector2.one, new Color(0.012f, 0.040f, 0.030f, 1f));
-            var card = Panel(arrivalScreen.transform, "ArrivalCard", new Vector2(0.18f, 0.12f), new Vector2(0.82f, 0.88f), panel);
+            BirdieWorldArt.Cover(arrivalScreen.transform, "NestForecourtArt", "BirdieWorldArt/nest-forecourt", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(arrivalScreen.transform, "ArrivalAtmosphere", Vector2.zero, Vector2.one, new Color(0.004f, 0.015f, 0.011f, 0.24f));
+            var card = Panel(arrivalScreen.transform, "ArrivalCard", new Vector2(0.18f, 0.12f), new Vector2(0.82f, 0.88f), new Color(panel.r, panel.g, panel.b, 0.90f));
             arrivalCardLayout = card.GetComponent<RectTransform>();
             AddOutline(card, gold, 2f);
             Label(card.transform, "BIRDIE EXPRESS · ANGEKOMMEN", 17, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.85f), new Vector2(0.92f, 0.94f));

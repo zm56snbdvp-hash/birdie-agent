@@ -134,6 +134,8 @@ namespace BirdieWorld
 
             var visual = Panel(startScreen.transform, "JourneyVisual", new Vector2(0f, 0f), new Vector2(0.58f, 1f), forest);
             startVisualLayout = visual.GetComponent<RectTransform>();
+            BirdieWorldArt.Cover(visual.transform, "ExpressHeroArt", "BirdieWorldArt/express-hero", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(visual.transform, "JourneyVisualTint", Vector2.zero, Vector2.one, new Color(0.004f, 0.015f, 0.011f, 0.38f));
             Label(visual.transform, "B", 56, gold, TextAnchor.MiddleCenter, new Vector2(0.08f, 0.78f), new Vector2(0.22f, 0.94f));
             Label(visual.transform, "BIRDIE & BREAKFAST", 45, gold, TextAnchor.MiddleCenter, new Vector2(0.15f, 0.63f), new Vector2(0.92f, 0.78f));
             Label(visual.transform, "DEINE WELT. DEIN BIRDIE. DEIN ABENTEUER.", 20, ivory, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.57f), new Vector2(0.94f, 0.64f));
@@ -199,7 +201,9 @@ namespace BirdieWorld
         private void BuildReadyScreen()
         {
             readyScreen = Fullscreen("Ready", ink);
-            var card = Panel(readyScreen.transform, "ReadyCard", new Vector2(0.18f, 0.13f), new Vector2(0.82f, 0.87f), panel);
+            BirdieWorldArt.Cover(readyScreen.transform, "NestForecourtArt", "BirdieWorldArt/nest-forecourt", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(readyScreen.transform, "ReadyAtmosphere", Vector2.zero, Vector2.one, new Color(0.004f, 0.015f, 0.011f, 0.30f));
+            var card = Panel(readyScreen.transform, "ReadyCard", new Vector2(0.18f, 0.13f), new Vector2(0.82f, 0.87f), new Color(panel.r, panel.g, panel.b, 0.92f));
             readyCardLayout = card.GetComponent<RectTransform>();
             card.AddComponent<Outline>().effectColor = gold;
             Label(card.transform, "BIRDIE EXPRESS · ANKUNFT", 18, gold, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.82f), new Vector2(0.90f, 0.90f));

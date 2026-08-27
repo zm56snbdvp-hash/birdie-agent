@@ -32,6 +32,10 @@ namespace BirdieWorld
             root.GetComponent<Image>().color = new Color(.008f,.018f,.014f,1);
             group = root.GetComponent<CanvasGroup>();
 
+            BirdieWorldArt.Cover(root.transform, "ExpressHeroArt", "BirdieWorldArt/express-hero", Vector2.zero, Vector2.one, Color.white);
+            BirdieWorldArt.Tint(root.transform, "HeroAtmosphere", Vector2.zero, Vector2.one, new Color(.004f,.012f,.010f,.22f));
+            BirdieWorldArt.Tint(root.transform, "HeroCopyContrast", Vector2.zero, new Vector2(.61f,1f), new Color(.004f,.012f,.010f,.66f));
+
             brandLayout = MakeText(root.transform,"BIRDIE & BREAKFAST",42,new Vector2(.06f,.83f),new Vector2(.55f,.93f),new Color(.86f,.67f,.34f,1),TextAnchor.MiddleLeft).rectTransform;
             chapter = MakeText(root.transform,"THE BIRDIE EXPRESS",18,new Vector2(.06f,.78f),new Vector2(.45f,.84f),new Color(.72f,.67f,.55f,1),TextAnchor.MiddleLeft);
             chapterLayout = chapter.rectTransform;
@@ -41,13 +45,20 @@ namespace BirdieWorld
             var route = new GameObject("Route",typeof(RectTransform),typeof(Image)); route.transform.SetParent(root.transform,false);
             var rr=(RectTransform)route.transform; rr.anchorMin=new Vector2(.62f,.14f);rr.anchorMax=new Vector2(.93f,.84f);rr.offsetMin=rr.offsetMax=Vector2.zero;
             routeLayout = rr;
-            route.GetComponent<Image>().color=new Color(.025f,.07f,.052f,1); route.AddComponent<Outline>().effectColor=new Color(.58f,.43f,.22f,1);
+            route.GetComponent<Image>().color=new Color(.012f,.035f,.028f,.89f); route.AddComponent<Outline>().effectColor=new Color(.58f,.43f,.22f,1);
             MakeText(route.transform,"THE DESCENT",16,new Vector2(.08f,.84f),new Vector2(.92f,.93f),new Color(.86f,.67f,.34f,1),TextAnchor.MiddleCenter);
-            MakeText(route.transform,"╲\n  ╲\n    ╲_____\n          ╲___\n              ╲\n               ╱\n             ╱\n          ╱\n      ╱\n  ╱",36,new Vector2(.1f,.18f),new Vector2(.9f,.83f),new Color(.94f,.91f,.83f,1),TextAnchor.MiddleCenter);
+            BirdieWorldArt.Tint(route.transform,"JourneyLine",new Vector2(.49f,.22f),new Vector2(.51f,.78f),new Color(.72f,.54f,.27f,.75f));
+            BirdieWorldArt.Tint(route.transform,"ValleyStop",new Vector2(.455f,.69f),new Vector2(.545f,.735f),new Color(.94f,.91f,.83f,1f));
+            BirdieWorldArt.Tint(route.transform,"RiverStop",new Vector2(.455f,.47f),new Vector2(.545f,.515f),new Color(.72f,.54f,.27f,1f));
+            BirdieWorldArt.Tint(route.transform,"NestStop",new Vector2(.455f,.25f),new Vector2(.545f,.295f),new Color(.94f,.91f,.83f,1f));
+            MakeText(route.transform,"BIRKEN-TAL",13,new Vector2(.57f,.67f),new Vector2(.92f,.75f),new Color(.94f,.91f,.83f,1),TextAnchor.MiddleLeft);
+            MakeText(route.transform,"FLUSSSTRECKE",13,new Vector2(.57f,.45f),new Vector2(.92f,.53f),new Color(.72f,.67f,.55f,1),TextAnchor.MiddleLeft);
+            MakeText(route.transform,"THE NEST",13,new Vector2(.57f,.23f),new Vector2(.92f,.31f),new Color(.94f,.91f,.83f,1),TextAnchor.MiddleLeft);
             altitude=MakeText(route.transform,"VALLEY  •  -840 M",14,new Vector2(.08f,.06f),new Vector2(.92f,.14f),new Color(.72f,.67f,.55f,1),TextAnchor.MiddleCenter);
 
             var tg=new GameObject("Train",typeof(RectTransform),typeof(Image));tg.transform.SetParent(route.transform,false);train=(RectTransform)tg.transform;
-            train.anchorMin=new Vector2(.15f,.68f);train.anchorMax=new Vector2(.38f,.75f);train.offsetMin=train.offsetMax=Vector2.zero;
+            train.anchorMin=new Vector2(.44f,.69f);train.anchorMax=new Vector2(.56f,.745f);train.offsetMin=train.offsetMax=Vector2.zero;
+            train.localRotation=Quaternion.Euler(0f,0f,45f);
             tg.GetComponent<Image>().color=new Color(.72f,.54f,.27f,1);
 
             var button=new GameObject("Board",typeof(RectTransform),typeof(Image),typeof(Button));button.transform.SetParent(root.transform,false);
@@ -61,7 +72,7 @@ namespace BirdieWorld
             StartCoroutine(RoutePulse());
         }
 
-        private IEnumerator RoutePulse(){float t=0;while(!leaving){ApplyResponsiveLayout();t+=Time.unscaledDeltaTime;float p=(Mathf.Sin(t*.8f)+1f)*.5f;train.anchorMin=new Vector2(Mathf.Lerp(.15f,.55f,p),Mathf.Lerp(.68f,.24f,p));train.anchorMax=train.anchorMin+new Vector2(.23f,.07f);altitude.text=p<.5f?"DESCENDING  •  VALLEY":"CLIMBING  •  THE NEST";yield return null;}}
+        private IEnumerator RoutePulse(){float t=0;while(!leaving){ApplyResponsiveLayout();t+=Time.unscaledDeltaTime;float p=(Mathf.Sin(t*.8f)+1f)*.5f;train.anchorMin=new Vector2(.44f,Mathf.Lerp(.69f,.25f,p));train.anchorMax=train.anchorMin+new Vector2(.12f,.055f);altitude.text=p<.5f?"DESCENDING  •  VALLEY":"CLIMBING  •  THE NEST";yield return null;}}
         private IEnumerator Leave(System.Action done)
         {
             leaving = true;

@@ -11,14 +11,24 @@ namespace BirdieWorld.Editor
     {
         private const string ScenePath = "Assets/BirdieWorld/Generated/Beta.unity";
         private const string OutputPath = "Builds/WebGL";
+        private static readonly string[] RequiredArt =
+        {
+            "Assets/BirdieWorld/Resources/BirdieWorldArt/express-hero.png",
+            "Assets/BirdieWorld/Resources/BirdieWorldArt/platform-night.png",
+            "Assets/BirdieWorld/Resources/BirdieWorldArt/express-journey.png",
+            "Assets/BirdieWorld/Resources/BirdieWorldArt/nest-forecourt.png",
+            "Assets/BirdieWorld/Resources/BirdieWorldArt/avatar-human.png"
+        };
 
         [MenuItem("BirdieWorld/Build WebGL Beta")]
         public static void BuildWebGL()
         {
+            ValidateRequiredArt();
             EnsureScene();
 
             PlayerSettings.companyName = "Birdie & Breakfast";
             PlayerSettings.productName = "BirdieWorld Beta";
+            PlayerSettings.bundleVersion = "0.2.0-beta.02";
             PlayerSettings.SetApplicationIdentifier(
                 NamedBuildTarget.WebGL,
                 "de.birdieandbreakfast.birdieworld.beta"
@@ -41,6 +51,15 @@ namespace BirdieWorld.Editor
                 throw new BuildFailedException($"BirdieWorld WebGL build failed: {report.summary.result}");
 
             Debug.Log($"BirdieWorld WebGL beta ready at {Path.GetFullPath(OutputPath)}");
+        }
+
+        private static void ValidateRequiredArt()
+        {
+            foreach (var assetPath in RequiredArt)
+            {
+                if (File.Exists(assetPath) && AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath) != null) continue;
+                throw new BuildFailedException($"Required BirdieWorld art asset is missing or invalid: {assetPath}");
+            }
         }
 
         [MenuItem("BirdieWorld/Open Beta Scene")]
