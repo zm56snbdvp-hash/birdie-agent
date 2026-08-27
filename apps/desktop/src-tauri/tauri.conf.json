@@ -13,8 +13,8 @@
     "windows": [{
       "label": "core",
       "title": "Birdie",
-      "width": 260,
-      "height": 260,
+      "width": 1280,
+      "height": 720,
       "decorations": false,
       "transparent": true,
       "shadow": false,
@@ -24,7 +24,7 @@
       "alwaysOnTop": true,
       "skipTaskbar": true,
       "focus": false,
-      "visible": true
+      "visible": false
     }],
     "security": { "csp": null }
   },

@@ -635,6 +635,269 @@ fn recover_dev_webview(app: tauri::AppHandle) {
   });
 }
 
+fn place_on_primary_monitor(
+  window: &tauri::WebviewWindow,
+) -> tauri::Result<Option<String>> {
+  let Some(monitor) = window.primary_monitor()? else {
+    return Ok(None);
+  };
+  let position = monitor.position().to_owned();
+  let size = monitor.size().to_owned();
+  let position_changed = window.outer_position()? != position;
+  let size_changed = window.outer_size()? != size;
+  if position_changed {
+    window.set_position(position.to_owned())?;
+  }
+  if size_changed {
+    window.set_size(size.to_owned())?;
+  }
+  Ok(Some(format!(
+    "position={}x{} size={}x{} changed={}",
+    position.x,
+    position.y,
+    size.width,
+    size.height,
+    position_changed || size_changed,
+  )))
+}
+
+fn report_window_error(
+  app: &tauri::AppHandle,
+  stage: &str,
+  error: impl std::fmt::Display,
+) {
+  app.state::<RuntimeState>().diagnostic.append(
+    "ERROR",
+    format!("stage={stage} error={error}"),
+  );
+}
+
+fn force_overlay_fail_closed(
+  app: &tauri::AppHandle,
+  window: &tauri::WebviewWindow,
+  context: &str,
+) {
+  if let Err(error) = window.set_ignore_cursor_events(true) {
+    report_window_error(
+      app,
+      &format!("{context}.rollback.pass_through"),
+      error,
+    );
+  }
+  if let Err(error) = window.set_focusable(false) {
+    report_window_error(
+      app,
+      &format!("{context}.rollback.focusable"),
+      error,
+    );
+  }
+  if let Err(error) = window.hide() {
+    report_window_error(app, &format!("{context}.rollback.hide"), &error);
+    if let Err(close_error) = window.close() {
+      report_window_error(
+        app,
+        &format!("{context}.rollback.close"),
+        close_error,
+      );
+      app.exit(70);
+    }
+  }
+  app.state::<RuntimeState>().diagnostic.append(
+    "WINDOW_INTERACTION_FAIL_CLOSED",
+    format!("context={context} action=HIDE_OR_CLOSE"),
+  );
+}
+
+fn fail_overlay_transition(
+  app: &tauri::AppHandle,
+  window: &tauri::WebviewWindow,
+  stage: &str,
+  code: &str,
+  error: impl std::fmt::Display,
+) -> Result<(), String> {
+  let detail = error.to_string();
+  report_window_error(app, stage, &detail);
+  force_overlay_fail_closed(app, window, stage);
+  Err(format!("{code}:{detail}"))
+}
+
+fn set_overlay_interaction_mode(
+  app: &tauri::AppHandle,
+  enabled: bool,
+) -> Result<(), String> {
+  let window = app
+    .get_webview_window("core")
+    .ok_or_else(|| "DESKTOP.WINDOW.CORE_MISSING".to_string())?;
+
+  if enabled {
+    if let Err(error) = window.set_focusable(true) {
+      return fail_overlay_transition(
+        app,
+        &window,
+        "window.focusable.enable",
+        "DESKTOP.WINDOW.FOCUSABLE_ENABLE_FAILED",
+        error,
+      );
+    }
+    if let Err(error) = window.set_ignore_cursor_events(false) {
+      return fail_overlay_transition(
+        app,
+        &window,
+        "window.pass_through.disable",
+        "DESKTOP.WINDOW.CONTROL_ENABLE_FAILED",
+        error,
+      );
+    }
+    if let Err(error) = window.show() {
+      return fail_overlay_transition(
+        app,
+        &window,
+        "window.control.show",
+        "DESKTOP.WINDOW.CONTROL_SHOW_FAILED",
+        error,
+      );
+    }
+    if let Err(error) = window.set_focus() {
+      return fail_overlay_transition(
+        app,
+        &window,
+        "window.control.focus",
+        "DESKTOP.WINDOW.CONTROL_FOCUS_FAILED",
+        error,
+      );
+    }
+    app.state::<RuntimeState>().diagnostic.append(
+      "WINDOW_INTERACTION_MODE",
+      "mode=CONTROL cursorEvents=ENABLED",
+    );
+    return Ok(());
+  }
+
+  if let Err(error) = window.set_ignore_cursor_events(true) {
+    return fail_overlay_transition(
+      app,
+      &window,
+      "window.pass_through.enable",
+      "DESKTOP.WINDOW.PASS_THROUGH_FAILED",
+      error,
+    );
+  }
+  if let Err(error) = window.set_focusable(false) {
+    return fail_overlay_transition(
+      app,
+      &window,
+      "window.focusable.disable",
+      "DESKTOP.WINDOW.FOCUSABLE_DISABLE_FAILED",
+      error,
+    );
+  }
+  if let Err(error) = window.show() {
+    return fail_overlay_transition(
+      app,
+      &window,
+      "window.ambient.show",
+      "DESKTOP.WINDOW.AMBIENT_SHOW_FAILED",
+      error,
+    );
+  }
+  if let Err(error) =
+    window.eval("window.__birdieSetInteractionMode?.(false);")
+  {
+    report_window_error(app, "window.ambient.renderer_sync", error);
+  }
+  app.state::<RuntimeState>().diagnostic.append(
+    "WINDOW_INTERACTION_MODE",
+    "mode=AMBIENT cursorEvents=IGNORED",
+  );
+  Ok(())
+}
+
+#[tauri::command]
+fn desktop_set_interaction_mode(
+  app: tauri::AppHandle,
+  enabled: bool,
+) -> Result<(), String> {
+  set_overlay_interaction_mode(&app, enabled)
+}
+
+fn reset_overlay_after_page_load(app: &tauri::AppHandle) {
+  let Some(window) = app.get_webview_window("core") else {
+    report_window_error(app, "window.page_load.lookup", "core window missing");
+    return;
+  };
+
+  let was_visible = match window.is_visible() {
+    Ok(visible) => visible,
+    Err(error) => {
+      report_window_error(app, "window.page_load.visibility", error);
+      false
+    }
+  };
+  if let Err(error) = window.set_ignore_cursor_events(true) {
+    let _ = fail_overlay_transition(
+      app,
+      &window,
+      "window.page_load.pass_through",
+      "DESKTOP.WINDOW.PAGE_LOAD_PASS_THROUGH_FAILED",
+      error,
+    );
+    return;
+  }
+  if let Err(error) = window.set_focusable(false) {
+    let _ = fail_overlay_transition(
+      app,
+      &window,
+      "window.page_load.focusable",
+      "DESKTOP.WINDOW.PAGE_LOAD_FOCUSABLE_FAILED",
+      error,
+    );
+    return;
+  }
+  if let Err(error) =
+    window.eval("window.__birdieSetInteractionMode?.(false);")
+  {
+    report_window_error(app, "window.page_load.renderer_sync", error);
+  }
+  app.state::<RuntimeState>().diagnostic.append(
+    "WINDOW_PAGE_LOAD_RESET",
+    format!("mode=AMBIENT visibilityPreserved={was_visible}"),
+  );
+}
+
+fn prepare_immersive_window(app: &tauri::AppHandle) {
+  let Some(window) = app.get_webview_window("core") else {
+    report_window_error(app, "window.lookup", "core window missing");
+    return;
+  };
+
+  let _ = window.set_fullscreen(false);
+  match place_on_primary_monitor(&window) {
+    Ok(Some(detail)) => app.state::<RuntimeState>().diagnostic.append(
+      "WINDOW_IMMERSIVE_READY",
+      format!("mode=PRIMARY_MONITOR {detail}"),
+    ),
+    Ok(None) => match window.set_fullscreen(true) {
+      Ok(()) => app.state::<RuntimeState>().diagnostic.append(
+        "WINDOW_IMMERSIVE_READY",
+        "mode=CURRENT_MONITOR_FULLSCREEN fallback=NO_PRIMARY_MONITOR",
+      ),
+      Err(error) => report_window_error(app, "window.fullscreen.fallback", error),
+    },
+    Err(error) => {
+      report_window_error(app, "window.primary_monitor", error);
+      if let Err(fallback_error) = window.set_fullscreen(true) {
+        report_window_error(
+          app,
+          "window.fullscreen.fallback",
+          fallback_error,
+        );
+      }
+    }
+  }
+
+  let _ = set_overlay_interaction_mode(app, false);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   let diagnostic = DiagnosticLog::open()
@@ -663,12 +926,33 @@ pub fn run() {
       runtime_get_snapshot,
       runtime_set_microphone_enabled,
       runtime_log_frontend,
+      desktop_set_interaction_mode,
     ])
-    .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-      if let Some(window) = app.get_webview_window("core") {
-        let _ = window.show();
-        let _ = window.set_focus();
+    .on_page_load(|webview, _payload| {
+      if webview.label() == "core" {
+        reset_overlay_after_page_load(webview.app_handle());
       }
+    })
+    .on_window_event(|window, event| {
+      if window.label() != "core"
+        || !matches!(
+          event,
+          tauri::WindowEvent::Resized(_)
+            | tauri::WindowEvent::Moved(_)
+            | tauri::WindowEvent::ScaleFactorChanged { .. }
+        )
+      {
+        return;
+      }
+      let app = window.app_handle();
+      if let Some(core) = app.get_webview_window("core") {
+        if let Err(error) = place_on_primary_monitor(&core) {
+          report_window_error(app, "window.monitor_change", error);
+        }
+      }
+    })
+    .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+      prepare_immersive_window(app);
     }))
     .plugin(tauri_plugin_autostart::Builder::new().build())
     .setup(|app| {
@@ -676,11 +960,26 @@ pub fn run() {
       let _ = app.manage(supervisor);
       start_core_ipc(app.handle().clone());
       recover_dev_webview(app.handle().clone());
+      prepare_immersive_window(app.handle());
 
       let show = MenuItem::with_id(
         app,
         "show",
         "Birdie anzeigen",
+        true,
+        None::<&str>,
+      )?;
+      let interact = MenuItem::with_id(
+        app,
+        "interact",
+        "Birdie bedienen",
+        true,
+        None::<&str>,
+      )?;
+      let passive = MenuItem::with_id(
+        app,
+        "passive",
+        "Präsenzmodus",
         true,
         None::<&str>,
       )?;
@@ -698,16 +997,30 @@ pub fn run() {
         true,
         None::<&str>,
       )?;
-      let menu = Menu::with_items(app, &[&show, &hide, &quit])?;
+      let menu = Menu::with_items(
+        app,
+        &[&show, &interact, &passive, &hide, &quit],
+      )?;
       TrayIconBuilder::new()
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
           "show" => {
+            prepare_immersive_window(app);
+          }
+          "interact" => {
             if let Some(window) = app.get_webview_window("core") {
-              let _ = window.show();
+              if let Err(error) = window.eval(
+                "window.__birdieRequestControlMode?.();",
+              ) {
+                report_window_error(app, "window.control.request", error);
+              }
             }
           }
+          "passive" => {
+            let _ = set_overlay_interaction_mode(app, false);
+          }
           "hide" => {
+            let _ = set_overlay_interaction_mode(app, false);
             if let Some(window) = app.get_webview_window("core") {
               let _ = window.hide();
             }
