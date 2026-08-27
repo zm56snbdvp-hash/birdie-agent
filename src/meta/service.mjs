@@ -153,7 +153,7 @@ export function createMetaCommunityService({
         event,
         source: "Birdie Agent Meta Adapter"
       });
-      const data = event.eventType === "IG_COMMENT"
+      const data = ["IG_COMMENT", "IG_DM_WELCOME"].includes(event.eventType)
         ? validateCommentReadback(event, response)
         : validateDmReadback(event, response);
       results.push({

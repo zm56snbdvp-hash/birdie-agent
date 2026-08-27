@@ -191,25 +191,29 @@ export function normalizeMetaWebhook(
       const message = item?.message ?? {};
       if (message.is_echo === true) continue;
 
-      const sourceReference = messageReference(message.mid);
+      const messageId = messageReference(message.mid);
       const senderId = messageReference(item?.sender?.id);
-      const syncEventId = `SCE-IG-DM-${sourceReference}`;
+      const syncEventId = `SCE-IG-DM-WELCOME-${senderId}`;
+      if (eventsById.has(syncEventId)) continue;
 
       addUniqueEvent(eventsById, {
         syncEventId,
+        workItemId: `WORK-IG-DM-WELCOME-${senderId}`,
+        sourceSnapshotKey: `SSK-IG-DM-WELCOME-${senderId}`,
         sourceType: "INSTAGRAM",
         sourceAccount: account,
-        sourceReference,
+        sourceReference: senderId,
         externalUserId: senderId,
-        eventType: "DM_RECEIVED",
-        actionCode: "INSTAGRAM_DM",
+        eventType: "IG_DM_WELCOME",
+        actionCode: "IG_DM_WELCOME",
         payloadSummary: compact(
-          `messageId=${sourceReference} | senderScopedId=${senderId} | text=${message.text ?? ""}`
+          `firstMessageId=${messageId} | senderScopedId=${senderId} | text=${message.text ?? ""}`
         ),
         detectedAt: eventTimestamp(item?.timestamp ?? entry?.time),
         syncStatus: "PENDING",
-        idempotencyKey: `ig:dm:${senderId}:${sourceReference}`,
-        notes: "Signed Meta DM webhook ingested queue-only; no Coin event is created."
+        idempotencyKey: `ig:ig_dm_welcome:${senderId}`,
+        notes:
+          "Signed inbound Instagram DM establishes the once-per-account welcome Coin entitlement; identity and ledger write remain governed."
       });
     }
   }
