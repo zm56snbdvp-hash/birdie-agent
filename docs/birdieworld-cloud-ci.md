@@ -79,7 +79,7 @@ unset BIRDIEWORLD_INVITE_GATE_HMAC_KEY ACCEPTED_MANIFEST_SHA256 VERCEL_ORG_ID VE
 - `workflow_dispatch` defaults to `build-only`.
 - Builds are uploaded as a GitHub artifact even when Vercel credentials are absent.
 - Each artifact contains `birdieworld-build.json` plus `birdieworld-files.sha256`; the summary prints its run ID, source SHA and manifest digest.
-- `production` must run from `main` and requires the exact `GO_BIRDIEWORLD_CHARACTER_BETA_01`, accepted run ID, accepted source SHA and accepted manifest digest.
+- `production` must run from `main` and requires the exact `GO_BIRDIEWORLD_CHARACTER_BETA_02`, accepted run ID, accepted source SHA and accepted manifest digest.
 - The accepted run must be this workflow's successful `build-review-artifact` job on `main`; a production run cannot be reused as build evidence.
 - The manifest must seal every regular file and the required release files. Hidden paths, symlinks, missing files and extras are rejected before `npx` runs.
 - A fresh invite-only receipt binds the exact Vercel org/project, accepted manifest digest and check timestamp. It expires after 30 minutes.

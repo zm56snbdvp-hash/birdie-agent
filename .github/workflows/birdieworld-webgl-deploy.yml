@@ -159,7 +159,7 @@ jobs:
             echo 'Production release blocked: dispatch must run from main.'
             exit 4
           }
-          test "$PRODUCTION_CONFIRMATION_INPUT" = 'GO_BIRDIEWORLD_CHARACTER_BETA_01' || {
+          test "$PRODUCTION_CONFIRMATION_INPUT" = 'GO_BIRDIEWORLD_CHARACTER_BETA_02' || {
             echo 'Production release blocked: exact Founder confirmation is missing.'
             exit 5
           }

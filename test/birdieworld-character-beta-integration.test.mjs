@@ -216,6 +216,8 @@ test("build automation cannot deploy production without exact Founder confirmati
   assert.match(workflow, /BIRDIEWORLD_INVITE_GATE_HMAC_KEY/);
   assert.match(workflow, /birdieworld-invite-v1/);
   assert.match(workflow, /ageMs > 30 \* 60 \* 1000/);
+  assert.match(workflow, /GO_BIRDIEWORLD_CHARACTER_BETA_02/);
+  assert.doesNotMatch(workflow, /GO_BIRDIEWORLD_CHARACTER_BETA_01/);
   assert.match(workflow, /vercel@59\.5\.0/);
   assert.doesNotMatch(workflow, /vercel@latest/);
   assert.match(workflow, /birdieworld-build\.json/);

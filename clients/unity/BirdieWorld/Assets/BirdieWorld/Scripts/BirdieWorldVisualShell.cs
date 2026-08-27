@@ -33,7 +33,7 @@ namespace BirdieWorld
 
             Button(root, "REISE BEGINNEN", new Vector2(.07f,.31f), new Vector2(.33f,.39f));
             Button(root, "MEIN BIRDIE", new Vector2(.07f,.205f), new Vector2(.33f,.285f));
-            Text(root, "BETA 01  •  CHARACTER CREATION", 15, new Vector2(.07f,.10f), new Vector2(.45f,.15f), brass, TextAnchor.MiddleLeft);
+            Text(root, "BETA 02  •  CHARACTER CREATION", 15, new Vector2(.07f,.10f), new Vector2(.45f,.15f), brass, TextAnchor.MiddleLeft);
         }
 
         private GameObject Panel(Transform parent,string name,Vector2 min,Vector2 max,Color color){var g=new GameObject(name,typeof(RectTransform),typeof(Image));g.transform.SetParent(parent,false);var r=(RectTransform)g.transform;r.anchorMin=min;r.anchorMax=max;r.offsetMin=r.offsetMax=Vector2.zero;g.GetComponent<Image>().color=color;return g;}
