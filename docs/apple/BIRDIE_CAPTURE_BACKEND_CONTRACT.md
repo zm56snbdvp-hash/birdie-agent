@@ -18,8 +18,23 @@ Required invariants:
 
 The production adapter should run only in `BirdiePhone` and use an authenticated background `URLSession` for large originals. The URL and auth scheme are deployment configuration, not source code constants.
 
+## Existing Birdie Agent runtime
+
+Repository and read-only runtime inspection found the existing Birdie Agent base URL and app-auth settings:
+
 ```text
-POST /v1/captures
+Base URL:    https://birdie-agent-893591677320.europe-west3.run.app
+Issuer:      https://dev-dfveukr86fg3e8fr.eu.auth0.com/
+Audience:    https://birdie-agent-893591677320.europe-west3.run.app
+JWKS:        https://dev-dfveukr86fg3e8fr.eu.auth0.com/.well-known/jwks.json
+Scope:       birdie-world:access
+Birdie claim: https://birdieandbreakfast.de/birdie_id
+```
+
+The existing authenticated app surface uses the `/birdie-app/v1/*` prefix. A read-only `GET /birdie-app/v1/captures` probe currently returns `404 BIRDIE_APP_ROUTE_NOT_FOUND`; no capture route or durable capture storage exists in the checked-out server. Therefore the adapter below is a ready client scaffold, not an enabled production integration. Adding the route requires a separately reviewed server-side storage decision.
+
+```text
+POST /birdie-app/v1/captures
 Authorization: Bearer <short-lived user access token>
 Idempotency-Key: birdie.capture.v1.<uuid>
 Content-Type: application/json

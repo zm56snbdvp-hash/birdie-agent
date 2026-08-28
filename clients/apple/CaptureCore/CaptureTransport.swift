@@ -161,7 +161,7 @@ public struct CaptureBackendConfiguration: Sendable, Equatable {
     public let baseURL: URL
     public let capturesPath: String
 
-    public init(baseURL: URL, capturesPath: String = "/v1/captures") throws {
+    public init(baseURL: URL, capturesPath: String = "/birdie-app/v1/captures") throws {
         guard baseURL.scheme?.lowercased() == "https", baseURL.host != nil else {
             throw CaptureAdapterError.permanent(
                 code: "invalid_backend_configuration",
@@ -169,7 +169,7 @@ public struct CaptureBackendConfiguration: Sendable, Equatable {
             )
         }
         let normalizedPath = capturesPath.hasPrefix("/") ? capturesPath : "/\(capturesPath)"
-        guard normalizedPath.contains("/v1/") else {
+        guard normalizedPath.contains("/birdie-app/v1/") else {
             throw CaptureAdapterError.permanent(
                 code: "invalid_backend_configuration",
                 message: "Der Capture-Backend-Endpunkt muss versioniert sein."

@@ -111,10 +111,13 @@ test("backend contract is explicit but remains disabled behind the local mock", 
   assert.match(contract, /capture_idempotency_conflict/);
   assert.match(contract, /derivedTextOnly\|includeOriginals/);
   assert.match(contract, /background `URLSession`/);
+  assert.match(contract, /birdie-agent-893591677320\.europe-west3\.run\.app/);
+  assert.match(contract, /404 BIRDIE_APP_ROUTE_NOT_FOUND/);
   assert.match(transport, /LocalCaptureMockAdapter/);
   assert.match(transport, /HTTPSCaptureBackendAdapter/);
   assert.match(transport, /original_upload_not_enabled/);
   assert.match(transport, /Idempotency-Key/);
+  assert.match(transport, /birdie-app\/v1\/captures/);
   const localAdapter = transport.slice(
     transport.indexOf("public struct LocalCaptureMockAdapter"),
     transport.indexOf("public actor CaptureQueueProcessor"),
