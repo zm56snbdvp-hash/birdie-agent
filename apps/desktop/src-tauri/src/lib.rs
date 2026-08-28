@@ -1,152 +1,192 @@
+mod desktop_commands;
+mod local_store;
 mod process_supervisor;
+mod surface;
 
-use process_supervisor::ProcessSupervisor;
-use std::{
-  env,
-  fs::{File, OpenOptions},
-  io::{BufRead, BufReader, Write},
-  path::PathBuf,
-  sync::Mutex,
-  thread,
-  time::{Duration, SystemTime, UNIX_EPOCH},
+use desktop_commands::{
+    CommandDisposition, CommandName, DesktopCommand, DesktopCommandResult, DesktopExecutionLedger,
 };
+use local_store::{now_ms, CaptureEntry, FocusState, LocalStore};
+use process_supervisor::ProcessSupervisor;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use std::{
+    env,
+    fs::{File, OpenOptions},
+    io::{BufRead, BufReader, Write},
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        Arc, Mutex,
+    },
+    thread,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use surface::{DesktopMode, ModuleId, SurfaceSnapshot, SurfaceState};
 use tauri::{
-  menu::{Menu, MenuItem},
-  tray::TrayIconBuilder,
-  Emitter, Manager, State,
+    menu::{Menu, MenuItem},
+    tray::TrayIconBuilder,
+    Emitter, Manager, State,
 };
 
 const CONTRACT_VERSION: &str = "1.0";
 const CORE_PIPE: &str = r"\\.\pipe\birdie.core.control.v1";
 const BUILD_ID: &str = match option_env!("BIRDIE_DESKTOP_BUILD_ID") {
-  Some(value) => value,
-  None => "development-unversioned",
+    Some(value) => value,
+    None => "development-unversioned",
 };
-pub(crate) const EVENT_RUNTIME_PRESENCE_CHANGED: &str =
-  "runtime:presence-changed";
+pub(crate) const EVENT_RUNTIME_PRESENCE_CHANGED: &str = "runtime:presence-changed";
 pub(crate) const EVENT_RUNTIME_SNAPSHOT: &str = "runtime:snapshot";
 pub(crate) const EVENT_RUNTIME_DISCONNECTED: &str = "runtime:disconnected";
 pub(crate) const EVENT_RUNTIME_CONNECTED: &str = "runtime:connected";
 pub(crate) const EVENT_RUNTIME_AUDIO_INPUT: &str = "runtime:audio-input";
 pub(crate) const EVENT_RUNTIME_AUDIO_OUTPUT: &str = "runtime:audio-output";
 pub(crate) const EVENT_RUNTIME_IPC_ERROR: &str = "runtime:ipc-error";
+pub(crate) const EVENT_DESKTOP_SURFACE_CHANGED: &str = "desktop:surface-changed";
+pub(crate) const EVENT_DESKTOP_COMMAND_STATUS: &str = "desktop:command-status";
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PresenceSnapshot {
-  revision: u64,
-  state: String,
-  #[serde(default)]
-  reason: String,
+    revision: u64,
+    state: String,
+    #[serde(default)]
+    reason: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RuntimeSnapshot {
-  #[serde(default = "default_lifecycle")]
-  lifecycle: String,
-  presence: PresenceSnapshot,
-  #[serde(default = "default_microphone_state")]
-  microphone_state: String,
-  #[serde(default = "default_brain_state")]
-  brain_state: String,
-  #[serde(default)]
-  bridge_revision: u64,
+    #[serde(default = "default_lifecycle")]
+    lifecycle: String,
+    presence: PresenceSnapshot,
+    #[serde(default = "default_microphone_state")]
+    microphone_state: String,
+    #[serde(default = "default_brain_state")]
+    brain_state: String,
+    #[serde(default)]
+    bridge_revision: u64,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemSnapshot {
+    core_status: String,
+    voice_status: String,
+    microphone_state: String,
+    presence_state: String,
+    brain_state: String,
+    ipc_state: String,
+    connection_id: Option<String>,
+    last_core_message_at: Option<u64>,
+    mode: DesktopMode,
+    active_module: Option<ModuleId>,
+    global_shortcut_status: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct DesktopCommandMessage {
+    #[serde(rename = "type")]
+    message_type: String,
+    request_id: String,
+    payload: DesktopCommand,
 }
 
 fn default_lifecycle() -> String {
-  "READY".into()
+    "READY".into()
 }
 
 fn default_microphone_state() -> String {
-  "UNAVAILABLE".into()
+    "UNAVAILABLE".into()
 }
 
 fn default_brain_state() -> String {
-  "UNAVAILABLE".into()
+    "UNAVAILABLE".into()
 }
 
 struct DiagnosticLog {
-  path: PathBuf,
-  file: Mutex<File>,
+    path: PathBuf,
+    file: Mutex<File>,
 }
 
 impl DiagnosticLog {
-  fn open() -> Result<Self, String> {
-    let path = env::var_os("BIRDIE_DESKTOP_DIAGNOSTIC_LOG")
-      .map(PathBuf::from)
-      .unwrap_or_else(default_diagnostic_path);
-    if let Some(parent) = path.parent() {
-      std::fs::create_dir_all(parent).map_err(|error| {
-        format!(
-          "DESKTOP.DIAGNOSTIC.CREATE_DIR_FAILED path={} error={error}",
-          parent.display(),
-        )
-      })?;
+    fn open() -> Result<Self, String> {
+        let path = env::var_os("BIRDIE_DESKTOP_DIAGNOSTIC_LOG")
+            .map(PathBuf::from)
+            .unwrap_or_else(default_diagnostic_path);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| {
+                format!(
+                    "DESKTOP.DIAGNOSTIC.CREATE_DIR_FAILED path={} error={error}",
+                    parent.display(),
+                )
+            })?;
+        }
+        let file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .map_err(|error| {
+                format!(
+                    "DESKTOP.DIAGNOSTIC.OPEN_FAILED path={} error={error}",
+                    path.display(),
+                )
+            })?;
+        Ok(Self {
+            path,
+            file: Mutex::new(file),
+        })
     }
-    let file = OpenOptions::new()
-      .create(true)
-      .append(true)
-      .open(&path)
-      .map_err(|error| {
-        format!(
-          "DESKTOP.DIAGNOSTIC.OPEN_FAILED path={} error={error}",
-          path.display(),
-        )
-      })?;
-    Ok(Self {
-      path,
-      file: Mutex::new(file),
-    })
-  }
 
-  fn append(&self, event: &str, detail: impl AsRef<str>) {
-    let timestamp = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .map(|duration| duration.as_millis())
-      .unwrap_or(0);
-    let detail = compact_detail(detail.as_ref());
-    let line = format!("{timestamp} {event} {detail}\n");
-    let mut file = self.file.lock().unwrap_or_else(|_| {
-      panic!(
-        "DESKTOP.DIAGNOSTIC.LOCK_POISONED path={}",
-        self.path.display(),
-      )
-    });
-    file.write_all(line.as_bytes()).unwrap_or_else(|error| {
-      panic!(
-        "DESKTOP.DIAGNOSTIC.WRITE_FAILED path={} error={error}",
-        self.path.display(),
-      )
-    });
-    file.flush().unwrap_or_else(|error| {
-      panic!(
-        "DESKTOP.DIAGNOSTIC.FLUSH_FAILED path={} error={error}",
-        self.path.display(),
-      )
-    });
-  }
+    fn append(&self, event: &str, detail: impl AsRef<str>) {
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        let detail = compact_detail(detail.as_ref());
+        let line = format!("{timestamp} {event} {detail}\n");
+        let mut file = self.file.lock().unwrap_or_else(|_| {
+            panic!(
+                "DESKTOP.DIAGNOSTIC.LOCK_POISONED path={}",
+                self.path.display(),
+            )
+        });
+        file.write_all(line.as_bytes()).unwrap_or_else(|error| {
+            panic!(
+                "DESKTOP.DIAGNOSTIC.WRITE_FAILED path={} error={error}",
+                self.path.display(),
+            )
+        });
+        file.flush().unwrap_or_else(|error| {
+            panic!(
+                "DESKTOP.DIAGNOSTIC.FLUSH_FAILED path={} error={error}",
+                self.path.display(),
+            )
+        });
+    }
 }
 
 fn default_diagnostic_path() -> PathBuf {
-  PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-    .join("../../..")
-    .join(".birdie/logs/desktop-runtime-diagnostic.log")
+    env::var_os("LOCALAPPDATA")
+        .map(PathBuf::from)
+        .unwrap_or_else(std::env::temp_dir)
+        .join("Birdie")
+        .join("logs")
+        .join("desktop-runtime-diagnostic.log")
 }
 
 fn compact_detail(detail: &str) -> String {
-  detail
-    .replace('\r', " ")
-    .replace('\n', " ")
-    .chars()
-    .take(2_000)
-    .collect()
+    detail
+        .replace('\r', " ")
+        .replace('\n', " ")
+        .chars()
+        .take(2_000)
+        .collect()
 }
 
 fn snapshot_summary(snapshot: &RuntimeSnapshot) -> String {
-  format!(
+    format!(
     "bridgeRevision={} lifecycle={} presence.state={} presence.revision={} microphoneState={} brainState={}",
     snapshot.bridge_revision,
     snapshot.lifecycle,
@@ -157,231 +197,365 @@ fn snapshot_summary(snapshot: &RuntimeSnapshot) -> String {
   )
 }
 
-fn replace_authoritative_snapshot(
-  current: &mut RuntimeSnapshot,
-  mut next: RuntimeSnapshot,
-) {
-  next.bridge_revision = current.bridge_revision.saturating_add(1);
-  *current = next;
+fn replace_authoritative_snapshot(current: &mut RuntimeSnapshot, mut next: RuntimeSnapshot) {
+    next.bridge_revision = current.bridge_revision.saturating_add(1);
+    *current = next;
 }
 
 fn transition_to_disconnected(snapshot: &mut RuntimeSnapshot) {
-  snapshot.bridge_revision = snapshot.bridge_revision.saturating_add(1);
-  snapshot.lifecycle = "DEGRADED".into();
-  snapshot.microphone_state = "UNAVAILABLE".into();
-  snapshot.presence.state = "OFFLINE".into();
-  snapshot.presence.reason = "runtime.ipc.disconnected".into();
+    snapshot.bridge_revision = snapshot.bridge_revision.saturating_add(1);
+    snapshot.lifecycle = "DEGRADED".into();
+    snapshot.microphone_state = "UNAVAILABLE".into();
+    snapshot.presence.state = "OFFLINE".into();
+    snapshot.presence.reason = "runtime.ipc.disconnected".into();
 }
 
 struct RuntimeState {
-  snapshot: Mutex<RuntimeSnapshot>,
-  writer: Mutex<Option<std::fs::File>>,
-  diagnostic: DiagnosticLog,
+    snapshot: Mutex<RuntimeSnapshot>,
+    writer: Mutex<Option<std::fs::File>>,
+    instance_id: String,
+    connection_id: Mutex<Option<String>>,
+    ipc_state: Mutex<String>,
+    last_core_message_at: AtomicU64,
+    execution_ledger: Mutex<DesktopExecutionLedger>,
+    diagnostic: DiagnosticLog,
 }
 
 #[tauri::command]
-fn runtime_get_snapshot(
-  state: State<'_, RuntimeState>,
-  last_revision: i64,
-) -> RuntimeSnapshot {
-  state.diagnostic.append(
-    "TAURI_INVOKE",
-    format!("command=runtime_get_snapshot lastRevision={last_revision}"),
-  );
-  let snapshot = state
-    .snapshot
-    .lock()
-    .expect("runtime state poisoned")
-    .clone();
-  state.diagnostic.append(
-    "TAURI_INVOKE_RESULT",
-    format!("command=runtime_get_snapshot {}", snapshot_summary(&snapshot)),
-  );
-  snapshot
+fn runtime_get_snapshot(state: State<'_, RuntimeState>, last_revision: i64) -> RuntimeSnapshot {
+    state.diagnostic.append(
+        "TAURI_INVOKE",
+        format!("command=runtime_get_snapshot lastRevision={last_revision}"),
+    );
+    let snapshot = state
+        .snapshot
+        .lock()
+        .expect("runtime state poisoned")
+        .clone();
+    state.diagnostic.append(
+        "TAURI_INVOKE_RESULT",
+        format!(
+            "command=runtime_get_snapshot {}",
+            snapshot_summary(&snapshot)
+        ),
+    );
+    snapshot
+}
+
+#[tauri::command]
+fn runtime_get_system_snapshot(
+    runtime: State<'_, RuntimeState>,
+    surface: State<'_, SurfaceState>,
+    supervisor: State<'_, ProcessSupervisor>,
+) -> SystemSnapshot {
+    let snapshot = runtime
+        .snapshot
+        .lock()
+        .expect("runtime state poisoned")
+        .clone();
+    let ipc_state = runtime
+        .ipc_state
+        .lock()
+        .expect("runtime IPC state poisoned")
+        .clone();
+    let connection_id = runtime
+        .connection_id
+        .lock()
+        .expect("runtime connection state poisoned")
+        .clone();
+    let last_message = runtime.last_core_message_at.load(Ordering::Acquire);
+    let surface = surface.snapshot();
+    let core_process_status = supervisor.component_status("birdie-core");
+    let core_status = if ipc_state == "CONNECTED" {
+        "READY".into()
+    } else if core_process_status == "RUNNING" {
+        "RUNNING_NO_IPC".into()
+    } else if core_process_status == "UNMANAGED" {
+        if ipc_state == "CONNECTING" {
+            "CONNECTING".into()
+        } else {
+            "OFFLINE".into()
+        }
+    } else {
+        core_process_status
+    };
+    let voice_process_status = supervisor.component_status("birdie-voice");
+    let voice_status = match voice_process_status.as_str() {
+        "UNMANAGED" => match snapshot.microphone_state.as_str() {
+            "ENABLED" | "MUTED_BY_USER" | "PERMISSION_DENIED" => "CONNECTED".into(),
+            "UNAVAILABLE" => "UNAVAILABLE".into(),
+            _ => "UNKNOWN".into(),
+        },
+        _ => voice_process_status,
+    };
+    SystemSnapshot {
+        core_status,
+        voice_status,
+        microphone_state: snapshot.microphone_state,
+        presence_state: snapshot.presence.state,
+        brain_state: snapshot.brain_state,
+        ipc_state,
+        connection_id,
+        last_core_message_at: (last_message > 0).then_some(last_message),
+        mode: surface.mode,
+        active_module: surface.active_module,
+        global_shortcut_status: surface.global_shortcut_status,
+    }
 }
 
 #[tauri::command]
 fn runtime_set_microphone_enabled(
-  state: State<'_, RuntimeState>,
-  enabled: bool,
+    state: State<'_, RuntimeState>,
+    enabled: bool,
 ) -> Result<(), String> {
-  let nonce = SystemTime::now()
-    .duration_since(UNIX_EPOCH)
-    .map_err(|error| format!("SYSTEM.CLOCK_ERROR:{error}"))?
-    .as_millis();
-  let command = json!({
-    "type": "runtime.command",
-    "requestId": format!("desktop-mic-{}-{nonce}", std::process::id()),
-    "payload": {
-      "name": "ui.microphone.set_enabled",
-      "enabled": enabled,
-    },
-  });
-  state.diagnostic.append(
-    "TAURI_INVOKE",
-    format!("command=runtime_set_microphone_enabled enabled={enabled}"),
-  );
-  let result = send_pipe_message(&state.writer, &command);
-  match &result {
-    Ok(()) => state.diagnostic.append(
-      "TAURI_INVOKE_RESULT",
-      "command=runtime_set_microphone_enabled result=OK",
-    ),
-    Err(error) => state.diagnostic.append(
-      "ERROR",
-      format!("stage=runtime_set_microphone_enabled error={error}"),
-    ),
-  }
-  result
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| format!("SYSTEM.CLOCK_ERROR:{error}"))?
+        .as_millis();
+    let command = json!({
+      "type": "runtime.command",
+      "requestId": format!("desktop-mic-{}-{nonce}", std::process::id()),
+      "payload": {
+        "name": "ui.microphone.set_enabled",
+        "enabled": enabled,
+      },
+    });
+    state.diagnostic.append(
+        "TAURI_INVOKE",
+        format!("command=runtime_set_microphone_enabled enabled={enabled}"),
+    );
+    let result = send_pipe_message(&state.writer, &command);
+    match &result {
+        Ok(()) => state.diagnostic.append(
+            "TAURI_INVOKE_RESULT",
+            "command=runtime_set_microphone_enabled result=OK",
+        ),
+        Err(error) => state.diagnostic.append(
+            "ERROR",
+            format!("stage=runtime_set_microphone_enabled error={error}"),
+        ),
+    }
+    result
 }
 
 #[tauri::command]
-fn runtime_log_frontend(
-  state: State<'_, RuntimeState>,
-  stage: String,
-  detail: String,
-) {
-  state.diagnostic.append(&stage, format!("source=js {detail}"));
+fn runtime_submit_desktop_intent(
+    state: State<'_, RuntimeState>,
+    command_id: String,
+    text: String,
+    issued_at_ms: u64,
+    expires_at_ms: u64,
+) -> Result<Value, String> {
+    if !valid_transport_id(&command_id) {
+        return Err("DESKTOP.COMMAND.ID_INVALID".into());
+    }
+    let text = text.trim();
+    if text.is_empty() || text.chars().count() > 500 {
+        return Err("DESKTOP.INTENT.TEXT_INVALID".into());
+    }
+    let current = now_ms();
+    if expires_at_ms <= issued_at_ms
+        || expires_at_ms.saturating_sub(issued_at_ms) > 30_000
+        || expires_at_ms <= current
+        || issued_at_ms > current.saturating_add(5_000)
+    {
+        return Err("DESKTOP.COMMAND.DEADLINE_INVALID".into());
+    }
+    let message = json!({
+      "type": "desktop.intent.submit",
+      "requestId": format!("desktop-intent-{command_id}"),
+      "payload": {
+        "commandId": &command_id,
+        "text": text,
+        "issuedAtMs": issued_at_ms,
+        "expiresAtMs": expires_at_ms,
+      },
+    });
+    send_pipe_message(&state.writer, &message)?;
+    Ok(json!({
+      "commandId": command_id,
+      "status": "SENT",
+      "errorCode": Value::Null,
+    }))
 }
 
-fn send_pipe_message(
-  writer: &Mutex<Option<std::fs::File>>,
-  value: &Value,
-) -> Result<(), String> {
-  let mut guard = writer
-    .lock()
-    .map_err(|_| "runtime writer poisoned".to_string())?;
-  let file = guard
-    .as_mut()
-    .ok_or_else(|| "RUNTIME.IPC.DISCONNECTED".to_string())?;
-  writeln!(file, "{}", value)
-    .map_err(|error| format!("RUNTIME.IPC.WRITE_FAILED:{error}"))?;
-  file
-    .flush()
-    .map_err(|error| format!("RUNTIME.IPC.FLUSH_FAILED:{error}"))
+#[tauri::command]
+fn focus_get_state(store: State<'_, LocalStore>) -> Result<FocusState, String> {
+    store.focus()
+}
+
+#[tauri::command]
+fn focus_save_state(store: State<'_, LocalStore>, state: FocusState) -> Result<FocusState, String> {
+    store.save_focus(state)
+}
+
+#[tauri::command]
+fn capture_list(store: State<'_, LocalStore>) -> Result<Vec<CaptureEntry>, String> {
+    store.captures()
+}
+
+#[tauri::command]
+fn capture_add(store: State<'_, LocalStore>, text: String) -> Result<CaptureEntry, String> {
+    store.add_capture(text)
+}
+
+#[tauri::command]
+fn capture_delete(store: State<'_, LocalStore>, id: String) -> Result<bool, String> {
+    store.delete_capture(&id)
+}
+
+fn valid_transport_id(value: &str) -> bool {
+    (8..=128).contains(&value.len())
+        && value.chars().enumerate().all(|(index, character)| {
+            character.is_ascii_alphanumeric()
+                || (index > 0 && matches!(character, '.' | '_' | ':' | '-'))
+        })
+}
+
+#[tauri::command]
+fn runtime_log_frontend(state: State<'_, RuntimeState>, stage: String, detail: String) {
+    state
+        .diagnostic
+        .append(&stage, format!("source=js {detail}"));
+}
+
+fn send_pipe_message(writer: &Mutex<Option<std::fs::File>>, value: &Value) -> Result<(), String> {
+    let mut guard = writer
+        .lock()
+        .map_err(|_| "runtime writer poisoned".to_string())?;
+    let file = guard
+        .as_mut()
+        .ok_or_else(|| "RUNTIME.IPC.DISCONNECTED".to_string())?;
+    writeln!(file, "{}", value).map_err(|error| format!("RUNTIME.IPC.WRITE_FAILED:{error}"))?;
+    file.flush()
+        .map_err(|error| format!("RUNTIME.IPC.FLUSH_FAILED:{error}"))
 }
 
 fn desktop_hello() -> Value {
-  json!({
-    "type": "component.hello",
-    "requestId": format!("desktop-hello-{}", std::process::id()),
-    "payload": {
-      "component": "birdie-desktop",
-      "role": "desktop",
-      "instanceId": format!("birdie-desktop-{}", std::process::id()),
-      "contractVersion": CONTRACT_VERSION,
-    },
-  })
+    let instance_id = desktop_instance_id();
+    json!({
+      "type": "component.hello",
+      "requestId": format!("desktop-hello-{}", std::process::id()),
+      "payload": {
+        "component": "birdie-desktop",
+        "role": "desktop",
+        "instanceId": instance_id,
+        "contractVersion": CONTRACT_VERSION,
+      },
+    })
+}
+
+fn desktop_instance_id() -> String {
+    format!("birdie-desktop-{}", std::process::id())
 }
 
 fn desktop_snapshot_request() -> Value {
-  json!({
-    "type": "runtime.snapshot.request",
-    "requestId": format!("desktop-snapshot-{}", std::process::id()),
-    "payload": {},
-  })
+    json!({
+      "type": "runtime.snapshot.request",
+      "requestId": format!("desktop-snapshot-{}", std::process::id()),
+      "payload": {},
+    })
 }
 
 fn clear_runtime_writer(app: &tauri::AppHandle) {
-  let runtime = app.state::<RuntimeState>();
-  *runtime
-    .writer
-    .lock()
-    .expect("runtime writer poisoned") = None;
+    let runtime = app.state::<RuntimeState>();
+    *runtime.writer.lock().expect("runtime writer poisoned") = None;
+    *runtime
+        .connection_id
+        .lock()
+        .expect("runtime connection state poisoned") = None;
+    *runtime
+        .ipc_state
+        .lock()
+        .expect("runtime IPC state poisoned") = "DISCONNECTED".into();
 }
 
 fn mark_runtime_disconnected(app: &tauri::AppHandle) {
-  let snapshot = {
-    let runtime = app.state::<RuntimeState>();
-    let mut snapshot = runtime
-      .snapshot
-      .lock()
-      .expect("runtime state poisoned");
-    transition_to_disconnected(&mut snapshot);
-    snapshot.clone()
-  };
+    let snapshot = {
+        let runtime = app.state::<RuntimeState>();
+        let mut snapshot = runtime.snapshot.lock().expect("runtime state poisoned");
+        transition_to_disconnected(&mut snapshot);
+        snapshot.clone()
+    };
 
-  app.state::<RuntimeState>().diagnostic.append(
-    "RUNTIME_DISCONNECTED",
-    snapshot_summary(&snapshot),
-  );
+    app.state::<RuntimeState>()
+        .diagnostic
+        .append("RUNTIME_DISCONNECTED", snapshot_summary(&snapshot));
 
-  if let Err(error) = app.emit(
-    EVENT_RUNTIME_DISCONNECTED,
-    json!({
-      "reason": "RUNTIME.IPC.DISCONNECTED",
-      "bridgeRevision": snapshot.bridge_revision,
-    }),
-  ) {
-    app.state::<RuntimeState>().diagnostic.append(
-      "ERROR",
-      format!("stage=emit.runtime.disconnected error={error}"),
-    );
-  }
-  if let Err(error) = app.emit(EVENT_RUNTIME_SNAPSHOT, snapshot) {
-    app.state::<RuntimeState>().diagnostic.append(
-      "ERROR",
-      format!("stage=emit.runtime.snapshot.disconnected error={error}"),
-    );
-  }
+    if let Err(error) = app.emit(
+        EVENT_RUNTIME_DISCONNECTED,
+        json!({
+          "reason": "RUNTIME.IPC.DISCONNECTED",
+          "bridgeRevision": snapshot.bridge_revision,
+        }),
+    ) {
+        app.state::<RuntimeState>().diagnostic.append(
+            "ERROR",
+            format!("stage=emit.runtime.disconnected error={error}"),
+        );
+    }
+    if let Err(error) = app.emit(EVENT_RUNTIME_SNAPSHOT, snapshot) {
+        app.state::<RuntimeState>().diagnostic.append(
+            "ERROR",
+            format!("stage=emit.runtime.snapshot.disconnected error={error}"),
+        );
+    }
 }
 
 fn start_core_ipc(app: tauri::AppHandle) {
-  thread::spawn(move || {
-    let mut attempt = 0_u64;
-    loop {
-      attempt = attempt.saturating_add(1);
-      app.state::<RuntimeState>().diagnostic.append(
-        "PIPE_CONNECT_ATTEMPT",
-        format!("attempt={attempt} pipe={CORE_PIPE}"),
-      );
-      let mut opened_session = false;
+    thread::spawn(move || {
+        let mut attempt = 0_u64;
+        loop {
+            attempt = attempt.saturating_add(1);
+            *app.state::<RuntimeState>()
+                .ipc_state
+                .lock()
+                .expect("runtime IPC state poisoned") = "CONNECTING".into();
+            app.state::<RuntimeState>().diagnostic.append(
+                "PIPE_CONNECT_ATTEMPT",
+                format!("attempt={attempt} pipe={CORE_PIPE}"),
+            );
+            let mut opened_session = false;
 
-      match OpenOptions::new().read(true).write(true).open(CORE_PIPE) {
-        Ok(file) => {
-          opened_session = true;
-          app.state::<RuntimeState>().diagnostic.append(
-            "PIPE_CONNECTED",
-            format!("attempt={attempt} pipe={CORE_PIPE}"),
-          );
-          let writer = match file.try_clone() {
-            Ok(writer) => writer,
-            Err(error) => {
-              app.state::<RuntimeState>().diagnostic.append(
-                "ERROR",
-                format!("stage=pipe.try_clone error={error}"),
-              );
-              clear_runtime_writer(&app);
-              mark_runtime_disconnected(&app);
-              thread::sleep(Duration::from_millis(750));
-              continue;
-            }
-          };
+            match OpenOptions::new().read(true).write(true).open(CORE_PIPE) {
+                Ok(file) => {
+                    opened_session = true;
+                    app.state::<RuntimeState>().diagnostic.append(
+                        "PIPE_CONNECTED",
+                        format!("attempt={attempt} pipe={CORE_PIPE}"),
+                    );
+                    let writer = match file.try_clone() {
+                        Ok(writer) => writer,
+                        Err(error) => {
+                            app.state::<RuntimeState>()
+                                .diagnostic
+                                .append("ERROR", format!("stage=pipe.try_clone error={error}"));
+                            clear_runtime_writer(&app);
+                            mark_runtime_disconnected(&app);
+                            thread::sleep(Duration::from_millis(750));
+                            continue;
+                        }
+                    };
 
-          {
-            let runtime = app.state::<RuntimeState>();
-            *runtime
-              .writer
-              .lock()
-              .expect("runtime writer poisoned") = Some(writer);
-          }
+                    {
+                        let runtime = app.state::<RuntimeState>();
+                        *runtime.writer.lock().expect("runtime writer poisoned") = Some(writer);
+                    }
 
-          let hello_result = {
-            let runtime = app.state::<RuntimeState>();
-            send_pipe_message(&runtime.writer, &desktop_hello())
-          };
-          match hello_result {
+                    let hello_result = {
+                        let runtime = app.state::<RuntimeState>();
+                        send_pipe_message(&runtime.writer, &desktop_hello())
+                    };
+                    match hello_result {
             Ok(()) => app.state::<RuntimeState>().diagnostic.append(
               "HELLO_SENT",
-              format!(
-                "component=birdie-desktop role=desktop contractVersion={CONTRACT_VERSION}"
-              ),
+              format!("component=birdie-desktop role=desktop contractVersion={CONTRACT_VERSION}"),
             ),
             Err(error) => {
-              app.state::<RuntimeState>().diagnostic.append(
-                "ERROR",
-                format!("stage=hello.write error={error}"),
-              );
+              app
+                .state::<RuntimeState>()
+                .diagnostic
+                .append("ERROR", format!("stage=hello.write error={error}"));
               clear_runtime_writer(&app);
               mark_runtime_disconnected(&app);
               thread::sleep(Duration::from_millis(750));
@@ -389,98 +563,122 @@ fn start_core_ipc(app: tauri::AppHandle) {
             }
           }
 
-          let reader = BufReader::new(file);
-          for line_result in reader.lines() {
-            let line = match line_result {
-              Ok(line) => line,
-              Err(error) => {
-                app.state::<RuntimeState>().diagnostic.append(
-                  "ERROR",
-                  format!("stage=pipe.read error={error}"),
-                );
-                break;
-              }
-            };
-            let message = match serde_json::from_str::<Value>(&line) {
-              Ok(message) => message,
-              Err(error) => {
-                app.state::<RuntimeState>().diagnostic.append(
-                  "ERROR",
-                  format!(
-                    "stage=pipe.json error={error} line={}",
-                    compact_detail(&line)
-                  ),
-                );
-                continue;
-              }
-            };
+                    let reader = BufReader::new(file);
+                    for line_result in reader.lines() {
+                        let line = match line_result {
+                            Ok(line) => line,
+                            Err(error) => {
+                                app.state::<RuntimeState>()
+                                    .diagnostic
+                                    .append("ERROR", format!("stage=pipe.read error={error}"));
+                                break;
+                            }
+                        };
+                        let message = match serde_json::from_str::<Value>(&line) {
+                            Ok(message) => message,
+                            Err(error) => {
+                                app.state::<RuntimeState>().diagnostic.append(
+                                    "ERROR",
+                                    format!(
+                                        "stage=pipe.json error={error} line={}",
+                                        compact_detail(&line)
+                                    ),
+                                );
+                                continue;
+                            }
+                        };
+                        app.state::<RuntimeState>()
+                            .last_core_message_at
+                            .store(now_ms(), Ordering::Release);
 
-            match message.get("type").and_then(Value::as_str) {
-              Some("component.hello.ack") => {
-                let accepted = message
-                  .pointer("/payload/accepted")
-                  .and_then(Value::as_bool)
-                  .unwrap_or(false);
-                app.state::<RuntimeState>().diagnostic.append(
-                  "HELLO_ACK",
-                  format!("accepted={accepted} payload={}", message["payload"]),
-                );
-                if accepted {
-                  if let Err(error) = app.emit(
-                    EVENT_RUNTIME_CONNECTED,
-                    json!({
-                      "pipe": CORE_PIPE,
-                      "contractVersion": CONTRACT_VERSION,
-                      "role": "desktop",
-                    }),
-                  ) {
-                    app.state::<RuntimeState>().diagnostic.append(
-                      "ERROR",
-                      format!("stage=emit.runtime.connected error={error}"),
-                    );
-                  }
-                  let runtime = app.state::<RuntimeState>();
-                  match send_pipe_message(
-                    &runtime.writer,
-                    &desktop_snapshot_request(),
-                  ) {
-                    Ok(()) => runtime.diagnostic.append(
-                      "SNAPSHOT_REQUEST_SENT",
-                      "type=runtime.snapshot.request",
-                    ),
-                    Err(error) => runtime.diagnostic.append(
-                      "ERROR",
-                      format!("stage=snapshot.request error={error}"),
-                    ),
-                  }
-                } else {
-                  app.state::<RuntimeState>().diagnostic.append(
-                    "ERROR",
-                    "stage=hello.ack error=CONTRACT.HELLO_REJECTED",
-                  );
-                }
-              }
-              Some("runtime.snapshot") => {
-                if let Some(payload) = message.get("payload") {
-                  app.state::<RuntimeState>().diagnostic.append(
-                    "SNAPSHOT_RECEIVED",
-                    format!("payload={payload}"),
-                  );
-                  match serde_json::from_value::<RuntimeSnapshot>(payload.clone()) {
+                        match message.get("type").and_then(Value::as_str) {
+                            Some("component.hello.ack") => {
+                                let accepted = message
+                                    .pointer("/payload/accepted")
+                                    .and_then(Value::as_bool)
+                                    .unwrap_or(false);
+                                app.state::<RuntimeState>().diagnostic.append(
+                                    "HELLO_ACK",
+                                    format!("accepted={accepted} payload={}", message["payload"]),
+                                );
+                                if accepted {
+                                    let connection_id = message
+                                        .pointer("/payload/connectionId")
+                                        .and_then(Value::as_str)
+                                        .filter(|value| valid_transport_id(value))
+                                        .map(str::to_owned);
+                                    let Some(connection_id) = connection_id else {
+                                        app.state::<RuntimeState>().diagnostic.append(
+                                            "ERROR",
+                                            "stage=hello.ack error=CONTRACT.CONNECTION_ID_INVALID",
+                                        );
+                                        break;
+                                    };
+                                    {
+                                        let runtime = app.state::<RuntimeState>();
+                                        *runtime
+                                            .connection_id
+                                            .lock()
+                                            .expect("runtime connection state poisoned") =
+                                            Some(connection_id.clone());
+                                        *runtime
+                                            .ipc_state
+                                            .lock()
+                                            .expect("runtime IPC state poisoned") =
+                                            "CONNECTED".into();
+                                    }
+                                    if let Err(error) = app.emit(
+                                        EVENT_RUNTIME_CONNECTED,
+                                        json!({
+                                          "pipe": CORE_PIPE,
+                                          "connectionId": connection_id,
+                                          "contractVersion": CONTRACT_VERSION,
+                                          "role": "desktop",
+                                        }),
+                                    ) {
+                                        app.state::<RuntimeState>().diagnostic.append(
+                                            "ERROR",
+                                            format!("stage=emit.runtime.connected error={error}"),
+                                        );
+                                    }
+                                    let runtime = app.state::<RuntimeState>();
+                                    match send_pipe_message(
+                                        &runtime.writer,
+                                        &desktop_snapshot_request(),
+                                    ) {
+                                        Ok(()) => runtime.diagnostic.append(
+                                            "SNAPSHOT_REQUEST_SENT",
+                                            "type=runtime.snapshot.request",
+                                        ),
+                                        Err(error) => runtime.diagnostic.append(
+                                            "ERROR",
+                                            format!("stage=snapshot.request error={error}"),
+                                        ),
+                                    }
+                                } else {
+                                    app.state::<RuntimeState>().diagnostic.append(
+                                        "ERROR",
+                                        "stage=hello.ack error=CONTRACT.HELLO_REJECTED",
+                                    );
+                                }
+                            }
+                            Some("runtime.snapshot") => {
+                                if let Some(payload) = message.get("payload") {
+                                    app.state::<RuntimeState>()
+                                        .diagnostic
+                                        .append("SNAPSHOT_RECEIVED", format!("payload={payload}"));
+                                    match serde_json::from_value::<RuntimeSnapshot>(payload.clone()) {
                     Ok(next) => {
                       let snapshot = {
                         let runtime = app.state::<RuntimeState>();
-                        let mut snapshot = runtime
-                          .snapshot
-                          .lock()
-                          .expect("runtime state poisoned");
+                        let mut snapshot = runtime.snapshot.lock().expect("runtime state poisoned");
                         replace_authoritative_snapshot(&mut snapshot, next);
                         snapshot.clone()
                       };
-                      app.state::<RuntimeState>().diagnostic.append(
-                        "RUST_STATE_UPDATED",
-                        snapshot_summary(&snapshot),
-                      );
+                      app
+                        .state::<RuntimeState>()
+                        .diagnostic
+                        .append("RUST_STATE_UPDATED", snapshot_summary(&snapshot));
                       if let Err(error) = app.emit(EVENT_RUNTIME_SNAPSHOT, snapshot) {
                         app.state::<RuntimeState>().diagnostic.append(
                           "ERROR",
@@ -493,22 +691,18 @@ fn start_core_ipc(app: tauri::AppHandle) {
                       format!("stage=snapshot.deserialize error={error} payload={payload}"),
                     ),
                   }
-                }
-              }
-              Some("runtime.presence.changed") => {
-                if let Some(payload) = message.get("payload") {
-                  match serde_json::from_value::<PresenceSnapshot>(payload.clone()) {
+                                }
+                            }
+                            Some("runtime.presence.changed") => {
+                                if let Some(payload) = message.get("payload") {
+                                    match serde_json::from_value::<PresenceSnapshot>(payload.clone()) {
                     Ok(presence) => {
                       let changed = {
                         let runtime = app.state::<RuntimeState>();
-                        let mut snapshot = runtime
-                          .snapshot
-                          .lock()
-                          .expect("runtime state poisoned");
+                        let mut snapshot = runtime.snapshot.lock().expect("runtime state poisoned");
                         if presence.revision > snapshot.presence.revision {
                           snapshot.presence = presence.clone();
-                          snapshot.bridge_revision =
-                            snapshot.bridge_revision.saturating_add(1);
+                          snapshot.bridge_revision = snapshot.bridge_revision.saturating_add(1);
                           Some(snapshot.bridge_revision)
                         } else {
                           None
@@ -516,7 +710,7 @@ fn start_core_ipc(app: tauri::AppHandle) {
                       };
                       if let Some(bridge_revision) = changed {
                         if let Err(error) = app.emit(
-                            EVENT_RUNTIME_PRESENCE_CHANGED,
+                          EVENT_RUNTIME_PRESENCE_CHANGED,
                           json!({
                             "snapshot": presence,
                             "bridgeRevision": bridge_revision,
@@ -534,623 +728,911 @@ fn start_core_ipc(app: tauri::AppHandle) {
                       format!("stage=presence.deserialize error={error} payload={payload}"),
                     ),
                   }
+                                }
+                            }
+                            Some("runtime.audio.input") => {
+                                if let Some(payload) = message.get("payload") {
+                                    if let Err(error) =
+                                        app.emit(EVENT_RUNTIME_AUDIO_INPUT, payload.clone())
+                                    {
+                                        app.state::<RuntimeState>().diagnostic.append(
+                                            "ERROR",
+                                            format!("stage=emit.runtime.audio.input error={error}"),
+                                        );
+                                    }
+                                }
+                            }
+                            Some("runtime.audio.output") => {
+                                if let Some(payload) = message.get("payload") {
+                                    if let Err(error) =
+                                        app.emit(EVENT_RUNTIME_AUDIO_OUTPUT, payload.clone())
+                                    {
+                                        app.state::<RuntimeState>().diagnostic.append(
+                                            "ERROR",
+                                            format!(
+                                                "stage=emit.runtime.audio.output error={error}"
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            Some("runtime.command.ack") => {
+                                app.state::<RuntimeState>().diagnostic.append(
+                                    "RUNTIME_COMMAND_ACK",
+                                    format!("payload={}", message["payload"]),
+                                );
+                            }
+                            Some("desktop.command") => {
+                                let parsed = serde_json::from_value::<DesktopCommandMessage>(
+                                    message.clone(),
+                                )
+                                .map_err(|_| "DESKTOP.COMMAND.MESSAGE_SCHEMA_INVALID".to_string())
+                                .and_then(|message| {
+                                    if message.message_type != "desktop.command"
+                                        || message.request_id != message.payload.command_id
+                                    {
+                                        return Err(
+                                            "DESKTOP.COMMAND.CORRELATION_MISMATCH".to_string()
+                                        );
+                                    }
+                                    Ok(message.payload)
+                                });
+                                let result = parsed
+                                    .and_then(|command| execute_desktop_command(&app, command));
+                                match result {
+                                    Ok(result) => {
+                                        let response = json!({
+                                          "type": "desktop.command.result",
+                                          "requestId": result.command_id.clone(),
+                                          "payload": result,
+                                        });
+                                        let runtime = app.state::<RuntimeState>();
+                                        if let Err(error) =
+                                            send_pipe_message(&runtime.writer, &response)
+                                        {
+                                            runtime.diagnostic.append(
+                                                "ERROR",
+                                                format!(
+                                                    "stage=desktop.command.result error={error}"
+                                                ),
+                                            );
+                                        }
+                                    }
+                                    Err(error) => {
+                                        app.state::<RuntimeState>().diagnostic.append(
+                                            "ERROR",
+                                            format!("stage=desktop.command.validate error={error}"),
+                                        );
+                                        reject_invalid_desktop_command_message(
+                                            &app, &message, &error,
+                                        );
+                                    }
+                                }
+                            }
+                            Some("desktop.intent.ack") | Some("desktop.command.status") => {
+                                if let Some(payload) = message.get("payload") {
+                                    if let Err(error) =
+                                        app.emit(EVENT_DESKTOP_COMMAND_STATUS, payload.clone())
+                                    {
+                                        app.state::<RuntimeState>().diagnostic.append(
+                                            "ERROR",
+                                            format!(
+                                                "stage=emit.desktop.command.status error={error}"
+                                            ),
+                                        );
+                                    }
+                                }
+                            }
+                            Some("error") => {
+                                let error = message
+                                    .get("error")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("RUNTIME.IPC.ERROR");
+                                app.state::<RuntimeState>().diagnostic.append(
+                                    "ERROR",
+                                    format!("stage=core.message error={error} message={message}"),
+                                );
+                                if let Err(emit_error) =
+                                    app.emit(EVENT_RUNTIME_IPC_ERROR, json!({ "error": error }))
+                                {
+                                    app.state::<RuntimeState>().diagnostic.append(
+                                        "ERROR",
+                                        format!("stage=emit.runtime.ipc.error error={emit_error}"),
+                                    );
+                                }
+                                if error.starts_with("CONTRACT.") {
+                                    break;
+                                }
+                            }
+                            Some(message_type) => app.state::<RuntimeState>().diagnostic.append(
+                                "ERROR",
+                                format!(
+                                    "stage=pipe.message error=UNKNOWN_TYPE type={message_type}"
+                                ),
+                            ),
+                            None => app.state::<RuntimeState>().diagnostic.append(
+                                "ERROR",
+                                format!("stage=pipe.message error=MISSING_TYPE message={message}"),
+                            ),
+                        }
+                    }
+                    app.state::<RuntimeState>()
+                        .diagnostic
+                        .append("ERROR", "stage=pipe.read error=EOF");
                 }
-              }
-              Some("runtime.audio.input") => {
-                if let Some(payload) = message.get("payload") {
-                  if let Err(error) = app.emit(EVENT_RUNTIME_AUDIO_INPUT, payload.clone()) {
-                    app.state::<RuntimeState>().diagnostic.append(
-                      "ERROR",
-                      format!("stage=emit.runtime.audio.input error={error}"),
-                    );
-                  }
-                }
-              }
-              Some("runtime.audio.output") => {
-                if let Some(payload) = message.get("payload") {
-                  if let Err(error) = app.emit(EVENT_RUNTIME_AUDIO_OUTPUT, payload.clone()) {
-                    app.state::<RuntimeState>().diagnostic.append(
-                      "ERROR",
-                      format!("stage=emit.runtime.audio.output error={error}"),
-                    );
-                  }
-                }
-              }
-              Some("runtime.command.ack") => {
-                app.state::<RuntimeState>().diagnostic.append(
-                  "RUNTIME_COMMAND_ACK",
-                  format!("payload={}", message["payload"]),
-                );
-              }
-              Some("error") => {
-                let error = message
-                  .get("error")
-                  .and_then(Value::as_str)
-                  .unwrap_or("RUNTIME.IPC.ERROR");
-                app.state::<RuntimeState>().diagnostic.append(
-                  "ERROR",
-                  format!("stage=core.message error={error} message={message}"),
-                );
-                if let Err(emit_error) = app.emit(
-                  EVENT_RUNTIME_IPC_ERROR,
-                  json!({ "error": error }),
-                ) {
-                  app.state::<RuntimeState>().diagnostic.append(
+                Err(error) => app.state::<RuntimeState>().diagnostic.append(
                     "ERROR",
-                    format!("stage=emit.runtime.ipc.error error={emit_error}"),
-                  );
-                }
-                if error.starts_with("CONTRACT.") {
-                  break;
-                }
-              }
-              Some(message_type) => app.state::<RuntimeState>().diagnostic.append(
-                "ERROR",
-                format!("stage=pipe.message error=UNKNOWN_TYPE type={message_type}"),
-              ),
-              None => app.state::<RuntimeState>().diagnostic.append(
-                "ERROR",
-                format!("stage=pipe.message error=MISSING_TYPE message={message}"),
-              ),
+                    format!("stage=pipe.open attempt={attempt} error={error}"),
+                ),
             }
-          }
-          app.state::<RuntimeState>().diagnostic.append(
-            "ERROR",
-            "stage=pipe.read error=EOF",
-          );
+
+            clear_runtime_writer(&app);
+            if opened_session {
+                mark_runtime_disconnected(&app);
+            }
+            thread::sleep(Duration::from_millis(750));
         }
-        Err(error) => app.state::<RuntimeState>().diagnostic.append(
-          "ERROR",
-          format!("stage=pipe.open attempt={attempt} error={error}"),
-        ),
-      }
+    });
+}
 
-      clear_runtime_writer(&app);
-      if opened_session {
-        mark_runtime_disconnected(&app);
-      }
-      thread::sleep(Duration::from_millis(750));
+fn place_on_primary_monitor(window: &tauri::WebviewWindow) -> tauri::Result<Option<String>> {
+    let Some(monitor) = window.primary_monitor()? else {
+        return Ok(None);
+    };
+    let position = monitor.position().to_owned();
+    let size = monitor.size().to_owned();
+    let position_changed = window.outer_position()? != position;
+    let size_changed = window.outer_size()? != size;
+    if position_changed {
+        window.set_position(position.to_owned())?;
     }
-  });
-}
-
-fn recover_dev_webview(app: tauri::AppHandle) {
-  let Ok(frontend_url) = std::env::var("BIRDIE_DEV_FRONTEND_URL") else {
-    return;
-  };
-  if !frontend_url.starts_with("http://127.0.0.1:") {
-    return;
-  }
-
-  thread::spawn(move || {
-    thread::sleep(Duration::from_millis(900));
-    if let Some(window) = app.get_webview_window("core") {
-      let script = format!(
-        "if (window.location.href !== {url}) window.location.replace({url});",
-        url = serde_json::to_string(&frontend_url)
-          .unwrap_or_else(|_| "\"http://127.0.0.1:1420\"".into()),
-      );
-      let _ = window.eval(&script);
+    if size_changed {
+        window.set_size(size.to_owned())?;
     }
-  });
+    Ok(Some(format!(
+        "position={}x{} size={}x{} changed={}",
+        position.x,
+        position.y,
+        size.width,
+        size.height,
+        position_changed || size_changed,
+    )))
 }
 
-fn place_on_primary_monitor(
-  window: &tauri::WebviewWindow,
-) -> tauri::Result<Option<String>> {
-  let Some(monitor) = window.primary_monitor()? else {
-    return Ok(None);
-  };
-  let position = monitor.position().to_owned();
-  let size = monitor.size().to_owned();
-  let position_changed = window.outer_position()? != position;
-  let size_changed = window.outer_size()? != size;
-  if position_changed {
-    window.set_position(position.to_owned())?;
-  }
-  if size_changed {
-    window.set_size(size.to_owned())?;
-  }
-  Ok(Some(format!(
-    "position={}x{} size={}x{} changed={}",
-    position.x,
-    position.y,
-    size.width,
-    size.height,
-    position_changed || size_changed,
-  )))
+fn report_window_error(app: &tauri::AppHandle, stage: &str, error: impl std::fmt::Display) {
+    app.state::<RuntimeState>()
+        .diagnostic
+        .append("ERROR", format!("stage={stage} error={error}"));
 }
 
-fn report_window_error(
-  app: &tauri::AppHandle,
-  stage: &str,
-  error: impl std::fmt::Display,
-) {
-  app.state::<RuntimeState>().diagnostic.append(
-    "ERROR",
-    format!("stage={stage} error={error}"),
-  );
-}
-
-fn force_overlay_fail_closed(
-  app: &tauri::AppHandle,
-  window: &tauri::WebviewWindow,
-  context: &str,
-) {
-  if let Err(error) = window.set_ignore_cursor_events(true) {
-    report_window_error(
-      app,
-      &format!("{context}.rollback.pass_through"),
-      error,
+fn force_overlay_fail_closed(app: &tauri::AppHandle, window: &tauri::WebviewWindow, context: &str) {
+    if let Err(error) = window.set_ignore_cursor_events(true) {
+        report_window_error(app, &format!("{context}.rollback.pass_through"), error);
+    }
+    if let Err(error) = window.set_focusable(false) {
+        report_window_error(app, &format!("{context}.rollback.focusable"), error);
+    }
+    if let Err(error) = window.hide() {
+        report_window_error(app, &format!("{context}.rollback.hide"), &error);
+        if let Err(close_error) = window.close() {
+            report_window_error(app, &format!("{context}.rollback.close"), close_error);
+            app.exit(70);
+        }
+    }
+    app.state::<RuntimeState>().diagnostic.append(
+        "WINDOW_INTERACTION_FAIL_CLOSED",
+        format!("context={context} action=HIDE_OR_CLOSE"),
     );
-  }
-  if let Err(error) = window.set_focusable(false) {
-    report_window_error(
-      app,
-      &format!("{context}.rollback.focusable"),
-      error,
-    );
-  }
-  if let Err(error) = window.hide() {
-    report_window_error(app, &format!("{context}.rollback.hide"), &error);
-    if let Err(close_error) = window.close() {
-      report_window_error(
-        app,
-        &format!("{context}.rollback.close"),
-        close_error,
-      );
-      app.exit(70);
-    }
-  }
-  app.state::<RuntimeState>().diagnostic.append(
-    "WINDOW_INTERACTION_FAIL_CLOSED",
-    format!("context={context} action=HIDE_OR_CLOSE"),
-  );
+    let snapshot = app
+        .state::<SurfaceState>()
+        .transition(DesktopMode::Ambient, None);
+    emit_surface_snapshot(app, &snapshot);
 }
 
 fn fail_overlay_transition(
-  app: &tauri::AppHandle,
-  window: &tauri::WebviewWindow,
-  stage: &str,
-  code: &str,
-  error: impl std::fmt::Display,
+    app: &tauri::AppHandle,
+    window: &tauri::WebviewWindow,
+    stage: &str,
+    code: &str,
+    error: impl std::fmt::Display,
 ) -> Result<(), String> {
-  let detail = error.to_string();
-  report_window_error(app, stage, &detail);
-  force_overlay_fail_closed(app, window, stage);
-  Err(format!("{code}:{detail}"))
+    let detail = error.to_string();
+    report_window_error(app, stage, &detail);
+    force_overlay_fail_closed(app, window, stage);
+    Err(format!("{code}:{detail}"))
 }
 
-fn set_overlay_interaction_mode(
-  app: &tauri::AppHandle,
-  enabled: bool,
-) -> Result<(), String> {
-  let window = app
-    .get_webview_window("core")
-    .ok_or_else(|| "DESKTOP.WINDOW.CORE_MISSING".to_string())?;
+fn set_overlay_interaction_mode(app: &tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let window = app
+        .get_webview_window("core")
+        .ok_or_else(|| "DESKTOP.WINDOW.CORE_MISSING".to_string())?;
 
-  if enabled {
-    if let Err(error) = window.set_focusable(true) {
-      return fail_overlay_transition(
-        app,
-        &window,
-        "window.focusable.enable",
-        "DESKTOP.WINDOW.FOCUSABLE_ENABLE_FAILED",
-        error,
-      );
+    if enabled {
+        if let Err(error) = window.set_focusable(true) {
+            return fail_overlay_transition(
+                app,
+                &window,
+                "window.focusable.enable",
+                "DESKTOP.WINDOW.FOCUSABLE_ENABLE_FAILED",
+                error,
+            );
+        }
+        if let Err(error) = window.set_ignore_cursor_events(false) {
+            return fail_overlay_transition(
+                app,
+                &window,
+                "window.pass_through.disable",
+                "DESKTOP.WINDOW.CONTROL_ENABLE_FAILED",
+                error,
+            );
+        }
+        if let Err(error) = window.show() {
+            return fail_overlay_transition(
+                app,
+                &window,
+                "window.control.show",
+                "DESKTOP.WINDOW.CONTROL_SHOW_FAILED",
+                error,
+            );
+        }
+        if let Err(error) = window.set_focus() {
+            return fail_overlay_transition(
+                app,
+                &window,
+                "window.control.focus",
+                "DESKTOP.WINDOW.CONTROL_FOCUS_FAILED",
+                error,
+            );
+        }
+        app.state::<RuntimeState>().diagnostic.append(
+            "WINDOW_INTERACTION_MODE",
+            "mode=CONTROL cursorEvents=ENABLED",
+        );
+        return Ok(());
     }
-    if let Err(error) = window.set_ignore_cursor_events(false) {
-      return fail_overlay_transition(
-        app,
-        &window,
-        "window.pass_through.disable",
-        "DESKTOP.WINDOW.CONTROL_ENABLE_FAILED",
-        error,
-      );
+
+    if let Err(error) = window.set_ignore_cursor_events(true) {
+        return fail_overlay_transition(
+            app,
+            &window,
+            "window.pass_through.enable",
+            "DESKTOP.WINDOW.PASS_THROUGH_FAILED",
+            error,
+        );
+    }
+    if let Err(error) = window.set_focusable(false) {
+        return fail_overlay_transition(
+            app,
+            &window,
+            "window.focusable.disable",
+            "DESKTOP.WINDOW.FOCUSABLE_DISABLE_FAILED",
+            error,
+        );
     }
     if let Err(error) = window.show() {
-      return fail_overlay_transition(
-        app,
-        &window,
-        "window.control.show",
-        "DESKTOP.WINDOW.CONTROL_SHOW_FAILED",
-        error,
-      );
+        return fail_overlay_transition(
+            app,
+            &window,
+            "window.ambient.show",
+            "DESKTOP.WINDOW.AMBIENT_SHOW_FAILED",
+            error,
+        );
     }
-    if let Err(error) = window.set_focus() {
-      return fail_overlay_transition(
-        app,
-        &window,
-        "window.control.focus",
-        "DESKTOP.WINDOW.CONTROL_FOCUS_FAILED",
-        error,
-      );
+    if let Err(error) = window.eval("window.__birdieSetInteractionMode?.(false);") {
+        report_window_error(app, "window.ambient.renderer_sync", error);
     }
     app.state::<RuntimeState>().diagnostic.append(
-      "WINDOW_INTERACTION_MODE",
-      "mode=CONTROL cursorEvents=ENABLED",
+        "WINDOW_INTERACTION_MODE",
+        "mode=AMBIENT cursorEvents=IGNORED",
     );
-    return Ok(());
-  }
+    Ok(())
+}
 
-  if let Err(error) = window.set_ignore_cursor_events(true) {
-    return fail_overlay_transition(
-      app,
-      &window,
-      "window.pass_through.enable",
-      "DESKTOP.WINDOW.PASS_THROUGH_FAILED",
-      error,
+fn emit_surface_snapshot(app: &tauri::AppHandle, snapshot: &SurfaceSnapshot) {
+    if let Err(error) = app.emit(EVENT_DESKTOP_SURFACE_CHANGED, snapshot.clone()) {
+        report_window_error(app, "emit.desktop.surface.changed", error);
+    }
+}
+
+fn apply_surface_transition(
+    app: &tauri::AppHandle,
+    mode: DesktopMode,
+    active_module: Option<ModuleId>,
+) -> Result<SurfaceSnapshot, String> {
+    let surface = app.state::<SurfaceState>();
+    let _transition = surface.lock_transition();
+    set_overlay_interaction_mode(app, mode == DesktopMode::Control)?;
+    let snapshot = surface.transition(mode, active_module);
+    emit_surface_snapshot(app, &snapshot);
+    Ok(snapshot)
+}
+
+fn compact_error_code(error: &str) -> String {
+    error
+        .split(':')
+        .next()
+        .unwrap_or("DESKTOP.COMMAND.EXECUTION_FAILED")
+        .chars()
+        .take(128)
+        .collect()
+}
+
+fn reject_invalid_desktop_command_message(
+    app: &tauri::AppHandle,
+    message: &Value,
+    error_code: &str,
+) {
+    let Some(command_id) = message
+        .get("payload")
+        .and_then(|payload| payload.get("commandId"))
+        .and_then(Value::as_str)
+        .filter(|command_id| valid_transport_id(command_id))
+    else {
+        return;
+    };
+    let runtime = app.state::<RuntimeState>();
+    let Some(connection_id) = runtime
+        .connection_id
+        .lock()
+        .ok()
+        .and_then(|connection_id| connection_id.clone())
+    else {
+        return;
+    };
+    let result = DesktopCommandResult::rejected_for_id(
+        command_id,
+        &connection_id,
+        now_ms(),
+        compact_error_code(error_code),
     );
-  }
-  if let Err(error) = window.set_focusable(false) {
-    return fail_overlay_transition(
-      app,
-      &window,
-      "window.focusable.disable",
-      "DESKTOP.WINDOW.FOCUSABLE_DISABLE_FAILED",
-      error,
-    );
-  }
-  if let Err(error) = window.show() {
-    return fail_overlay_transition(
-      app,
-      &window,
-      "window.ambient.show",
-      "DESKTOP.WINDOW.AMBIENT_SHOW_FAILED",
-      error,
-    );
-  }
-  if let Err(error) =
-    window.eval("window.__birdieSetInteractionMode?.(false);")
-  {
-    report_window_error(app, "window.ambient.renderer_sync", error);
-  }
-  app.state::<RuntimeState>().diagnostic.append(
-    "WINDOW_INTERACTION_MODE",
-    "mode=AMBIENT cursorEvents=IGNORED",
-  );
-  Ok(())
+    let response = json!({
+      "type": "desktop.command.result",
+      "requestId": command_id,
+      "payload": result,
+    });
+    if let Err(error) = send_pipe_message(&runtime.writer, &response) {
+        runtime.diagnostic.append(
+            "ERROR",
+            format!("stage=desktop.command.reject error={error}"),
+        );
+    }
+}
+
+fn execute_desktop_command(
+    app: &tauri::AppHandle,
+    command: DesktopCommand,
+) -> Result<DesktopCommandResult, String> {
+    let runtime = app.state::<RuntimeState>();
+    let connection_id = runtime
+        .connection_id
+        .lock()
+        .map_err(|_| "RUNTIME.CONNECTION.LOCK_POISONED".to_string())?
+        .clone()
+        .ok_or_else(|| "RUNTIME.IPC.DISCONNECTED".to_string())?;
+    let now = now_ms();
+    let disposition = runtime
+        .execution_ledger
+        .lock()
+        .map_err(|_| "DESKTOP.COMMAND.LEDGER_POISONED".to_string())?
+        .prepare(&command, &runtime.instance_id, &connection_id, now);
+    match disposition {
+        CommandDisposition::Replay(result) | CommandDisposition::Reject(result) => {
+            return Ok(result);
+        }
+        CommandDisposition::Execute => {}
+    }
+
+    let transition = match command.name {
+        CommandName::ModuleOpen => command
+            .module()
+            .map_err(str::to_string)
+            .and_then(|module| apply_surface_transition(app, DesktopMode::Control, Some(module))),
+        CommandName::SurfaceSetMode => command
+            .mode()
+            .map_err(str::to_string)
+            .and_then(|mode| apply_surface_transition(app, mode, None)),
+    };
+    let result = match transition {
+        Ok(_) => DesktopCommandResult::acknowledged(&command, &connection_id, now_ms()),
+        Err(error) => DesktopCommandResult::failed(
+            &command,
+            &connection_id,
+            now_ms(),
+            compact_error_code(&error),
+        ),
+    };
+    runtime
+        .execution_ledger
+        .lock()
+        .map_err(|_| "DESKTOP.COMMAND.LEDGER_POISONED".to_string())?
+        .record(&command, result.clone());
+    Ok(result)
+}
+
+#[tauri::command]
+fn desktop_get_surface_state(surface: State<'_, SurfaceState>) -> SurfaceSnapshot {
+    surface.snapshot()
+}
+
+#[tauri::command]
+fn desktop_open_module(
+    app: tauri::AppHandle,
+    module_id: ModuleId,
+) -> Result<SurfaceSnapshot, String> {
+    apply_surface_transition(&app, DesktopMode::Control, Some(module_id))
 }
 
 #[tauri::command]
 fn desktop_set_interaction_mode(
-  app: tauri::AppHandle,
-  enabled: bool,
-) -> Result<(), String> {
-  set_overlay_interaction_mode(&app, enabled)
+    app: tauri::AppHandle,
+    enabled: bool,
+) -> Result<SurfaceSnapshot, String> {
+    apply_surface_transition(
+        &app,
+        if enabled {
+            DesktopMode::Control
+        } else {
+            DesktopMode::Ambient
+        },
+        None,
+    )
 }
 
 fn reset_overlay_after_page_load(app: &tauri::AppHandle) {
-  let Some(window) = app.get_webview_window("core") else {
-    report_window_error(app, "window.page_load.lookup", "core window missing");
-    return;
-  };
+    let surface = app.state::<SurfaceState>();
+    let _transition = surface.lock_transition();
+    let Some(window) = app.get_webview_window("core") else {
+        report_window_error(app, "window.page_load.lookup", "core window missing");
+        return;
+    };
 
-  let was_visible = match window.is_visible() {
-    Ok(visible) => visible,
-    Err(error) => {
-      report_window_error(app, "window.page_load.visibility", error);
-      false
+    let was_visible = match window.is_visible() {
+        Ok(visible) => visible,
+        Err(error) => {
+            report_window_error(app, "window.page_load.visibility", error);
+            false
+        }
+    };
+    if let Err(error) = window.set_ignore_cursor_events(true) {
+        let _ = fail_overlay_transition(
+            app,
+            &window,
+            "window.page_load.pass_through",
+            "DESKTOP.WINDOW.PAGE_LOAD_PASS_THROUGH_FAILED",
+            error,
+        );
+        return;
     }
-  };
-  if let Err(error) = window.set_ignore_cursor_events(true) {
-    let _ = fail_overlay_transition(
-      app,
-      &window,
-      "window.page_load.pass_through",
-      "DESKTOP.WINDOW.PAGE_LOAD_PASS_THROUGH_FAILED",
-      error,
+    if let Err(error) = window.set_focusable(false) {
+        let _ = fail_overlay_transition(
+            app,
+            &window,
+            "window.page_load.focusable",
+            "DESKTOP.WINDOW.PAGE_LOAD_FOCUSABLE_FAILED",
+            error,
+        );
+        return;
+    }
+    if let Err(error) = window.eval("window.__birdieSetInteractionMode?.(false);") {
+        report_window_error(app, "window.page_load.renderer_sync", error);
+    }
+    app.state::<RuntimeState>().diagnostic.append(
+        "WINDOW_PAGE_LOAD_RESET",
+        format!("mode=AMBIENT visibilityPreserved={was_visible}"),
     );
-    return;
-  }
-  if let Err(error) = window.set_focusable(false) {
-    let _ = fail_overlay_transition(
-      app,
-      &window,
-      "window.page_load.focusable",
-      "DESKTOP.WINDOW.PAGE_LOAD_FOCUSABLE_FAILED",
-      error,
-    );
-    return;
-  }
-  if let Err(error) =
-    window.eval("window.__birdieSetInteractionMode?.(false);")
-  {
-    report_window_error(app, "window.page_load.renderer_sync", error);
-  }
-  app.state::<RuntimeState>().diagnostic.append(
-    "WINDOW_PAGE_LOAD_RESET",
-    format!("mode=AMBIENT visibilityPreserved={was_visible}"),
-  );
+    let snapshot = surface.transition(DesktopMode::Ambient, None);
+    emit_surface_snapshot(app, &snapshot);
 }
 
 fn prepare_immersive_window(app: &tauri::AppHandle) {
-  let Some(window) = app.get_webview_window("core") else {
-    report_window_error(app, "window.lookup", "core window missing");
-    return;
-  };
+    let Some(window) = app.get_webview_window("core") else {
+        report_window_error(app, "window.lookup", "core window missing");
+        return;
+    };
 
-  let _ = window.set_fullscreen(false);
-  match place_on_primary_monitor(&window) {
-    Ok(Some(detail)) => app.state::<RuntimeState>().diagnostic.append(
-      "WINDOW_IMMERSIVE_READY",
-      format!("mode=PRIMARY_MONITOR {detail}"),
-    ),
-    Ok(None) => match window.set_fullscreen(true) {
-      Ok(()) => app.state::<RuntimeState>().diagnostic.append(
-        "WINDOW_IMMERSIVE_READY",
-        "mode=CURRENT_MONITOR_FULLSCREEN fallback=NO_PRIMARY_MONITOR",
-      ),
-      Err(error) => report_window_error(app, "window.fullscreen.fallback", error),
-    },
-    Err(error) => {
-      report_window_error(app, "window.primary_monitor", error);
-      if let Err(fallback_error) = window.set_fullscreen(true) {
-        report_window_error(
-          app,
-          "window.fullscreen.fallback",
-          fallback_error,
-        );
-      }
+    let _ = window.set_fullscreen(false);
+    match place_on_primary_monitor(&window) {
+        Ok(Some(detail)) => app.state::<RuntimeState>().diagnostic.append(
+            "WINDOW_IMMERSIVE_READY",
+            format!("mode=PRIMARY_MONITOR {detail}"),
+        ),
+        Ok(None) => match window.set_fullscreen(true) {
+            Ok(()) => app.state::<RuntimeState>().diagnostic.append(
+                "WINDOW_IMMERSIVE_READY",
+                "mode=CURRENT_MONITOR_FULLSCREEN fallback=NO_PRIMARY_MONITOR",
+            ),
+            Err(error) => report_window_error(app, "window.fullscreen.fallback", error),
+        },
+        Err(error) => {
+            report_window_error(app, "window.primary_monitor", error);
+            if let Err(fallback_error) = window.set_fullscreen(true) {
+                report_window_error(app, "window.fullscreen.fallback", fallback_error);
+            }
+        }
     }
-  }
 
-  let _ = set_overlay_interaction_mode(app, false);
+    let _ = apply_surface_transition(app, DesktopMode::Ambient, None);
+}
+
+struct GlobalShortcutRuntime {
+    stop: Arc<AtomicBool>,
+    thread_id: Arc<AtomicU32>,
+    worker: Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+impl GlobalShortcutRuntime {
+    fn shutdown(&self) {
+        if self.stop.swap(true, Ordering::AcqRel) {
+            return;
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_QUIT};
+            let thread_id = self.thread_id.load(Ordering::Acquire);
+            if thread_id != 0 {
+                unsafe {
+                    let _ = PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
+                }
+            }
+        }
+        if let Ok(mut worker) = self.worker.lock() {
+            if let Some(worker) = worker.take() {
+                let _ = worker.join();
+            }
+        }
+    }
+}
+
+impl Drop for GlobalShortcutRuntime {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
+
+#[cfg(windows)]
+fn start_global_shortcut(app: tauri::AppHandle) -> GlobalShortcutRuntime {
+    let stop = Arc::new(AtomicBool::new(false));
+    let thread_id = Arc::new(AtomicU32::new(0));
+    let worker_stop = stop.clone();
+    let worker_thread_id = thread_id.clone();
+    let error_app = app.clone();
+    let worker = thread::Builder::new()
+        .name("birdie-global-shortcut".into())
+        .spawn(move || unsafe {
+            use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+            use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+                RegisterHotKey, UnregisterHotKey,
+            };
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                GetMessageW, PeekMessageW, MSG, PM_NOREMOVE, WM_HOTKEY,
+            };
+
+            const HOTKEY_ID: i32 = 0xB17D;
+            const MOD_CONTROL: u32 = 0x0002;
+            const MOD_SHIFT: u32 = 0x0004;
+            const MOD_NOREPEAT: u32 = 0x4000;
+            const VK_SPACE: u32 = 0x20;
+
+            let mut message: MSG = std::mem::zeroed();
+            let _ = PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_NOREMOVE);
+            worker_thread_id.store(GetCurrentThreadId(), Ordering::Release);
+            if worker_stop.load(Ordering::Acquire) {
+                worker_thread_id.store(0, Ordering::Release);
+                return;
+            }
+
+            let registered = RegisterHotKey(
+                std::ptr::null_mut(),
+                HOTKEY_ID,
+                MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT,
+                VK_SPACE,
+            ) != 0;
+            let status = if registered {
+                "REGISTERED"
+            } else {
+                "UNAVAILABLE"
+            };
+            let snapshot = app
+                .state::<SurfaceState>()
+                .set_global_shortcut_status(status);
+            emit_surface_snapshot(&app, &snapshot);
+            if !registered {
+                worker_thread_id.store(0, Ordering::Release);
+                report_window_error(
+                    &app,
+                    "shortcut.register",
+                    "DESKTOP.SHORTCUT.REGISTRATION_FAILED",
+                );
+                return;
+            }
+
+            while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
+                if message.message != WM_HOTKEY || message.wParam != HOTKEY_ID as usize {
+                    continue;
+                }
+                let current = app.state::<SurfaceState>().snapshot();
+                let next_mode = if current.mode == DesktopMode::Ambient {
+                    DesktopMode::Control
+                } else {
+                    DesktopMode::Ambient
+                };
+                if let Err(error) = apply_surface_transition(&app, next_mode, None) {
+                    report_window_error(&app, "shortcut.surface.toggle", error);
+                }
+            }
+            let _ = UnregisterHotKey(std::ptr::null_mut(), HOTKEY_ID);
+            worker_thread_id.store(0, Ordering::Release);
+            let snapshot = app
+                .state::<SurfaceState>()
+                .set_global_shortcut_status("STOPPED");
+            emit_surface_snapshot(&app, &snapshot);
+        })
+        .map_err(|error| {
+            report_window_error(&error_app, "shortcut.thread", error);
+            let snapshot = error_app
+                .state::<SurfaceState>()
+                .set_global_shortcut_status("UNAVAILABLE");
+            emit_surface_snapshot(&error_app, &snapshot);
+        })
+        .ok();
+    GlobalShortcutRuntime {
+        stop,
+        thread_id,
+        worker: Mutex::new(worker),
+    }
+}
+
+#[cfg(not(windows))]
+fn start_global_shortcut(app: tauri::AppHandle) -> GlobalShortcutRuntime {
+    let snapshot = app
+        .state::<SurfaceState>()
+        .set_global_shortcut_status("UNAVAILABLE");
+    emit_surface_snapshot(&app, &snapshot);
+    GlobalShortcutRuntime {
+        stop: Arc::new(AtomicBool::new(false)),
+        thread_id: Arc::new(AtomicU32::new(0)),
+        worker: Mutex::new(None),
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  let diagnostic = DiagnosticLog::open()
-    .unwrap_or_else(|error| panic!("{error}"));
-  diagnostic.append(
-    "DESKTOP_START",
-    format!("pid={} buildId={BUILD_ID}", std::process::id()),
-  );
-  tauri::Builder::default()
-    .manage(RuntimeState {
-      snapshot: Mutex::new(RuntimeSnapshot {
-        lifecycle: "STARTING".into(),
-        presence: PresenceSnapshot {
-          revision: 0,
-          state: "OFFLINE".into(),
-          reason: "runtime.not_connected".into(),
-        },
-        microphone_state: "UNAVAILABLE".into(),
-        brain_state: "UNAVAILABLE".into(),
-        bridge_revision: 0,
-      }),
-      writer: Mutex::new(None),
-      diagnostic,
-    })
-    .invoke_handler(tauri::generate_handler![
-      runtime_get_snapshot,
-      runtime_set_microphone_enabled,
-      runtime_log_frontend,
-      desktop_set_interaction_mode,
-    ])
-    .on_page_load(|webview, _payload| {
-      if webview.label() == "core" {
-        reset_overlay_after_page_load(webview.app_handle());
-      }
-    })
-    .on_window_event(|window, event| {
-      if window.label() != "core"
-        || !matches!(
-          event,
-          tauri::WindowEvent::Resized(_)
-            | tauri::WindowEvent::Moved(_)
-            | tauri::WindowEvent::ScaleFactorChanged { .. }
-        )
-      {
-        return;
-      }
-      let app = window.app_handle();
-      if let Some(core) = app.get_webview_window("core") {
-        if let Err(error) = place_on_primary_monitor(&core) {
-          report_window_error(app, "window.monitor_change", error);
-        }
-      }
-    })
-    .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-      prepare_immersive_window(app);
-    }))
-    .plugin(tauri_plugin_autostart::Builder::new().build())
-    .setup(|app| {
-      let supervisor = ProcessSupervisor::start(app.handle().clone());
-      let _ = app.manage(supervisor);
-      start_core_ipc(app.handle().clone());
-      recover_dev_webview(app.handle().clone());
-      prepare_immersive_window(app.handle());
-
-      let show = MenuItem::with_id(
-        app,
-        "show",
-        "Birdie anzeigen",
-        true,
-        None::<&str>,
-      )?;
-      let interact = MenuItem::with_id(
-        app,
-        "interact",
-        "Birdie bedienen",
-        true,
-        None::<&str>,
-      )?;
-      let passive = MenuItem::with_id(
-        app,
-        "passive",
-        "Präsenzmodus",
-        true,
-        None::<&str>,
-      )?;
-      let hide = MenuItem::with_id(
-        app,
-        "hide",
-        "Birdie verbergen",
-        true,
-        None::<&str>,
-      )?;
-      let quit = MenuItem::with_id(
-        app,
-        "quit",
-        "Birdie beenden",
-        true,
-        None::<&str>,
-      )?;
-      let menu = Menu::with_items(
-        app,
-        &[&show, &interact, &passive, &hide, &quit],
-      )?;
-      TrayIconBuilder::new()
-        .menu(&menu)
-        .on_menu_event(|app, event| match event.id.as_ref() {
-          "show" => {
-            prepare_immersive_window(app);
-          }
-          "interact" => {
-            if let Some(window) = app.get_webview_window("core") {
-              if let Err(error) = window.eval(
-                "window.__birdieRequestControlMode?.();",
-              ) {
-                report_window_error(app, "window.control.request", error);
-              }
-            }
-          }
-          "passive" => {
-            let _ = set_overlay_interaction_mode(app, false);
-          }
-          "hide" => {
-            let _ = set_overlay_interaction_mode(app, false);
-            if let Some(window) = app.get_webview_window("core") {
-              let _ = window.hide();
-            }
-          }
-          "quit" => {
-            app.state::<ProcessSupervisor>().shutdown();
-            app.exit(0);
-          }
-          _ => {}
+    let diagnostic = DiagnosticLog::open().unwrap_or_else(|error| panic!("{error}"));
+    diagnostic.append(
+        "DESKTOP_START",
+        format!("pid={} buildId={BUILD_ID}", std::process::id()),
+    );
+    tauri::Builder::default()
+        .manage(SurfaceState::default())
+        .manage(RuntimeState {
+            snapshot: Mutex::new(RuntimeSnapshot {
+                lifecycle: "STARTING".into(),
+                presence: PresenceSnapshot {
+                    revision: 0,
+                    state: "OFFLINE".into(),
+                    reason: "runtime.not_connected".into(),
+                },
+                microphone_state: "UNAVAILABLE".into(),
+                brain_state: "UNAVAILABLE".into(),
+                bridge_revision: 0,
+            }),
+            writer: Mutex::new(None),
+            instance_id: desktop_instance_id(),
+            connection_id: Mutex::new(None),
+            ipc_state: Mutex::new("CONNECTING".into()),
+            last_core_message_at: AtomicU64::new(0),
+            execution_ledger: Mutex::new(DesktopExecutionLedger::default()),
+            diagnostic,
         })
-        .build(app)?;
-      Ok(())
-    })
-    .run(tauri::generate_context!())
-    .expect("Birdie desktop runtime failed");
+        .invoke_handler(tauri::generate_handler![
+            runtime_get_snapshot,
+            runtime_get_system_snapshot,
+            runtime_set_microphone_enabled,
+            runtime_submit_desktop_intent,
+            runtime_log_frontend,
+            desktop_get_surface_state,
+            desktop_open_module,
+            desktop_set_interaction_mode,
+            focus_get_state,
+            focus_save_state,
+            capture_list,
+            capture_add,
+            capture_delete,
+        ])
+        .on_page_load(|webview, _payload| {
+            if webview.label() == "core" {
+                reset_overlay_after_page_load(webview.app_handle());
+            }
+        })
+        .on_window_event(|window, event| {
+            if window.label() != "core"
+                || !matches!(
+                    event,
+                    tauri::WindowEvent::Resized(_)
+                        | tauri::WindowEvent::Moved(_)
+                        | tauri::WindowEvent::ScaleFactorChanged { .. }
+                )
+            {
+                return;
+            }
+            let app = window.app_handle();
+            if let Some(core) = app.get_webview_window("core") {
+                if let Err(error) = place_on_primary_monitor(&core) {
+                    report_window_error(app, "window.monitor_change", error);
+                }
+            }
+        })
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            prepare_immersive_window(app);
+        }))
+        .plugin(tauri_plugin_autostart::Builder::new().build())
+        .setup(|app| {
+            let local_data_path = app
+                .path()
+                .app_local_data_dir()?
+                .join("function-layer-v1.json");
+            let _ = app.manage(LocalStore::open(local_data_path));
+
+            let shortcut = start_global_shortcut(app.handle().clone());
+            let _ = app.manage(shortcut);
+
+            let supervisor = ProcessSupervisor::start(app.handle().clone());
+            let _ = app.manage(supervisor);
+            start_core_ipc(app.handle().clone());
+            prepare_immersive_window(app.handle());
+
+            let show = MenuItem::with_id(app, "show", "Birdie anzeigen", true, None::<&str>)?;
+            let interact =
+                MenuItem::with_id(app, "interact", "Birdie bedienen", true, None::<&str>)?;
+            let passive = MenuItem::with_id(app, "passive", "Präsenzmodus", true, None::<&str>)?;
+            let hide = MenuItem::with_id(app, "hide", "Birdie verbergen", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Birdie beenden", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &interact, &passive, &hide, &quit])?;
+            TrayIconBuilder::new()
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        prepare_immersive_window(app);
+                    }
+                    "interact" => {
+                        let _ = apply_surface_transition(app, DesktopMode::Control, None);
+                    }
+                    "passive" => {
+                        let _ = apply_surface_transition(app, DesktopMode::Ambient, None);
+                    }
+                    "hide" => {
+                        let _ = apply_surface_transition(app, DesktopMode::Ambient, None);
+                        if let Some(window) = app.get_webview_window("core") {
+                            let _ = window.hide();
+                        }
+                    }
+                    "quit" => {
+                        app.state::<GlobalShortcutRuntime>().shutdown();
+                        app.state::<ProcessSupervisor>().shutdown();
+                        app.exit(0);
+                    }
+                    _ => {}
+                })
+                .build(app)?;
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("Birdie desktop runtime failed");
 }
 
 #[cfg(test)]
 mod tests {
-  use super::*;
+    use super::*;
 
-  fn ready_snapshot(core_revision: u64, bridge_revision: u64) -> RuntimeSnapshot {
-    RuntimeSnapshot {
-      lifecycle: "READY".into(),
-      presence: PresenceSnapshot {
-        revision: core_revision,
-        state: "IDLE".into(),
-        reason: "runtime.required_components_ready".into(),
-      },
-      microphone_state: "ENABLED".into(),
-      brain_state: "READY".into(),
-      bridge_revision,
+    fn ready_snapshot(core_revision: u64, bridge_revision: u64) -> RuntimeSnapshot {
+        RuntimeSnapshot {
+            lifecycle: "READY".into(),
+            presence: PresenceSnapshot {
+                revision: core_revision,
+                state: "IDLE".into(),
+                reason: "runtime.required_components_ready".into(),
+            },
+            microphone_state: "ENABLED".into(),
+            brain_state: "READY".into(),
+            bridge_revision,
+        }
     }
-  }
 
-  #[test]
-  fn real_core_ready_snapshot_deserializes_and_keeps_required_fields() {
-    let payload = json!({
-      "lifecycle": "READY",
-      "presence": {
-        "revision": 7,
-        "state": "IDLE",
-        "reason": "runtime.required_components_ready",
-        "since": "2026-08-26T20:00:00.000Z",
-        "activeTurnId": null,
-        "microphone": "ENABLED",
-        "connectivity": "CONNECTED"
-      },
-      "activeTurn": null,
-      "microphoneState": "ENABLED",
-      "brainState": "READY",
-      "futureCoreField": { "allowed": true }
-    });
+    #[test]
+    fn real_core_ready_snapshot_deserializes_and_keeps_required_fields() {
+        let payload = json!({
+          "lifecycle": "READY",
+          "presence": {
+            "revision": 7,
+            "state": "IDLE",
+            "reason": "runtime.required_components_ready",
+            "since": "2026-08-26T20:00:00.000Z",
+            "activeTurnId": null,
+            "microphone": "ENABLED",
+            "connectivity": "CONNECTED"
+          },
+          "activeTurn": null,
+          "microphoneState": "ENABLED",
+          "brainState": "READY",
+          "futureCoreField": { "allowed": true }
+        });
 
-    let snapshot: RuntimeSnapshot =
-      serde_json::from_value(payload).expect("Core snapshot must deserialize");
-    assert_eq!(snapshot.lifecycle, "READY");
-    assert_eq!(snapshot.presence.state, "IDLE");
-    assert_eq!(snapshot.presence.revision, 7);
-    assert_eq!(snapshot.microphone_state, "ENABLED");
-    assert_eq!(snapshot.brain_state, "READY");
-    assert_eq!(snapshot.bridge_revision, 0);
+        let snapshot: RuntimeSnapshot =
+            serde_json::from_value(payload).expect("Core snapshot must deserialize");
+        assert_eq!(snapshot.lifecycle, "READY");
+        assert_eq!(snapshot.presence.state, "IDLE");
+        assert_eq!(snapshot.presence.revision, 7);
+        assert_eq!(snapshot.microphone_state, "ENABLED");
+        assert_eq!(snapshot.brain_state, "READY");
+        assert_eq!(snapshot.bridge_revision, 0);
 
-    let encoded = serde_json::to_value(&snapshot).expect("snapshot must serialize");
-    assert_eq!(encoded["microphoneState"], "ENABLED");
-    assert_eq!(encoded["brainState"], "READY");
-    assert_eq!(encoded["bridgeRevision"], 0);
-    assert!(encoded.get("microphone_state").is_none());
-  }
-
-  #[test]
-  fn authoritative_snapshot_advances_bridge_revision_without_rewriting_core_revision() {
-    let mut current = ready_snapshot(9, 12);
-    let next = ready_snapshot(2, 0);
-
-    replace_authoritative_snapshot(&mut current, next);
-
-    assert_eq!(current.bridge_revision, 13);
-    assert_eq!(current.presence.revision, 2);
-    assert_eq!(current.presence.state, "IDLE");
-    assert_eq!(current.microphone_state, "ENABLED");
-  }
-
-  #[test]
-  fn disconnect_and_reconnect_use_bridge_revision_not_core_revision() {
-    let mut snapshot = ready_snapshot(9, 40);
-
-    transition_to_disconnected(&mut snapshot);
-    assert_eq!(snapshot.bridge_revision, 41);
-    assert_eq!(snapshot.presence.revision, 9);
-    assert_eq!(snapshot.presence.state, "OFFLINE");
-    assert_eq!(snapshot.microphone_state, "UNAVAILABLE");
-
-    replace_authoritative_snapshot(&mut snapshot, ready_snapshot(2, 0));
-    assert_eq!(snapshot.bridge_revision, 42);
-    assert_eq!(snapshot.presence.revision, 2);
-    assert_eq!(snapshot.presence.state, "IDLE");
-    assert_eq!(snapshot.microphone_state, "ENABLED");
-  }
-
-  #[test]
-  fn desktop_handshake_and_snapshot_request_match_the_core_contract() {
-    let hello = desktop_hello();
-    assert_eq!(hello["type"], "component.hello");
-    assert_eq!(hello["payload"]["component"], "birdie-desktop");
-    assert_eq!(hello["payload"]["role"], "desktop");
-    assert_eq!(hello["payload"]["contractVersion"], CONTRACT_VERSION);
-
-    let request = desktop_snapshot_request();
-    assert_eq!(request["type"], "runtime.snapshot.request");
-    assert_eq!(request["payload"], json!({}));
-  }
-
-  #[test]
-  fn emitted_event_names_satisfy_tauri_v2_grammar() {
-    let names = [
-      EVENT_RUNTIME_PRESENCE_CHANGED,
-      EVENT_RUNTIME_SNAPSHOT,
-      EVENT_RUNTIME_DISCONNECTED,
-      EVENT_RUNTIME_CONNECTED,
-      EVENT_RUNTIME_AUDIO_INPUT,
-      EVENT_RUNTIME_AUDIO_OUTPUT,
-      EVENT_RUNTIME_IPC_ERROR,
-    ];
-    for name in names {
-      assert!(!name.is_empty());
-      assert!(!name.contains('.'));
-      assert!(name.chars().all(|character| {
-        character.is_alphanumeric() || matches!(character, '-' | '/' | ':' | '_')
-      }));
+        let encoded = serde_json::to_value(&snapshot).expect("snapshot must serialize");
+        assert_eq!(encoded["microphoneState"], "ENABLED");
+        assert_eq!(encoded["brainState"], "READY");
+        assert_eq!(encoded["bridgeRevision"], 0);
+        assert!(encoded.get("microphone_state").is_none());
     }
-  }
+
+    #[test]
+    fn authoritative_snapshot_advances_bridge_revision_without_rewriting_core_revision() {
+        let mut current = ready_snapshot(9, 12);
+        let next = ready_snapshot(2, 0);
+
+        replace_authoritative_snapshot(&mut current, next);
+
+        assert_eq!(current.bridge_revision, 13);
+        assert_eq!(current.presence.revision, 2);
+        assert_eq!(current.presence.state, "IDLE");
+        assert_eq!(current.microphone_state, "ENABLED");
+    }
+
+    #[test]
+    fn disconnect_and_reconnect_use_bridge_revision_not_core_revision() {
+        let mut snapshot = ready_snapshot(9, 40);
+
+        transition_to_disconnected(&mut snapshot);
+        assert_eq!(snapshot.bridge_revision, 41);
+        assert_eq!(snapshot.presence.revision, 9);
+        assert_eq!(snapshot.presence.state, "OFFLINE");
+        assert_eq!(snapshot.microphone_state, "UNAVAILABLE");
+
+        replace_authoritative_snapshot(&mut snapshot, ready_snapshot(2, 0));
+        assert_eq!(snapshot.bridge_revision, 42);
+        assert_eq!(snapshot.presence.revision, 2);
+        assert_eq!(snapshot.presence.state, "IDLE");
+        assert_eq!(snapshot.microphone_state, "ENABLED");
+    }
+
+    #[test]
+    fn desktop_handshake_and_snapshot_request_match_the_core_contract() {
+        let hello = desktop_hello();
+        assert_eq!(hello["type"], "component.hello");
+        assert_eq!(hello["payload"]["component"], "birdie-desktop");
+        assert_eq!(hello["payload"]["role"], "desktop");
+        assert_eq!(hello["payload"]["contractVersion"], CONTRACT_VERSION);
+
+        let request = desktop_snapshot_request();
+        assert_eq!(request["type"], "runtime.snapshot.request");
+        assert_eq!(request["payload"], json!({}));
+    }
+
+    #[test]
+    fn emitted_event_names_satisfy_tauri_v2_grammar() {
+        let names = [
+            EVENT_RUNTIME_PRESENCE_CHANGED,
+            EVENT_RUNTIME_SNAPSHOT,
+            EVENT_RUNTIME_DISCONNECTED,
+            EVENT_RUNTIME_CONNECTED,
+            EVENT_RUNTIME_AUDIO_INPUT,
+            EVENT_RUNTIME_AUDIO_OUTPUT,
+            EVENT_RUNTIME_IPC_ERROR,
+        ];
+        for name in names {
+            assert!(!name.is_empty());
+            assert!(!name.contains('.'));
+            assert!(name.chars().all(|character| {
+                character.is_alphanumeric() || matches!(character, '-' | '/' | ':' | '_')
+            }));
+        }
+    }
 }

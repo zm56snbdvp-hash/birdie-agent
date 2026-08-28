@@ -23,7 +23,7 @@ function inputLevelEvent() {
     kind: 'event',
     name: 'voice.input.level',
     event_id: 'input-level-1',
-    source: 'birdie-voice-realtime-test',
+    source: 'birdie-voice',
     timestamp_utc: new Date().toISOString(),
     monotonic_ms: 1234,
     source_sequence: 1,
@@ -50,7 +50,8 @@ test('Voice levels are normalized and forwarded without changing Presence', asyn
   });
   const voice = await connectIpcClient(name, {
     role: IpcRole.VOICE,
-    component: 'birdie-voice-realtime-test',
+    component: 'birdie-voice',
+    instanceId: 'session-realtime',
   });
 
   try {

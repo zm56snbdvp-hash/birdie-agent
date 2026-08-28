@@ -13,7 +13,7 @@ function voicePrivacyEvent(state, sequence = 1) {
     kind: 'event',
     name: 'voice.privacy.changed',
     event_id: `privacy-${sequence}`,
-    source: 'birdie-voice-test',
+    source: 'birdie-voice',
     timestamp_utc: new Date().toISOString(),
     monotonic_ms: sequence,
     source_sequence: sequence,
@@ -36,11 +36,12 @@ test('IPC routes microphone command and waits for Voice privacy confirmation', a
 
   const desktop = await connectIpcClient(pipeName, {
     role: IpcRole.DESKTOP,
-    component: 'birdie-desktop-test',
+    component: 'birdie-desktop',
   });
   const voice = await connectIpcClient(pipeName, {
     role: IpcRole.VOICE,
-    component: 'birdie-voice-test',
+    component: 'birdie-voice',
+    instanceId: 'session-microphone-test',
   });
 
   try {

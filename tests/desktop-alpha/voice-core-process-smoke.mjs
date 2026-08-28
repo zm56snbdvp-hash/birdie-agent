@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { IpcRole } from '../../packages/protocol/src/contract.mjs';
+import { DevelopmentAcknowledgementBrain } from '../../services/core/src/brain.mjs';
 import { BirdieIpcServer, PIPE_NAME } from '../../services/core/src/ipc-server.mjs';
 import { connectIpcClient } from '../../services/core/test/helpers/ipc-client.mjs';
 
@@ -43,7 +44,7 @@ assert.ok(
   'BIRDIE_VOICE_SMOKE_EXE must point to the built C++ smoke publisher',
 );
 
-const server = new BirdieIpcServer();
+const server = new BirdieIpcServer({ brain: new DevelopmentAcknowledgementBrain() });
 let observer;
 let child;
 

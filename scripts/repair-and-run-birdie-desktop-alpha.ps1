@@ -152,7 +152,6 @@ function Configure-FullVoiceDemoEnvironment {
   $env:BIRDIE_GATE_STT_LANGUAGE = 'de'
   $env:BIRDIE_GATE_STT_USE_GPU = '0'
   $env:BIRDIE_GATE_STT_FLASH_ATTN = '0'
-  $env:BIRDIE_DEV_FRONTEND_URL = $viteUrl
 }
 
 Require-Command 'git'; Require-Command 'node'; Require-Command 'npm'; Require-Command 'cargo'
@@ -166,7 +165,7 @@ $viteProcess = $null
 $tauriExitCode = 1
 try {
   $viteProcess = Start-ManagedVite
-  Write-Host 'Starting Tauri with explicit WebView recovery navigation...' -ForegroundColor Green
+  Write-Host 'Starting Tauri with the managed Vite dev URL...' -ForegroundColor Green
   Push-Location $desktopDir
   try {
     & $tauriCommand dev --config $managedTauriConfig --no-watch

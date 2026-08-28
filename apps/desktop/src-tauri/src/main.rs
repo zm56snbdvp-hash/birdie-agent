@@ -1,1 +1,3 @@
-fn main() { birdie_desktop_lib::run(); }
+fn main() {
+    birdie_desktop_lib::run();
+}

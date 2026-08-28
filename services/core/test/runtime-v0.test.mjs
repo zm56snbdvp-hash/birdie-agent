@@ -109,8 +109,7 @@ test('completed turn cannot speak again', () => {
   runtime.apply(evt('voice.utterance.finalized', 4, { turn_id: 'turn-1' }));
   runtime.apply(evt('voice.output.started', 5, { turn_id: 'turn-1' }));
   runtime.apply(evt('voice.output.completed', 6, { turn_id: 'turn-1' }));
-  assert.throws(
-    () => runtime.apply(evt('voice.output.started', 7, { turn_id: 'turn-1' })),
-    /TURN.STALE_EVENT/,
-  );
+  const stale = runtime.apply(evt('voice.output.started', 7, { turn_id: 'turn-1' }));
+  assert.equal(stale.dropped, 'stale_turn_event');
+  assert.equal(runtime.getSnapshot().presence.state, 'IDLE');
 });

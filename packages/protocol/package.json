@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "validate": "node ./src/validate-contract.mjs"
+    "validate": "node ./src/validate-contract.mjs",
+    "test": "node --test test/*.test.mjs"
   }
 }

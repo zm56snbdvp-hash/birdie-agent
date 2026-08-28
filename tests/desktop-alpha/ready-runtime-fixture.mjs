@@ -14,7 +14,8 @@ while (!client && Date.now() < deadline) {
   try {
     client = await connectIpcClient(pipeName, {
       role: IpcRole.VOICE,
-      component: 'birdie-ready-runtime-fixture',
+      component: 'birdie-voice',
+      instanceId: 'ready-runtime-fixture',
     });
   } catch {
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -29,7 +30,7 @@ function event(name, payload) {
   return createEnvelope({
     name,
     eventId: `ready-runtime-fixture-${sequence}`,
-    source: 'birdie-ready-runtime-fixture',
+    source: 'birdie-voice',
     monotonicMs: sequence,
     sourceSequence: sequence,
     traceId: 'ready-runtime-fixture',

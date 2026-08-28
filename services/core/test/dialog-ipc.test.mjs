@@ -31,7 +31,7 @@ function event(name, sequence, {
     kind: 'event',
     name,
     event_id: `dialog-${sequence}-${name}`,
-    source: 'birdie-voice-dialog-test',
+    source: 'birdie-voice',
     timestamp_utc: new Date(
       Date.UTC(2026, 7, 26, 12, 0, 0, sequence),
     ).toISOString(),
@@ -77,7 +77,8 @@ test('classified transcript becomes a Voice output and completes Presence', asyn
     });
     const voice = await connectIpcClient(name, {
       role: IpcRole.VOICE,
-      component: 'dialog-voice',
+      component: 'birdie-voice',
+      instanceId: 'session-dialog-ipc',
     });
 
     try {
@@ -173,7 +174,8 @@ test('transcript content with operational classification is rejected', async () 
   await withServer('classification', async (_server, name) => {
     const voice = await connectIpcClient(name, {
       role: IpcRole.VOICE,
-      component: 'classification-voice',
+      component: 'birdie-voice',
+      instanceId: 'session-dialog-ipc',
     });
 
     try {

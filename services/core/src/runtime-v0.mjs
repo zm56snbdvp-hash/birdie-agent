@@ -17,14 +17,19 @@ export class BirdieRuntimeV0 {
     };
   }
 
-  apply(event) {
+  apply(event, { sourceScope = null } = {}) {
     this.#validateEnvelope(event);
-    if (this.seenEventIds.has(event.event_id)) return { dropped: 'duplicate_event' };
-    this.seenEventIds.add(event.event_id);
+    const sequenceScope = sourceScope ?? `${event.source}:${event.session_id ?? 'legacy'}`;
+    const replayKey = `${sequenceScope}:${event.event_id}`;
+    if (this.seenEventIds.has(replayKey)) return { dropped: 'duplicate_event' };
+    this.seenEventIds.add(replayKey);
+    if (this.seenEventIds.size > 8_192) {
+      this.seenEventIds.delete(this.seenEventIds.values().next().value);
+    }
 
-    const previousSeq = this.lastSourceSequence.get(event.source) ?? -1;
+    const previousSeq = this.lastSourceSequence.get(sequenceScope) ?? -1;
     if (event.source_sequence <= previousSeq) return { dropped: 'stale_source_sequence' };
-    this.lastSourceSequence.set(event.source, event.source_sequence);
+    this.lastSourceSequence.set(sequenceScope, event.source_sequence);
 
     switch (event.name) {
       case 'component.ready':
@@ -67,27 +72,43 @@ export class BirdieRuntimeV0 {
         );
       }
       case 'voice.input.cancelled':
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
         this.pendingBargeIn = false;
-        if (event.turn_id && this.turns.isCurrent(event.turn_id)) {
-          this.turns.transition(event.turn_id, TurnStatus.CANCELLED);
-        }
+        this.turns.transition(event.turn_id, TurnStatus.CANCELLED);
         return this.#setPresence(PresenceState.IDLE, event, 'voice.input.cancelled', null);
       case 'voice.utterance.captured':
         return this.#markTurnProcessing(event, 'voice.utterance.captured');
       case 'voice.utterance.finalized':
         return this.#markTurnProcessing(event, 'voice.utterance.finalized');
       case 'voice.output.started':
-        this.turns.assertCurrent(event.turn_id);
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
         this.turns.transition(event.turn_id, TurnStatus.OUTPUTTING);
         return this.#setPresence(PresenceState.SPEAKING, event, 'voice.output.started', event.turn_id);
       case 'voice.output.completed':
-        this.turns.assertCurrent(event.turn_id);
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
         this.turns.transition(event.turn_id, TurnStatus.COMPLETED);
         return this.#setPresence(PresenceState.IDLE, event, 'voice.output.completed', null);
+      case 'runtime.turn.completed':
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
+        this.turns.transition(event.turn_id, TurnStatus.COMPLETED);
+        return this.#setPresence(PresenceState.IDLE, event, 'runtime.turn.completed', null);
+      case 'runtime.turn.cancelled':
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
+        this.turns.transition(event.turn_id, TurnStatus.CANCELLED);
+        return this.#setPresence(PresenceState.IDLE, event, 'runtime.turn.cancelled', null);
+      case 'runtime.turn.failed':
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
+        this.turns.transition(event.turn_id, TurnStatus.FAILED);
+        return this.#setPresence(PresenceState.IDLE, event, 'runtime.turn.failed', null);
       case 'brain.turn.failed':
       case 'voice.output.failed':
-        if (event.turn_id && this.turns.isCurrent(event.turn_id)) this.turns.transition(event.turn_id, TurnStatus.FAILED);
-        return this.#setPresence(PresenceState.ERROR, event, event.name, event.turn_id ?? null);
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
+        this.turns.transition(event.turn_id, TurnStatus.FAILED);
+        return this.#setPresence(PresenceState.ERROR, event, event.name, null);
+      case 'voice.output.cancelled':
+        if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
+        this.turns.transition(event.turn_id, TurnStatus.CANCELLED);
+        return this.#setPresence(PresenceState.IDLE, event, 'voice.output.cancelled', null);
       default:
         return { accepted: true, ignored: event.name };
     }
@@ -97,10 +118,12 @@ export class BirdieRuntimeV0 {
     if (!event.turn_id) throw new Error('TURN.ID_REQUIRED');
     let turn = this.turns.get(event.turn_id);
     if (!turn) {
+      if (this.turns.activeTurnId) return { dropped: 'stale_turn_event' };
       turn = this.turns.create(event.turn_id, {
         timestampUtc: event.timestamp_utc,
       });
     }
+    if (!this.turns.isCurrent(event.turn_id)) return { dropped: 'stale_turn_event' };
     if (turn.status !== TurnStatus.PROCESSING) {
       this.turns.assertCurrent(event.turn_id);
       this.turns.transition(event.turn_id, TurnStatus.PROCESSING);

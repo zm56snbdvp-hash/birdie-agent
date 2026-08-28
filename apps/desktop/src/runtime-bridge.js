@@ -10,6 +10,8 @@ export const TAURI_EVENTS = Object.freeze({
   AUDIO_INPUT: 'runtime:audio-input',
   AUDIO_OUTPUT: 'runtime:audio-output',
   IPC_ERROR: 'runtime:ipc-error',
+  SURFACE_CHANGED: 'desktop:surface-changed',
+  COMMAND_STATUS: 'desktop:command-status',
 });
 
 export const TAURI_EVENT_NAME_PATTERN = /^[A-Za-z0-9\-/:_]+$/;
@@ -96,6 +98,8 @@ export class RuntimeBridge {
       onAudioOutput,
       onDiagnostic,
       onError,
+      onSurface,
+      onCommandStatus,
     },
     {
       invokeFn = tauriInvoke,
@@ -113,6 +117,8 @@ export class RuntimeBridge {
     this.onAudioOutput = onAudioOutput;
     this.onDiagnostic = onDiagnostic;
     this.onError = onError;
+    this.onSurface = onSurface;
+    this.onCommandStatus = onCommandStatus;
     this.invokeFn = invokeFn;
     this.listenFn = listenFn;
     this.setIntervalFn = setIntervalFn;
@@ -186,6 +192,14 @@ export class RuntimeBridge {
         );
         this.#reportError('event.runtime-ipc-error', error);
       });
+      await this.#registerListener(
+        TAURI_EVENTS.SURFACE_CHANGED,
+        ({ payload }) => this.onSurface?.(payload),
+      );
+      await this.#registerListener(
+        TAURI_EVENTS.COMMAND_STATUS,
+        ({ payload }) => this.onCommandStatus?.(payload),
+      );
 
       await this.requestSnapshot('connect.post-listeners');
       if (typeof this.setIntervalFn !== 'function') {
@@ -236,6 +250,53 @@ export class RuntimeBridge {
       this.#reportError('invoke.runtime_set_microphone_enabled', error);
       throw error;
     }
+  }
+
+  getSurfaceState() {
+    return this.invokeFn('desktop_get_surface_state');
+  }
+
+  openModule(moduleId) {
+    return this.invokeFn('desktop_open_module', { moduleId });
+  }
+
+  setInteractionMode(enabled) {
+    return this.invokeFn('desktop_set_interaction_mode', {
+      enabled: Boolean(enabled),
+    });
+  }
+
+  submitDesktopIntent({ commandId, text, issuedAtMs, expiresAtMs }) {
+    return this.invokeFn('runtime_submit_desktop_intent', {
+      commandId,
+      text,
+      issuedAtMs,
+      expiresAtMs,
+    });
+  }
+
+  getSystemSnapshot() {
+    return this.invokeFn('runtime_get_system_snapshot');
+  }
+
+  getFocusState() {
+    return this.invokeFn('focus_get_state');
+  }
+
+  saveFocusState(state) {
+    return this.invokeFn('focus_save_state', { state });
+  }
+
+  listCaptures() {
+    return this.invokeFn('capture_list');
+  }
+
+  addCapture(text) {
+    return this.invokeFn('capture_add', { text });
+  }
+
+  deleteCapture(id) {
+    return this.invokeFn('capture_delete', { id });
   }
 
   reportDiagnostic(stage, detail) {

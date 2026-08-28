@@ -61,7 +61,7 @@ test('contract major mismatch is rejected', async () => {
   await withServer('version', async (_server, pipeName) => {
     const rejected = await connectIpcClient(pipeName, {
       role: IpcRole.DESKTOP,
-      component: 'incompatible-desktop',
+      component: 'birdie-desktop',
       contractVersion: '2.0',
       expectAccepted: false,
     });
@@ -109,7 +109,7 @@ test('Voice role never receives Presence snapshots or realtime projections', asy
   await withServer('routing', async (_server, pipeName) => {
     const voice = await connectIpcClient(pipeName, {
       role: IpcRole.VOICE,
-      component: 'isolated-voice',
+      component: 'birdie-voice',
     });
     try {
       await new Promise((resolve) => setTimeout(resolve, 40));

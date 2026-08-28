@@ -67,7 +67,37 @@ export const IpcMessageType = Object.freeze({
   RUNTIME_AUDIO_INPUT: "runtime.audio.input",
   RUNTIME_AUDIO_OUTPUT: "runtime.audio.output",
   VOICE_COMMAND: "voice.command",
+  DESKTOP_INTENT_SUBMIT: "desktop.intent.submit",
+  DESKTOP_INTENT_ACK: "desktop.intent.ack",
+  DESKTOP_COMMAND: "desktop.command",
+  DESKTOP_COMMAND_RESULT: "desktop.command.result",
+  DESKTOP_COMMAND_STATUS: "desktop.command.status",
   ERROR: "error",
+});
+
+export const DesktopModule = Object.freeze({
+  COMMAND_CENTER: "COMMAND_CENTER",
+  SYSTEM: "SYSTEM",
+  FOCUS: "FOCUS",
+  CAPTURE: "CAPTURE",
+});
+
+export const DesktopMode = Object.freeze({
+  CONTROL: "CONTROL",
+  AMBIENT: "AMBIENT",
+});
+
+export const DesktopCommandName = Object.freeze({
+  MODULE_OPEN: "desktop.module.open",
+  SURFACE_SET_MODE: "desktop.surface.set_mode",
+});
+
+export const DesktopCommandStatus = Object.freeze({
+  SENT: "SENT",
+  ACKNOWLEDGED: "ACKNOWLEDGED",
+  REJECTED: "REJECTED",
+  FAILED: "FAILED",
+  TIMEOUT: "TIMEOUT",
 });
 
 export const EventName = Object.freeze({

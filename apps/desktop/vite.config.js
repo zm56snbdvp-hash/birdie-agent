@@ -8,7 +8,12 @@ export default defineConfig({
   define: {
     __BIRDIE_DESKTOP_BUILD_ID__: JSON.stringify(buildId),
   },
-  server: { port: 1420, strictPort: true, host: '127.0.0.1' },
+  server: {
+    port: 1420,
+    strictPort: true,
+    host: '127.0.0.1',
+    watch: { ignored: ['**/src-tauri/target/**'] },
+  },
   envPrefix: ['VITE_', 'TAURI_'],
   build: {
     target: 'es2021',

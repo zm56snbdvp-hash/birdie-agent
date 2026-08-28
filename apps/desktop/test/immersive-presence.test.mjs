@@ -162,14 +162,15 @@ test('desktop surface is hidden-first, transparent, full-monitor, and click-thro
   assert.match(rustSource, /reset_overlay_after_page_load/);
   assert.match(rustSource, /\.on_page_load\(/);
   assert.match(rustSource, /\.on_window_event\(/);
-  assert.match(rustSource, /__birdieRequestControlMode/);
+  assert.match(rustSource, /RegisterHotKey/);
+  assert.match(rustSource, /MOD_NOREPEAT/);
+  assert.match(rustSource, /lock_transition/);
   assert.match(rustSource, /"Birdie bedienen"/);
   assert.match(rustSource, /"Präsenzmodus"/);
   assert.match(mainSource, /id="release-overlay"/);
+  assert.match(mainSource, /__birdieRequestControlMode/);
   assert.match(mainSource, /event\.key === 'Escape'/);
   assert.doesNotMatch(mainSource, /panel\.hidden\s*=\s*!panel\.hidden/);
-  assert.match(
-    mainSource,
-    /await tauriInvoke\('desktop_set_interaction_mode',[\s\S]+renderInteractionMode\(requested\)/,
-  );
+  assert.match(mainSource, /surface\.escape\(\)/);
+  assert.doesNotMatch(mainSource, /Ctrl\+Shift\+Space/);
 });
