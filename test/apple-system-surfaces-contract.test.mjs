@@ -152,6 +152,17 @@ test("phone root composes Day Pilot and Capture without losing either deep-link 
   assert.match(entitlements, /\$\(BIRDIE_SHARED_SUITE_NAME\)/);
 });
 
+test("Apple smoke prefers the iPhone 13 mini compatibility baseline", async () => {
+  const workflow = await text(".github/workflows/apple-build.yml");
+  const swiftFiles = (await filesBelow(apple)).filter((file) => file.endsWith(".swift"));
+  const swift = (await Promise.all(swiftFiles.map((file) => readFile(file, "utf8")))).join("\n");
+
+  assert.match(workflow, /"iPhone 13 mini"/);
+  assert.match(workflow, /"iPhone SE \(3rd generation\)"/);
+  assert.doesNotMatch(swift, /DynamicIsland|ActivityKit/);
+  assert.match(await text("clients/apple/BirdiePhone/DayPilot/DayPilotView.swift"), /List \{/);
+});
+
 test("app-only drafts expire while the minimized widget snapshot has a TTL", async () => {
   const routing = await text("clients/apple/BirdieShared/BirdieRouting.swift");
   const snapshots = await text("clients/apple/BirdieShared/DayPilotSnapshotStore.swift");

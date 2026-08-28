@@ -46,7 +46,11 @@ jobs:
               for device in data[runtime]
               if device.get("isAvailable") and device.get("name", "").startswith("iPhone")
           ]
-          preferred = next((d for d in candidates if d["name"] == "iPhone 16 Pro"), None)
+          preferred_names = ["iPhone 13 mini", "iPhone SE (3rd generation)", "iPhone 16 Pro"]
+          preferred = next(
+              (d for name in preferred_names for d in candidates if d["name"] == name),
+              None,
+          )
           chosen = preferred or (candidates[0] if candidates else None)
           print(chosen["udid"] if chosen else "")
           '

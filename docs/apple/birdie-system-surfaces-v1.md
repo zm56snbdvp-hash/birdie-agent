@@ -69,7 +69,10 @@ Optional `source` and `focus` query items are parsed as untrusted input; the par
 
 The phone reads calendar and reminders through separate EventKit permissions, each requested only after its own button tap. Existing authorization is read on refresh; no prompt occurs at launch. Calendar write-only access can create a confirmed event but cannot read events; the UI offers an explicit full-access upgrade. An event or reminder change follows a two-step UI: generate an immutable preview with exact destination identifier/title, start, optional end, and time zone, then confirm that same value. If the destination disappears, the commit fails and requires a new preview. Only `DayPilotEventStore.applyConfirmed` calls EventKit save APIs.
 
-The approval provider is deliberately `unavailable` until a scoped, structured mobile endpoint exists. The app does not embed or reuse `BIRDIE_AGENT_API_KEY` and never invents approvals.
+The read-only approval display consumes only structured `openApprovals` from the scoped
+`/watch/day-pilot/v1` contract. Approval execution remains unavailable until it has a
+separate confirmed in-app flow. The app does not embed or reuse `BIRDIE_AGENT_API_KEY`,
+never infers approvals from briefing text, and never executes an approval from an intent.
 
 ## Privacy and device behavior
 
