@@ -138,7 +138,7 @@ private struct CaptureItemDetailView: View {
                     Text(payload.displayName).font(.headline)
                     if let text = payload.inlineText {
                         Text(preview(text))
-                            .font(.body.monospaced(payload.kind == .recognizedText))
+                            .font(payload.kind == .recognizedText ? .body.monospaced() : .body)
                             .lineLimit(12)
                     }
                 }
