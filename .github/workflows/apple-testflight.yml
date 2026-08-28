@@ -29,7 +29,9 @@ jobs:
             test -n "${!name:-}" || { echo "Missing GitHub secret: $name" >&2; exit 1; }
           done
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          brew untap aws/tap 2>/dev/null || true
+          brew install xcodegen
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
