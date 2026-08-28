@@ -10,6 +10,7 @@ import {
   createPocketRelayHostEffectRequest,
   validatePocketRelayHostEffectRequest,
 } from '../src/pocket-relay-host.mjs';
+import { PocketRelayHostAdapter } from '../src/pocket-relay-host-adapter.mjs';
 
 const target = { deviceId: 'birdie-windows-mock', deviceName: 'Birdie Windows Mock', platform: 'windows' };
 
@@ -83,4 +84,41 @@ test('mock host rejects file/workflow actions instead of silently widening the a
 test('host contract has no shell, pipe, or arbitrary process execution surface', async () => {
   const source = await readFile(fileURLToPath(new URL('../src/pocket-relay-host.mjs', import.meta.url)), 'utf8');
   assert.doesNotMatch(source, /child_process|node:net|PowerShell|cmd\.exe|\\\\\.\\pipe/i);
+});
+
+test('production adapter is fail-closed until win32 and both explicit hooks are present', async () => {
+  const request = createPocketRelayHostEffectRequest({
+    command: command(PocketRelayHostAction.OPEN_LINK, { url: 'https://example.com' }),
+    leaseId: randomUUID(),
+  });
+  const adapter = new PocketRelayHostAdapter({
+    targetDeviceId: target.deviceId,
+    enableProductionEffects: true,
+    platform: 'linux',
+  });
+  assert.equal(adapter.describe().productionEffectsEnabled, false);
+  await assert.rejects(() => adapter.execute(request, lease()), (error) => error.code === 'HOST_PRODUCTION_DISABLED');
+});
+
+test('production adapter invokes only explicit hooks and is idempotent by effectId', async () => {
+  const calls = [];
+  const adapter = new PocketRelayHostAdapter({
+    targetDeviceId: target.deviceId,
+    enableProductionEffects: true,
+    platform: 'win32',
+    openHttpsLink: async (url, options) => calls.push(['open', url, options.signal]),
+    lockInteractiveSession: async (options) => calls.push(['lock', options.signal]),
+  });
+  const request = createPocketRelayHostEffectRequest({
+    command: command(PocketRelayHostAction.OPEN_LINK, { url: 'https://example.com/path' }),
+    leaseId: randomUUID(),
+  });
+  const first = await adapter.execute(request, lease());
+  const second = await adapter.execute(request, lease());
+  assert.equal(adapter.describe().productionEffectsEnabled, true);
+  assert.equal(first.productionEffect, true);
+  assert.strictEqual(second, first);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0][0], 'open');
+  assert.equal(calls[0][1], 'https://example.com/path');
 });

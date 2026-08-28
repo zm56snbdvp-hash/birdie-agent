@@ -18,10 +18,17 @@ and requires an active effect lease. File transfer and workflow actions are
 not part of this host contract and fail closed. No named pipe, shell,
 PowerShell, arbitrary executable, or caller-selected file path is used.
 
+`PocketRelayHostAdapter` is the only production binding point. It remains
+fail-closed unless the caller explicitly supplies both hooks, sets
+`enableProductionEffects: true`, and runs on `win32`. It re-validates the
+target and lease, invokes each hook with the lease abort signal, checks the
+lease again after the hook, and returns the same receipt on an exact
+`effectId` retry without repeating the OS effect.
+
 ## Next host step
 
 After the Pocket Relay gateway and Desktop Alpha have a reviewed deployment
-boundary, bind two explicit Windows hooks to this envelope:
+boundary, bind two explicit Windows hooks to this adapter:
 
 ```text
 openHttpsLink(url, { signal })
