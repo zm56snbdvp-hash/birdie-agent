@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace BirdieWorld
@@ -22,6 +23,8 @@ namespace BirdieWorld
         private readonly Color quiet = new(0.65f, 0.69f, 0.63f, 1f);
 
         private readonly List<Transform> worldLabels = new();
+        private readonly List<RectTransform> touchTargets = new();
+        private const float MinimumTouchTargetPixels = 44f;
         private Font font;
         private Action onReturnToJourney;
         private GameObject worldRoot;
@@ -32,6 +35,7 @@ namespace BirdieWorld
         private RectTransform hudRoot;
         private RectTransform objectivePanel;
         private RectTransform controlsPanel;
+        private RectTransform touchControlsPanel;
         private RectTransform backPanel;
         private Text objectiveTitle;
         private Text objectiveBody;
@@ -39,6 +43,8 @@ namespace BirdieWorld
         private Text locationText;
         private Text hintText;
         private Text interactionText;
+        private Text touchActionLabel;
+        private UnityEngine.UI.Button touchActionButton;
         private Renderer playerCoat;
         private Renderer playerScarf;
         private Material playerMaterial;
@@ -51,8 +57,11 @@ namespace BirdieWorld
         private Color signatureColor;
         private string displayName = "DEIN BIRDIE";
         private bool hasArrivedAtNest;
+        private Vector2 touchMovement;
+        private int activeTouchPointerId = int.MinValue;
         private int layoutWidth;
         private int layoutHeight;
+        private Rect layoutSafeArea;
 
         /// <summary>The overlay object used by the bootstrap screen router.</summary>
         public GameObject Screen { get; private set; }
@@ -97,6 +106,17 @@ namespace BirdieWorld
             if (worldRoot != null) worldRoot.SetActive(visible);
             if (Screen != null) Screen.SetActive(visible);
             if (visible) ResetWorldView();
+            else ResetTouchInput();
+        }
+
+        private void OnDisable()
+        {
+            ResetTouchInput();
+        }
+
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (!hasFocus) ResetTouchInput();
         }
 
         private void Update()
@@ -340,8 +360,18 @@ namespace BirdieWorld
             var controls = Panel(root.transform, "WorldControls", new Vector2(0.03f, 0.05f), new Vector2(0.47f, 0.16f), new Color(panel.r, panel.g, panel.b, 0.88f));
             controlsPanel = controls.GetComponent<RectTransform>();
             AddOutline(controls, new Color(gold.r, gold.g, gold.b, 0.45f), 1f);
-            hintText = Label(controls.transform, "WASD / PFEILE · E ODER SPACE AM NEST · TOUCH FOLGT", 12, ivory, TextAnchor.MiddleLeft, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.90f));
+            hintText = Label(controls.transform, "WASD / PFEILE · TOUCH-D-PAD · AKTION AM NEST", 12, ivory, TextAnchor.MiddleLeft, new Vector2(0.06f, 0.48f), new Vector2(0.94f, 0.90f));
             interactionText = Label(controls.transform, "GOLDENE MARKER FÜHREN DICH DURCH DIE WELT", 11, quiet, TextAnchor.MiddleLeft, new Vector2(0.06f, 0.12f), new Vector2(0.94f, 0.45f));
+
+            var touchControls = Panel(root.transform, "WorldTouchControls", new Vector2(0.50f, 0.05f), new Vector2(0.70f, 0.25f), new Color(panel.r, panel.g, panel.b, 0.82f));
+            touchControlsPanel = touchControls.GetComponent<RectTransform>();
+            AddOutline(touchControls, new Color(gold.r, gold.g, gold.b, 0.55f), 1f);
+            Label(touchControls.transform, "TOUCH · HALTEN ZUM LAUFEN", 11, quiet, TextAnchor.MiddleCenter, new Vector2(0.04f, 0.82f), new Vector2(0.96f, 0.98f));
+            TouchMovementButton(touchControls.transform, "↑", new Vector2(0.20f, 0.48f), new Vector2(0.39f, 0.79f), new Vector2(0f, 1f));
+            TouchMovementButton(touchControls.transform, "←", new Vector2(0.05f, 0.12f), new Vector2(0.24f, 0.43f), new Vector2(-1f, 0f));
+            TouchMovementButton(touchControls.transform, "↓", new Vector2(0.20f, 0.12f), new Vector2(0.39f, 0.43f), new Vector2(0f, -1f));
+            TouchMovementButton(touchControls.transform, "→", new Vector2(0.35f, 0.12f), new Vector2(0.54f, 0.43f), new Vector2(1f, 0f));
+            TouchActionButton(touchControls.transform, new Vector2(0.61f, 0.12f), new Vector2(0.95f, 0.79f));
 
             var back = Panel(root.transform, "WorldBack", new Vector2(0.72f, 0.05f), new Vector2(0.97f, 0.16f), new Color(0.07f, 0.055f, 0.03f, 0.95f));
             backPanel = back.GetComponent<RectTransform>();
@@ -367,6 +397,7 @@ namespace BirdieWorld
 
         private void ResetWorldView()
         {
+            ResetTouchInput();
             playerPosition = new Vector3(0f, 1.20f, -1.0f);
             hasArrivedAtNest = false;
             if (playerRoot == null)
@@ -407,8 +438,8 @@ namespace BirdieWorld
 
         private void HandleMovement()
         {
-            var horizontal = 0f;
-            var vertical = 0f;
+            var horizontal = touchMovement.x;
+            var vertical = touchMovement.y;
             if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) horizontal -= 1f;
             if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) horizontal += 1f;
             if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) vertical -= 1f;
@@ -416,17 +447,87 @@ namespace BirdieWorld
 
             var movement = new Vector3(horizontal, 0f, vertical);
             if (movement.sqrMagnitude > 0.01f)
-            {
-                movement.Normalize();
-                playerPosition += movement * (5.2f * Time.unscaledDeltaTime);
-                playerPosition.x = Mathf.Clamp(playerPosition.x, -27f, 27f);
-                playerPosition.z = Mathf.Clamp(playerPosition.z, -11f, 39f);
-                playerRoot.transform.position = playerPosition;
-                playerRoot.transform.rotation = Quaternion.LookRotation(movement, Vector3.up);
-            }
+                MovePlayer(movement, 5.2f * Time.unscaledDeltaTime);
 
             if (Input.GetKeyDown(KeyCode.E) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space))
                 InteractAtWorldMarker();
+        }
+
+        private void TouchMovementButton(Transform parent, string value, Vector2 min, Vector2 max, Vector2 direction)
+        {
+            var go = Panel(parent, $"TouchMove{value}", min, max, new Color(0.08f, 0.12f, 0.09f, 0.96f));
+            AddOutline(go, new Color(gold.r, gold.g, gold.b, 0.78f), 1f);
+            var button = go.AddComponent<UnityEngine.UI.Button>();
+            button.targetGraphic = go.GetComponent<Image>();
+            button.navigation = new Navigation { mode = Navigation.Mode.None };
+            Label(go.transform, value, 24, ivory, TextAnchor.MiddleCenter, new Vector2(0.04f, 0.05f), new Vector2(0.96f, 0.95f));
+            touchTargets.Add(go.GetComponent<RectTransform>());
+
+            var trigger = go.AddComponent<EventTrigger>();
+            trigger.triggers = new List<EventTrigger.Entry>();
+            AddTouchTrigger(trigger, EventTriggerType.PointerDown, eventData => BeginTouchMovement(eventData, direction));
+            AddTouchTrigger(trigger, EventTriggerType.PointerUp, EndTouchMovement);
+            // Each arrow is a discrete hold target: lifting or leaving releases
+            // it. Swiping between direction buttons is intentionally not a gesture.
+            AddTouchTrigger(trigger, EventTriggerType.PointerExit, EndTouchMovement);
+            AddTouchTrigger(trigger, EventTriggerType.Cancel, EndTouchMovement);
+        }
+
+        private void TouchActionButton(Transform parent, Vector2 min, Vector2 max)
+        {
+            var go = Panel(parent, "WorldTouchAction", min, max, new Color(0.16f, 0.12f, 0.055f, 0.98f));
+            AddOutline(go, gold, 1f);
+            touchActionButton = go.AddComponent<UnityEngine.UI.Button>();
+            touchActionButton.targetGraphic = go.GetComponent<Image>();
+            touchActionButton.navigation = new Navigation { mode = Navigation.Mode.None };
+            touchActionButton.onClick.AddListener(InteractAtWorldMarker);
+            touchActionLabel = Label(go.transform, "NEST · 25 m", 17, ivory, TextAnchor.MiddleCenter, new Vector2(0.05f, 0.08f), new Vector2(0.95f, 0.92f));
+            touchTargets.Add(go.GetComponent<RectTransform>());
+        }
+
+        private static void AddTouchTrigger(EventTrigger trigger, EventTriggerType eventType, Action<BaseEventData> action)
+        {
+            var entry = new EventTrigger.Entry
+            {
+                eventID = eventType,
+                callback = new EventTrigger.TriggerEvent()
+            };
+            entry.callback.AddListener(eventData => action?.Invoke(eventData));
+            trigger.triggers.Add(entry);
+        }
+
+        private void BeginTouchMovement(BaseEventData eventData, Vector2 direction)
+        {
+            if (eventData is PointerEventData pointer)
+            {
+                if (activeTouchPointerId != int.MinValue && pointer.pointerId != activeTouchPointerId) return;
+                activeTouchPointerId = pointer.pointerId;
+            }
+            touchMovement = direction.normalized;
+        }
+
+        private void EndTouchMovement(BaseEventData eventData)
+        {
+            if (eventData is PointerEventData pointer && activeTouchPointerId != int.MinValue && pointer.pointerId != activeTouchPointerId)
+                return;
+            ResetTouchInput();
+        }
+
+        private void ResetTouchInput()
+        {
+            touchMovement = Vector2.zero;
+            activeTouchPointerId = int.MinValue;
+        }
+
+        private void MovePlayer(Vector3 movement, float distance)
+        {
+            if (playerRoot == null || movement.sqrMagnitude <= 0.01f) return;
+            movement.Normalize();
+            playerPosition += movement * distance;
+            playerPosition.x = Mathf.Clamp(playerPosition.x, -27f, 27f);
+            playerPosition.z = Mathf.Clamp(playerPosition.z, -11f, 39f);
+            playerRoot.transform.position = playerPosition;
+            playerRoot.transform.rotation = Quaternion.LookRotation(movement, Vector3.up);
         }
 
         private void InteractAtWorldMarker()
@@ -460,6 +561,9 @@ namespace BirdieWorld
             if (objectiveTitle == null || playerRoot == null || nestMarker == null) return;
             var distance = Vector3.Distance(new Vector3(playerPosition.x, 0f, playerPosition.z), new Vector3(nestMarker.position.x, 0f, nestMarker.position.z));
             locationText.text = $"BIRDIEWORLD · THE NEST VORPLATZ · {distance:0.0} m ZUM NEST";
+            if (touchActionButton != null) touchActionButton.interactable = !hasArrivedAtNest && distance <= 4.2f;
+            if (touchActionLabel != null)
+                touchActionLabel.text = hasArrivedAtNest ? "TOR GEÖFFNET" : distance <= 4.2f ? "AKTION · NEST" : $"NEST · {distance:0} m";
             if (hasArrivedAtNest) return;
             objectiveTitle.text = distance <= 4.2f ? "THE NEST · AKTION BEREIT" : "THE NEST · VORPLATZ";
             objectiveBody.text = distance <= 4.2f
@@ -603,21 +707,64 @@ namespace BirdieWorld
         private void ApplyResponsiveLayout(bool force = false)
         {
             if (hudRoot == null) return;
-            if (!force && layoutWidth == UnityEngine.Screen.width && layoutHeight == UnityEngine.Screen.height) return;
+            var safeArea = UnityEngine.Screen.safeArea;
+            if (!force && layoutWidth == UnityEngine.Screen.width && layoutHeight == UnityEngine.Screen.height && layoutSafeArea == safeArea) return;
             layoutWidth = UnityEngine.Screen.width;
             layoutHeight = UnityEngine.Screen.height;
+            layoutSafeArea = safeArea;
+            ApplySafeArea(safeArea);
             var portrait = layoutHeight > layoutWidth;
             if (portrait)
             {
-                Stretch(objectivePanel, new Vector2(0.05f, 0.53f), new Vector2(0.95f, 0.80f));
-                Stretch(controlsPanel, new Vector2(0.05f, 0.16f), new Vector2(0.95f, 0.27f));
+                Stretch(objectivePanel, new Vector2(0.05f, 0.59f), new Vector2(0.95f, 0.80f));
+                controlsPanel.gameObject.SetActive(false);
+                Stretch(touchControlsPanel, new Vector2(0.05f, 0.18f), new Vector2(0.95f, 0.53f));
                 Stretch(backPanel, new Vector2(0.05f, 0.05f), new Vector2(0.95f, 0.14f));
             }
             else
             {
                 Stretch(objectivePanel, new Vector2(0.72f, 0.49f), new Vector2(0.97f, 0.84f));
+                controlsPanel.gameObject.SetActive(true);
                 Stretch(controlsPanel, new Vector2(0.03f, 0.05f), new Vector2(0.47f, 0.16f));
+                Stretch(touchControlsPanel, new Vector2(0.50f, 0.05f), new Vector2(0.70f, 0.25f));
                 Stretch(backPanel, new Vector2(0.72f, 0.05f), new Vector2(0.97f, 0.16f));
+            }
+            EnsureMinimumTouchTargets();
+        }
+
+        private void ApplySafeArea(Rect safeArea)
+        {
+            if (layoutWidth <= 0 || layoutHeight <= 0) return;
+            var safeMin = safeArea.position;
+            var safeMax = safeArea.position + safeArea.size;
+            safeMin.x /= layoutWidth;
+            safeMin.y /= layoutHeight;
+            safeMax.x /= layoutWidth;
+            safeMax.y /= layoutHeight;
+            hudRoot.anchorMin = safeMin;
+            hudRoot.anchorMax = safeMax;
+            hudRoot.offsetMin = Vector2.zero;
+            hudRoot.offsetMax = Vector2.zero;
+        }
+
+        private void EnsureMinimumTouchTargets()
+        {
+            foreach (var target in touchTargets)
+            {
+                if (target == null) continue;
+                target.offsetMin = Vector2.zero;
+                target.offsetMax = Vector2.zero;
+                target.sizeDelta = Vector2.zero;
+            }
+            Canvas.ForceUpdateCanvases();
+            var scaleFactor = hudCanvas != null ? Mathf.Max(0.01f, hudCanvas.scaleFactor) : 1f;
+            var minimumUnits = MinimumTouchTargetPixels / scaleFactor;
+            foreach (var target in touchTargets)
+            {
+                if (target == null) continue;
+                var missingWidth = Mathf.Max(0f, minimumUnits - target.rect.width);
+                var missingHeight = Mathf.Max(0f, minimumUnits - target.rect.height);
+                target.sizeDelta += new Vector2(missingWidth, missingHeight);
             }
         }
 
