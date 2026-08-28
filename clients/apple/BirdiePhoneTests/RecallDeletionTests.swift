@@ -208,20 +208,20 @@ final class RecallDeletionTests: RecallTestCase {
     func testBlockedExternalSyncCannotOverwriteNewerIntakeRevision() async throws {
         let root = try temporaryRoot()
         let externalIndex = SuspendedRecallExternalIndex()
-        let repository = try repository(root: root, index: externalIndex)
+        let activeRepository = try repository(root: root, index: externalIndex)
         let firstIdentifier = UUID()
         let secondIdentifier = UUID()
-        _ = try await repository.ingest(noteCapture(id: firstIdentifier, title: "Hotel vorher"))
+        _ = try await activeRepository.ingest(noteCapture(id: firstIdentifier, title: "Hotel vorher"))
 
-        let enabling = Task { try await repository.setSpotlightEnabled(true) }
+        let enabling = Task { try await activeRepository.setSpotlightEnabled(true) }
         await externalIndex.waitUntilStarted()
-        await repository.suspendAccess()
+        await activeRepository.suspendAccess()
         let concurrentIntake = Task {
-            try await repository.ingest(noteCapture(id: secondIdentifier, title: "Hotel nach Vordergrund"))
+            try await activeRepository.ingest(noteCapture(id: secondIdentifier, title: "Hotel nach Vordergrund"))
         }
 
         await externalIndex.waitUntilSecondOperationStarted()
-        let identifiersDuringBlockedSync = (await repository.allItems()).map(\.id)
+        let identifiersDuringBlockedSync = (await activeRepository.allItems()).map(\.id)
         XCTAssertTrue(identifiersDuringBlockedSync.contains(secondIdentifier))
         await externalIndex.release()
         try await enabling.value

@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 import XCTest
 @testable import Birdie
 
