@@ -270,9 +270,12 @@ final class LiveMissionTests: XCTestCase {
         await store.load()
 
         XCTAssertEqual(store.mission, original)
-        XCTAssertNil(await reloadedCache.request(for: idempotencyKey))
-        XCTAssertEqual(await service.submissionCount(), 2)
-        XCTAssertEqual(await service.fetchCount(), 2)
+        let pendingAfterRecovery = await reloadedCache.request(for: idempotencyKey)
+        let submissionCount = await service.submissionCount()
+        let fetchCount = await service.fetchCount()
+        XCTAssertNil(pendingAfterRecovery)
+        XCTAssertEqual(submissionCount, 2)
+        XCTAssertEqual(fetchCount, 2)
     }
 
     func testMutatedIdempotentRetryFailsClosed() async throws {
