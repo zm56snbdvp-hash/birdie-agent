@@ -1,6 +1,8 @@
 use serde::Serialize;
 use std::{
     env,
+    fs::OpenOptions,
+    io::Write,
     path::{Path, PathBuf},
     process::{Child, Command, Stdio},
     sync::{
@@ -52,6 +54,20 @@ pub struct ProcessSupervisor {
     workers: Mutex<Vec<Worker>>,
 }
 
+fn diagnostic(event: &str, detail: impl AsRef<str>) {
+    let Some(local_app_data) = env::var_os("LOCALAPPDATA") else {
+        return;
+    };
+    let path = PathBuf::from(local_app_data)
+        .join("Birdie")
+        .join("logs")
+        .join("desktop-runtime-diagnostic.log");
+    let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) else {
+        return;
+    };
+    let _ = writeln!(file, "SUPERVISOR_{event} {}", detail.as_ref());
+}
+
 impl ProcessSupervisor {
     pub fn start(app: AppHandle) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
@@ -59,6 +75,18 @@ impl ProcessSupervisor {
         let mut workers = Vec::new();
 
         let specs = discover_specs(&app);
+        diagnostic(
+            "DISCOVER",
+            format!(
+                "count={} components={}",
+                specs.len(),
+                specs
+                    .iter()
+                    .map(|spec| spec.component)
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        );
         let voice_managed = specs.iter().any(|spec| spec.component == "birdie-voice");
         if specs.is_empty() {
             let _ = app.emit(
@@ -238,9 +266,26 @@ fn spawn_worker(
                 #[cfg(windows)]
                 command.creation_flags(CREATE_NO_WINDOW);
 
+                diagnostic(
+                    "SPAWN_ATTEMPT",
+                    format!(
+                        "component={} program={} args={} cwd={}",
+                        spec.component,
+                        spec.program.display(),
+                        spec.args.join(" "),
+                        spec.working_directory
+                            .as_ref()
+                            .map(|path| path.display().to_string())
+                            .unwrap_or_default()
+                    ),
+                );
                 match command.spawn() {
                     Ok(child) => {
                         let pid = child.id();
+                        diagnostic(
+                            "SPAWN_OK",
+                            format!("component={} pid={pid}", spec.component),
+                        );
                         *child_slot.lock().expect("supervised child poisoned") = Some(child);
                         let _ = app.emit(
                             EVENT_SUPERVISOR_COMPONENT_CHANGED,
@@ -316,6 +361,15 @@ fn spawn_worker(
                         }
                     }
                     Err(_) => {
+                        diagnostic(
+                            "SPAWN_ERR",
+                            format!(
+                                "component={} program={} args={}",
+                                spec.component,
+                                spec.program.display(),
+                                spec.args.join(" ")
+                            ),
+                        );
                         restart_count = restart_count.saturating_add(1);
                         let _ = app.emit(
                             EVENT_SUPERVISOR_COMPONENT_CHANGED,
@@ -455,7 +509,24 @@ fn runtime_root(app: &AppHandle) -> Option<PathBuf> {
     if cfg!(debug_assertions) {
         return repo_root();
     }
-    app.path().resource_dir().ok()
+    app.path().resource_dir().ok().map(normalize_spawn_path)
+}
+
+#[cfg(windows)]
+fn normalize_spawn_path(path: PathBuf) -> PathBuf {
+    let value = path.to_string_lossy();
+    if let Some(rest) = value.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = value.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest);
+    }
+    path
+}
+
+#[cfg(not(windows))]
+fn normalize_spawn_path(path: PathBuf) -> PathBuf {
+    path
 }
 
 fn repo_root() -> Option<PathBuf> {
@@ -503,5 +574,18 @@ mod tests {
     fn restart_sleep_can_be_cancelled() {
         let stop = AtomicBool::new(true);
         assert!(sleep_until_restart(&stop, Duration::from_secs(5)));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn normalize_spawn_path_removes_windows_extended_prefix() {
+        assert_eq!(
+            normalize_spawn_path(PathBuf::from(r"\\?\C:\Birdie")),
+            PathBuf::from(r"C:\Birdie")
+        );
+        assert_eq!(
+            normalize_spawn_path(PathBuf::from(r"\\?\UNC\server\share\Birdie")),
+            PathBuf::from(r"\\server\share\Birdie")
+        );
     }
 }
