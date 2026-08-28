@@ -71,14 +71,14 @@ test("the 3-D forecourt supports held touch movement and a bounded Nest action",
   assert.match(world, /private Vector2 touchMovement;/);
   assert.match(world, /private int activeTouchPointerId = int\.MinValue;/);
   assert.match(world, /WorldTouchControls/);
-  for (const [label, vector] of [["↑", "0f, 1f"], ["←", "-1f, 0f"], ["↓", "0f, -1f"], ["→", "1f, 0f"]])
+  for (const [label, vector] of [["W", "0f, 1f"], ["A", "-1f, 0f"], ["S", "0f, -1f"], ["D", "1f, 0f"]])
     assert.match(world, new RegExp(`TouchMovementButton\\(touchControls\\.transform, "${label}"[^;]+new Vector2\\(${vector}\\)\\);`));
   assert.match(touchButton, /EventTriggerType\.PointerDown[^;]+BeginTouchMovement/);
   assert.match(touchButton, /EventTriggerType\.PointerUp, EndTouchMovement/);
   assert.match(touchButton, /EventTriggerType\.PointerExit, EndTouchMovement/);
   assert.match(touchButton, /EventTriggerType\.Cancel, EndTouchMovement/);
   assert.doesNotMatch(touchButton, /onClick[\s\S]*MovePlayer/);
-  assert.match(betaReadme, /hold one arrow to move[\s\S]*swiping between arrows is intentionally outside this beta scope/i);
+  assert.match(betaReadme, /W\/A\/S\/D touch direction buttons[\s\S]*swiping between buttons is intentionally outside this beta scope/i);
   assert.match(beginTouch, /activeTouchPointerId != int\.MinValue && pointer\.pointerId != activeTouchPointerId/);
   assert.match(beginTouch, /activeTouchPointerId = pointer\.pointerId/);
   assert.match(endTouch, /pointer\.pointerId != activeTouchPointerId[\s\S]*return;[\s\S]*ResetTouchInput\(\)/);

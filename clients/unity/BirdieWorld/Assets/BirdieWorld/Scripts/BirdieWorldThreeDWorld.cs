@@ -367,10 +367,10 @@ namespace BirdieWorld
             touchControlsPanel = touchControls.GetComponent<RectTransform>();
             AddOutline(touchControls, new Color(gold.r, gold.g, gold.b, 0.55f), 1f);
             Label(touchControls.transform, "TOUCH · HALTEN ZUM LAUFEN", 11, quiet, TextAnchor.MiddleCenter, new Vector2(0.04f, 0.82f), new Vector2(0.96f, 0.98f));
-            TouchMovementButton(touchControls.transform, "↑", new Vector2(0.20f, 0.48f), new Vector2(0.39f, 0.79f), new Vector2(0f, 1f));
-            TouchMovementButton(touchControls.transform, "←", new Vector2(0.05f, 0.12f), new Vector2(0.24f, 0.43f), new Vector2(-1f, 0f));
-            TouchMovementButton(touchControls.transform, "↓", new Vector2(0.20f, 0.12f), new Vector2(0.39f, 0.43f), new Vector2(0f, -1f));
-            TouchMovementButton(touchControls.transform, "→", new Vector2(0.35f, 0.12f), new Vector2(0.54f, 0.43f), new Vector2(1f, 0f));
+            TouchMovementButton(touchControls.transform, "W", new Vector2(0.20f, 0.48f), new Vector2(0.39f, 0.79f), new Vector2(0f, 1f));
+            TouchMovementButton(touchControls.transform, "A", new Vector2(0.05f, 0.12f), new Vector2(0.24f, 0.43f), new Vector2(-1f, 0f));
+            TouchMovementButton(touchControls.transform, "S", new Vector2(0.20f, 0.12f), new Vector2(0.39f, 0.43f), new Vector2(0f, -1f));
+            TouchMovementButton(touchControls.transform, "D", new Vector2(0.35f, 0.12f), new Vector2(0.54f, 0.43f), new Vector2(1f, 0f));
             TouchActionButton(touchControls.transform, new Vector2(0.61f, 0.12f), new Vector2(0.95f, 0.79f));
 
             var back = Panel(root.transform, "WorldBack", new Vector2(0.72f, 0.05f), new Vector2(0.97f, 0.16f), new Color(0.07f, 0.055f, 0.03f, 0.95f));
