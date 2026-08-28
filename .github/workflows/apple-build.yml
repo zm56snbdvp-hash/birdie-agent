@@ -40,8 +40,7 @@ jobs:
           set -euo pipefail
           curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
           echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
-          mkdir -p "$RUNNER_TEMP/xcodegen"
-          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP/xcodegen"
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
       - name: Contract, unsigned build, and unit smoke test
         run: bash scripts/smoke-ios-birdie-trust.sh
