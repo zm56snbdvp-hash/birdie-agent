@@ -147,6 +147,13 @@ export function createBirdieTrustV1LocalAdapter({
     }
   };
 
+  const requireFreshChallenge = (challenge) => {
+    if (challenge.consumed) throw new BirdieTrustAdapterError("CHALLENGE_CONSUMED", "Challenge was already consumed", 409);
+    if (nowDate(now).getTime() >= Date.parse(challenge.expiresAt)) {
+      throw new BirdieTrustAdapterError("CHALLENGE_EXPIRED", "Challenge has expired", 409);
+    }
+  };
+
   function createRegistrationChallenge(request) {
     requireVersion(request.contractVersion);
     opaque(request.registrationId, "registrationId");
@@ -217,7 +224,11 @@ export function createBirdieTrustV1LocalAdapter({
     const approval = state.approvals.get(request.approvalId);
     if (!approval) throw new BirdieTrustAdapterError("NOT_FOUND", "Approval not found", 404);
     if (approval.recordVersion !== request.recordVersion || approval.status !== "pending") throw new BirdieTrustAdapterError("VERSION_CONFLICT", "Approval is stale", 409);
-    if (state.approvalChallenges.has(request.idempotencyKey)) return clone(state.approvalChallenges.get(request.idempotencyKey));
+    if (state.approvalChallenges.has(request.idempotencyKey)) {
+      const existing = state.approvalChallenges.get(request.idempotencyKey);
+      if (digest(existing.request) !== digest(request)) throw new BirdieTrustAdapterError("IDEMPOTENCY_CONFLICT", "Approval challenge key reused", 409);
+      return clone(existing.challenge);
+    }
     const issuedAt = nowDate(now);
     const challenge = {
       contractVersion: BIRDIE_TRUST_V1,
@@ -234,7 +245,7 @@ export function createBirdieTrustV1LocalAdapter({
       maxAttempts: 1,
       consumed: false
     };
-    state.approvalChallenges.set(request.idempotencyKey, challenge);
+    state.approvalChallenges.set(request.idempotencyKey, { request: clone(request), challenge });
     return clone(challenge);
   }
 
@@ -246,11 +257,13 @@ export function createBirdieTrustV1LocalAdapter({
       if (cached.requestDigest !== requestDigest) throw new BirdieTrustAdapterError("IDEMPOTENCY_CONFLICT", "Decision key reused with different payload", 409);
       return clone(cached.receipt);
     }
-    const challenge = state.approvalChallenges.get(request.idempotencyKey);
+    const challengeRecord = state.approvalChallenges.get(request.idempotencyKey);
+    const challenge = challengeRecord?.challenge;
     const approval = state.approvals.get(request.approvalId);
     if (!challenge || !approval || challenge.challengeId !== request.challengeId || challenge.nonce !== request.nonce || challenge.actionDigest !== request.actionDigest || approval.recordVersion !== request.recordVersion || approval.status !== "pending") {
       throw new BirdieTrustAdapterError("INVALID_CHALLENGE", "Decision is not atomically bound to approval", 409);
     }
+    requireFreshChallenge(challenge);
     if (request.localAuthorization?.contextDigest !== request.actionDigest) throw new BirdieTrustAdapterError("LOCAL_AUTH_REQUIRED", "Local authorization context is not bound", 403);
     if (request.deviceAssertion?.provider !== "local_mock_only") throw new BirdieTrustAdapterError("DEVICE_ASSERTION_REQUIRED", "Local adapter accepts only explicit test assertions", 403);
     const nextStatus = request.decision === "approve" ? "approved" : request.decision === "reject" ? "rejected" : "changes_requested";
@@ -278,7 +291,11 @@ export function createBirdieTrustV1LocalAdapter({
     const mission = state.missions.get(request.missionId);
     if (!mission) throw new BirdieTrustAdapterError("NOT_FOUND", "Mission not found", 404);
     if (mission.recordVersion !== request.recordVersion) throw new BirdieTrustAdapterError("VERSION_CONFLICT", "Mission is stale", 409);
-    if (state.missionChallenges.has(request.idempotencyKey)) return clone(state.missionChallenges.get(request.idempotencyKey));
+    if (state.missionChallenges.has(request.idempotencyKey)) {
+      const existing = state.missionChallenges.get(request.idempotencyKey);
+      if (digest(existing.request) !== digest(request)) throw new BirdieTrustAdapterError("IDEMPOTENCY_CONFLICT", "Mission challenge key reused", 409);
+      return clone(existing.challenge);
+    }
     const issuedAt = nowDate(now);
     const challenge = {
       contractVersion: BIRDIE_TRUST_V1,
@@ -295,7 +312,7 @@ export function createBirdieTrustV1LocalAdapter({
       maxAttempts: 1,
       consumed: false
     };
-    state.missionChallenges.set(request.idempotencyKey, challenge);
+    state.missionChallenges.set(request.idempotencyKey, { request: clone(request), challenge });
     return clone(challenge);
   }
 
@@ -307,11 +324,13 @@ export function createBirdieTrustV1LocalAdapter({
       if (cached.requestDigest !== requestDigest) throw new BirdieTrustAdapterError("IDEMPOTENCY_CONFLICT", "Mission key reused with different payload", 409);
       return clone(cached.response);
     }
-    const challenge = state.missionChallenges.get(request.idempotencyKey);
+    const challengeRecord = state.missionChallenges.get(request.idempotencyKey);
+    const challenge = challengeRecord?.challenge;
     const mission = state.missions.get(request.missionId);
     if (!challenge || !mission || challenge.challengeId !== request.challengeId || challenge.nonce !== request.nonce || challenge.actionDigest !== request.actionDigest || mission.recordVersion !== request.recordVersion) {
       throw new BirdieTrustAdapterError("INVALID_CHALLENGE", "Command is not atomically bound to mission", 409);
     }
+    requireFreshChallenge(challenge);
     const nextStatus = request.command === "pause" ? "paused" : request.command === "resume" ? "running" : "cancelled";
     const nextVersion = mission.recordVersion + 1;
     const nextAudit = state.auditSequence + 1;

@@ -44,6 +44,27 @@ test("approval decision commits once and exact retry recovers a lost response", 
   assert.throws(() => adapter.submitApprovalDecision({ ...request, decision: "reject" }), (error) => error instanceof BirdieTrustAdapterError && error.code === "IDEMPOTENCY_CONFLICT");
 });
 
+test("challenge keys reject divergent payloads and expired nonces", () => {
+  const approval = baseApproval();
+  let now = Date.parse("2026-08-28T03:00:00Z");
+  const adapter = createBirdieTrustV1LocalAdapter({ allowLocalMock: true, approvals: [approval], now: () => now });
+  const request = {
+    contractVersion: BIRDIE_TRUST_V1, approvalId: approval.approvalId, recordVersion: 1,
+    actionDigest: "c".repeat(43), idempotencyKey: id("challenge"), deviceBindingId: id("device")
+  };
+  const challenge = adapter.createApprovalChallenge(request);
+  assert.throws(() => adapter.createApprovalChallenge({ ...request, actionDigest: "d".repeat(43) }), (error) => error instanceof BirdieTrustAdapterError && error.code === "IDEMPOTENCY_CONFLICT");
+  now += 91_000;
+  const decision = {
+    contractVersion: BIRDIE_TRUST_V1, decisionId: id("decision-expired"), approvalId: approval.approvalId,
+    recordVersion: 1, idempotencyKey: request.idempotencyKey, challengeId: challenge.challengeId,
+    nonce: challenge.nonce, actionDigest: request.actionDigest, deviceBindingId: request.deviceBindingId,
+    localAuthorization: localAuth(request.actionDigest), deviceAssertion: assertion(request.actionDigest),
+    decision: "approve", intent: { decision: "approve" }, clientDecidedAt: challenge.issuedAt
+  };
+  assert.throws(() => adapter.submitApprovalDecision(decision), (error) => error instanceof BirdieTrustAdapterError && error.code === "CHALLENGE_EXPIRED");
+});
+
 test("mission command is versioned, signed, and idempotent", () => {
   const mission = baseMission();
   const adapter = createBirdieTrustV1LocalAdapter({ allowLocalMock: true, missions: [mission] });
