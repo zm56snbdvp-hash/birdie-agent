@@ -373,6 +373,7 @@ namespace BirdieWorld
             var headMaterial = CreateMaterial("PlayerHead", new Color(0.80f, 0.62f, 0.47f, 1f), 0.0f, 0.3f);
             var hairMaterial = CreateMaterial("PlayerHair", new Color(0.055f, 0.030f, 0.018f, 1f), 0.0f, 0.35f);
             var bootMaterial = CreateMaterial("PlayerBoots", ink, 0.1f, 0.2f);
+            var scarfMaterial = CreateMaterial("PlayerScarf", gold, 0.3f, 0.5f);
             playerRoot = new GameObject("PlayerBirdie3D");
             playerRoot.transform.SetParent(worldRoot.transform, false);
             playerCoat = Primitive(PrimitiveType.Capsule, "PlayerCoat", new Vector3(0f, 1.18f, 0f), new Vector3(0.78f, 1.12f, 0.78f), playerMaterial, playerRoot.transform).GetComponent<Renderer>();
@@ -380,7 +381,7 @@ namespace BirdieWorld
             Primitive(PrimitiveType.Sphere, "PlayerHair", new Vector3(0f, 2.63f, -0.03f), new Vector3(0.72f, 0.37f, 0.72f), hairMaterial, playerRoot.transform);
             Primitive(PrimitiveType.Cube, "PlayerBootLeft", new Vector3(-0.25f, 0.24f, 0f), new Vector3(0.20f, 0.50f, 0.32f), bootMaterial, playerRoot.transform);
             Primitive(PrimitiveType.Cube, "PlayerBootRight", new Vector3(0.25f, 0.24f, 0f), new Vector3(0.20f, 0.50f, 0.32f), bootMaterial, playerRoot.transform);
-            playerScarf = Primitive(PrimitiveType.Cube, "PlayerScarf", new Vector3(0f, 1.75f, -0.43f), new Vector3(0.78f, 0.13f, 0.12f), gold, playerRoot.transform).GetComponent<Renderer>();
+            playerScarf = Primitive(PrimitiveType.Cube, "PlayerScarf", new Vector3(0f, 1.75f, -0.43f), new Vector3(0.78f, 0.13f, 0.12f), scarfMaterial, playerRoot.transform).GetComponent<Renderer>();
             CreateWorldLabel("PlayerLabel", "DEIN BIRDIE", new Vector3(0f, 3.45f, -1.0f), 0.055f, ivory, playerRoot.transform);
         }
 
@@ -499,8 +500,6 @@ namespace BirdieWorld
             if (rotation.HasValue) go.transform.localRotation = rotation.Value;
             var renderer = go.GetComponent<Renderer>();
             if (renderer != null) renderer.sharedMaterial = material;
-            var collider = go.GetComponent<Collider>();
-            if (collider != null) Destroy(collider);
             return go;
         }
 
@@ -521,9 +520,9 @@ namespace BirdieWorld
         private void ApplyResponsiveLayout(bool force = false)
         {
             if (hudRoot == null) return;
-            if (!force && layoutWidth == Screen.width && layoutHeight == Screen.height) return;
-            layoutWidth = Screen.width;
-            layoutHeight = Screen.height;
+            if (!force && layoutWidth == UnityEngine.Screen.width && layoutHeight == UnityEngine.Screen.height) return;
+            layoutWidth = UnityEngine.Screen.width;
+            layoutHeight = UnityEngine.Screen.height;
             var portrait = layoutHeight > layoutWidth;
             if (portrait)
             {
