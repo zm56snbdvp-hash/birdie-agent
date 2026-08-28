@@ -1,8 +1,14 @@
+import Combine
 import Foundation
 import WatchConnectivity
 
 final class WatchRelay: NSObject, ObservableObject, WCSessionDelegate {
     static let shared = WatchRelay()
+
+    @Published private(set) var activationState: WCSessionActivationState = .notActivated
+    @Published private(set) var isPaired = false
+    @Published private(set) var isWatchAppInstalled = false
+    @Published private(set) var isReachable = false
 
     private let session: WCSession? = WCSession.isSupported() ? .default : nil
     private let baseURL = URL(string: "https://birdie-agent-893591677320.europe-west3.run.app")!
@@ -10,7 +16,12 @@ final class WatchRelay: NSObject, ObservableObject, WCSessionDelegate {
     override private init() {
         super.init()
         session?.delegate = self
+        publishConnectionState(from: session)
         session?.activate()
+    }
+
+    func refreshConnectionState() {
+        publishConnectionState(from: session)
     }
 
     func session(
@@ -75,12 +86,39 @@ final class WatchRelay: NSObject, ObservableObject, WCSessionDelegate {
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
-    ) {}
+    ) {
+        publishConnectionState(from: session)
+    }
 
-    func sessionDidBecomeInactive(_ session: WCSession) {}
+    func sessionWatchStateDidChange(_ session: WCSession) {
+        publishConnectionState(from: session)
+    }
+
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        publishConnectionState(from: session)
+    }
+
+    func sessionDidBecomeInactive(_ session: WCSession) {
+        publishConnectionState(from: session)
+    }
 
     func sessionDidDeactivate(_ session: WCSession) {
+        publishConnectionState(from: session)
         session.activate()
+    }
+
+    private func publishConnectionState(from session: WCSession?) {
+        let activationState = session?.activationState ?? .notActivated
+        let isPaired = session?.isPaired ?? false
+        let isWatchAppInstalled = session?.isWatchAppInstalled ?? false
+        let isReachable = session?.isReachable ?? false
+
+        DispatchQueue.main.async { [weak self] in
+            self?.activationState = activationState
+            self?.isPaired = isPaired
+            self?.isWatchAppInstalled = isWatchAppInstalled
+            self?.isReachable = isReachable
+        }
     }
 }
 

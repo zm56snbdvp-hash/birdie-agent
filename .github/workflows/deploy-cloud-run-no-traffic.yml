@@ -16,7 +16,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: birdie-agent-coin-supporter-production
+  group: birdie-agent-production-service
   cancel-in-progress: false
 
 env:
