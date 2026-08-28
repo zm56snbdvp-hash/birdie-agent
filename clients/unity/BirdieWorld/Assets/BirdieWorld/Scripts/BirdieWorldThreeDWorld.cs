@@ -116,7 +116,11 @@ namespace BirdieWorld
             worldCamera = cameraObject.AddComponent<Camera>();
             worldCamera.clearFlags = CameraClearFlags.SolidColor;
             worldCamera.backgroundColor = new Color(0.025f, 0.055f, 0.095f, 1f);
-            worldCamera.fieldOfView = 58f;
+            // A slightly higher, wider third-person angle keeps the playable
+            // forecourt surface and the avatar readable on both desktop and
+            // WebGL's dynamically-sized canvas. The old low angle hid the
+            // character behind the near plaza edge.
+            worldCamera.fieldOfView = 62f;
             worldCamera.nearClipPlane = 0.1f;
             worldCamera.farClipPlane = 240f;
             worldCamera.allowHDR = false;
@@ -361,7 +365,7 @@ namespace BirdieWorld
 
         private void ResetWorldView()
         {
-            playerPosition = new Vector3(0f, 0.85f, -1.0f);
+            playerPosition = new Vector3(0f, 1.20f, -1.0f);
             hasArrivedAtNest = false;
             if (playerRoot == null)
                 BuildPlayer();
@@ -369,8 +373,8 @@ namespace BirdieWorld
             cameraVelocity = Vector3.zero;
             if (worldCamera != null)
             {
-                worldCamera.transform.position = playerPosition + new Vector3(0f, 6.2f, -10.2f);
-                worldCamera.transform.LookAt(playerPosition + Vector3.up * 1.55f);
+                worldCamera.transform.position = playerPosition + new Vector3(0f, 8.8f, -13.8f);
+                worldCamera.transform.LookAt(playerPosition + Vector3.up * 2.35f);
             }
             UpdateObjective();
         }
@@ -390,7 +394,13 @@ namespace BirdieWorld
             Primitive(PrimitiveType.Cube, "PlayerBootLeft", new Vector3(-0.25f, 0.24f, 0f), new Vector3(0.20f, 0.50f, 0.32f), bootMaterial, playerRoot.transform);
             Primitive(PrimitiveType.Cube, "PlayerBootRight", new Vector3(0.25f, 0.24f, 0f), new Vector3(0.20f, 0.50f, 0.32f), bootMaterial, playerRoot.transform);
             playerScarf = Primitive(PrimitiveType.Cube, "PlayerScarf", new Vector3(0f, 1.75f, -0.43f), new Vector3(0.78f, 0.13f, 0.12f), scarfMaterial, playerRoot.transform).GetComponent<Renderer>();
-            CreateWorldLabel("PlayerLabel", "DEIN BIRDIE", new Vector3(0f, 3.45f, -1.0f), 0.045f, ivory, playerRoot.transform);
+            // The slim brass pennant is a deliberate readability cue for the
+            // third-person avatar at the default distance. It remains part of
+            // the presentation-only player root and never touches profile or
+            // economy state.
+            Primitive(PrimitiveType.Cube, "PlayerPennantPole", new Vector3(0f, 3.15f, 0.12f), new Vector3(0.08f, 1.10f, 0.08f), scarfMaterial, playerRoot.transform);
+            Primitive(PrimitiveType.Cube, "PlayerPennant", new Vector3(0.32f, 3.52f, 0.12f), new Vector3(0.62f, 0.42f, 0.08f), scarfMaterial, playerRoot.transform);
+            CreateWorldLabel("PlayerLabel", "DEIN BIRDIE", new Vector3(0f, 4.15f, -1.0f), 0.045f, ivory, playerRoot.transform);
         }
 
         private void HandleMovement()
@@ -438,9 +448,9 @@ namespace BirdieWorld
         private void UpdateCamera()
         {
             if (worldCamera == null || playerRoot == null) return;
-            var desired = playerRoot.transform.position + new Vector3(0f, 6.2f, -10.2f);
+            var desired = playerRoot.transform.position + new Vector3(0f, 8.8f, -13.8f);
             worldCamera.transform.position = Vector3.SmoothDamp(worldCamera.transform.position, desired, ref cameraVelocity, 0.20f, 40f, Time.unscaledDeltaTime);
-            worldCamera.transform.LookAt(playerRoot.transform.position + Vector3.up * 1.55f);
+            worldCamera.transform.LookAt(playerRoot.transform.position + Vector3.up * 2.35f);
         }
 
         private void UpdateObjective()
