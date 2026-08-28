@@ -146,13 +146,45 @@ public enum LensAnalyzer {
 }
 
 public enum CaptureDeepLink {
-    public static func itemID(from url: URL) -> UUID? {
-        guard url.scheme?.lowercased() == "birdie",
+    public static func configuredScheme(bundle: Bundle = .main) -> String {
+        let configured = (
+            bundle.object(forInfoDictionaryKey: "BirdieURLScheme") as? String
+        )
+        return validScheme(configured) ?? "birdie"
+    }
+
+    public static func url(
+        for itemID: UUID,
+        scheme: String? = nil
+    ) -> URL {
+        var components = URLComponents()
+        components.scheme = validScheme(scheme) ?? configuredScheme()
+        components.host = "capture"
+        components.path = "/\(itemID.uuidString.lowercased())"
+        return components.url!
+    }
+
+    public static func itemID(
+        from url: URL,
+        scheme: String? = nil
+    ) -> UUID? {
+        let expectedScheme = (scheme ?? configuredScheme()).lowercased()
+        guard url.scheme?.lowercased() == expectedScheme,
               url.host?.lowercased() == "capture",
               url.query == nil,
               url.fragment == nil else { return nil }
         let components = url.pathComponents.filter { $0 != "/" }
         guard components.count == 1 else { return nil }
         return UUID(uuidString: components[0])
+    }
+
+    private static func validScheme(_ rawValue: String?) -> String? {
+        guard let candidate = rawValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+              !candidate.isEmpty,
+              URLComponents(string: "\(candidate)://capture")?.scheme == candidate
+        else { return nil }
+        return candidate
     }
 }

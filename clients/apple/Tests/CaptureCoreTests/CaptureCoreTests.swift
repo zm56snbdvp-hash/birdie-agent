@@ -579,6 +579,13 @@ final class CaptureCoreTests: XCTestCase {
     func testDeepLinkParserAcceptsOnlyOpaqueLocalIdentifierShape() {
         let id = UUID(uuidString: "4D36E967-E325-11CE-BFC1-08002BE10318")!
         XCTAssertEqual(CaptureDeepLink.itemID(from: URL(string: "birdie://capture/\(id)")!), id)
+        XCTAssertEqual(
+            CaptureDeepLink.itemID(
+                from: URL(string: "birdie-personal://capture/\(id)")!,
+                scheme: "birdie-personal"
+            ),
+            id
+        )
         XCTAssertNil(CaptureDeepLink.itemID(from: URL(string: "https://capture/\(id)")!))
         XCTAssertNil(CaptureDeepLink.itemID(from: URL(string: "birdie://capture/\(id)?text=secret")!))
         XCTAssertNil(CaptureDeepLink.itemID(from: URL(string: "birdie://capture/not-a-uuid")!))

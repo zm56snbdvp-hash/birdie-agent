@@ -29,17 +29,20 @@ test("Share activation is explicit for URLs, text, images, PDFs/files", async ()
   assert.match(info, /com\.apple\.share-services/);
 });
 
-test("host and extension share only the configured App Group and opaque deep link", async () => {
-  const [entitlements, phoneInfo, models] = await Promise.all([
+test("host and extension use configured App Groups and opaque deep links", async () => {
+  const [entitlements, phoneInfo, models, deepLinks] = await Promise.all([
     read("clients/apple/Config/BirdieCapture.entitlements"),
     read("clients/apple/Config/BirdiePhone-Info.plist"),
     read("clients/apple/CaptureCore/CaptureModels.swift"),
+    read("clients/apple/CaptureCore/LensAnalysis.swift"),
   ]);
   assert.match(entitlements, /com\.apple\.security\.application-groups/);
   assert.match(entitlements, /\$\(BIRDIE_APP_GROUP_IDENTIFIER\)/);
-  assert.match(phoneInfo, /<string>birdie<\/string>/);
+  assert.match(phoneInfo, /<key>BirdieURLScheme<\/key>[\s\S]*\$\(BIRDIE_URL_SCHEME\)/);
   assert.match(phoneInfo, /NSCameraUsageDescription/);
-  assert.match(models, /birdie:\/\/capture\/\\\(id\.uuidString\.lowercased\(\)\)/);
+  assert.match(models, /CaptureDeepLink\.url\(for: id\)/);
+  assert.match(deepLinks, /object\(forInfoDictionaryKey: "BirdieURLScheme"\)/);
+  assert.match(deepLinks, /url\.scheme\?\.lowercased\(\) == expectedScheme/);
 });
 
 test("Share Extension and local adapter cannot publish or reuse Watch credentials", async () => {
@@ -152,6 +155,7 @@ test("macOS verification script proves XcodeGen, tests, unsigned build and embed
   assert.match(script, /CODE_SIGNING_ALLOWED=NO/);
   assert.match(script, /CODE_SIGNING_REQUIRED=NO/);
   assert.match(script, /BirdieDrop\.appex/);
+  assert.match(script, /BirdieWidgets\.appex/);
   assert.match(script, /CaptureCore\.framework/);
   assert.match(script, /test ! -d .*BirdieDrop\.appex\/Frameworks/);
   assert.match(script, /simctl list --json devices available/);

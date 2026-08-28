@@ -2,20 +2,107 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { routeWatchRequest } from "../src/watch-router.mjs";
 
-function harness({ method, path, body = {}, mailService = {}, handleChat = async () => ({}) }) {
+function harness({
+  method,
+  path,
+  body = {},
+  mailService = {},
+  handleChat = async () => ({}),
+  dayPilotProvider = async () => ({})
+}) {
   let result;
   const req = { method };
   const res = {};
   const url = new URL(`https://birdie.local${path}`);
-  const json = (_res, status, payload) => { result = { status, payload }; };
+  const json = (_res, status, payload, headers = {}) => { result = { status, payload, headers }; };
   const readBody = async () => body;
   return {
     invoke: async () => {
-      const handled = await routeWatchRequest({ req, res, url, json, readBody, mailService, handleChat });
+      const handled = await routeWatchRequest({
+        req,
+        res,
+        url,
+        json,
+        readBody,
+        mailService,
+        handleChat,
+        dayPilotProvider
+      });
       return { handled, result };
     }
   };
 }
+
+test("day pilot returns a bounded read-only snapshot contract", async () => {
+  const { handled, result } = await harness({
+    method: "GET",
+    path: "/watch/day-pilot/v1",
+    dayPilotProvider: async () => ({
+      generatedAt: "2026-08-28T08:00:00Z",
+      nextTask: { taskId: "task-1", task: "Angebot prüfen", dueAt: "2026-08-28T09:30:00Z" },
+      briefing: "Ein Termin steht an.",
+      openApprovals: [
+        { approvalId: "approval-1", title: "Mail prüfen", detail: "Vor dem Senden ansehen" },
+        { approvalId: "bad", title: "", detail: "wird verworfen" }
+      ]
+    })
+  }).invoke();
+
+  assert.equal(handled, true);
+  assert.equal(result.status, 200);
+  assert.match(result.headers["Cache-Control"], /no-store/);
+  assert.equal(result.headers.Pragma, "no-cache");
+  assert.deepEqual(result.payload.data, {
+    contractVersion: 1,
+    generatedAt: "2026-08-28T08:00:00.000Z",
+    nextTask: { id: "task-1", title: "Angebot prüfen", dueAt: "2026-08-28T09:30:00.000Z" },
+    briefing: "Ein Termin steht an.",
+    openApprovals: [{ id: "approval-1", title: "Mail prüfen", detail: "Vor dem Senden ansehen" }]
+  });
+});
+
+test("day pilot bounds every personal field before returning it", async () => {
+  const ignoredApproval = {};
+  Object.defineProperty(ignoredApproval, "id", {
+    get() { throw new Error("approval outside the limit must not be inspected"); }
+  });
+  const openApprovals = Array.from({ length: 20 }, (_, index) => ({
+    id: `approval-${index}-${"i".repeat(256)}`,
+    title: "t".repeat(512),
+    detail: "d".repeat(4_096)
+  }));
+  openApprovals.push(ignoredApproval);
+
+  const { result } = await harness({
+    method: "GET",
+    path: "/watch/day-pilot/v1",
+    dayPilotProvider: async () => ({
+      nextTask: { id: "i".repeat(256), title: "t".repeat(512) },
+      briefing: "b".repeat(8_192),
+      openApprovals
+    })
+  }).invoke();
+
+  assert.equal(result.payload.data.nextTask.id.length, 128);
+  assert.equal(result.payload.data.nextTask.title.length, 256);
+  assert.equal(result.payload.data.briefing.length, 4_096);
+  assert.equal(result.payload.data.openApprovals.length, 20);
+  assert.ok(result.payload.data.openApprovals.every((approval) => approval.id.length === 128));
+  assert.ok(result.payload.data.openApprovals.every((approval) => approval.title.length === 256));
+  assert.ok(result.payload.data.openApprovals.every((approval) => approval.detail.length === 2_048));
+  assert.ok(JSON.stringify(result.payload).length < 55_000);
+});
+
+test("day pilot rejects malformed provider timestamps", async () => {
+  await assert.rejects(
+    () => harness({
+      method: "GET",
+      path: "/watch/day-pilot/v1",
+      dayPilotProvider: async () => ({ generatedAt: "not-a-date" })
+    }).invoke(),
+    (error) => error.code === "INVALID_DAY_PILOT_SNAPSHOT" && error.status === 502
+  );
+});
 
 test("watch briefing returns a compact unread inbox", async () => {
   const mailService = {

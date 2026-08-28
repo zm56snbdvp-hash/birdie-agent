@@ -4,6 +4,10 @@
 <dict>
     <key>BirdieAppGroupIdentifier</key>
     <string>$(BIRDIE_APP_GROUP_IDENTIFIER)</string>
+    <key>BirdieSharedSuiteName</key>
+    <string>$(BIRDIE_SHARED_SUITE_NAME)</string>
+    <key>BirdieURLScheme</key>
+    <string>$(BIRDIE_URL_SCHEME)</string>
     <key>CFBundleDisplayName</key>
     <string>Birdie</string>
     <key>CFBundleExecutable</key>
@@ -27,12 +31,16 @@
             <string>de.birdieandbreakfast.capture</string>
             <key>CFBundleURLSchemes</key>
             <array>
-                <string>birdie</string>
+                <string>$(BIRDIE_URL_SCHEME)</string>
             </array>
         </dict>
     </array>
     <key>NSCameraUsageDescription</key>
     <string>Birdie Lens benötigt die Kamera nur, wenn du ausdrücklich ein Dokument scannst.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Birdie zeigt auf Wunsch die nächsten Termine im Day Pilot. Zugriff wird nur nach deinem Tap angefragt.</string>
+    <key>NSRemindersFullAccessUsageDescription</key>
+    <string>Birdie zeigt auf Wunsch offene Erinnerungen im Day Pilot. Zugriff wird separat und nur nach deinem Tap angefragt.</string>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UISupportedInterfaceOrientations</key>

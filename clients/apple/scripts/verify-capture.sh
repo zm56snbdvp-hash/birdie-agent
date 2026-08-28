@@ -69,6 +69,7 @@ xcodebuild \
 
 birdie_app="$derived_root/standard/Build/Products/Debug-iphonesimulator/Birdie.app"
 test -d "$birdie_app/PlugIns/BirdieDrop.appex"
+test -d "$birdie_app/PlugIns/BirdieWidgets.appex"
 test -d "$birdie_app/Frameworks/CaptureCore.framework"
 test ! -d "$birdie_app/PlugIns/BirdieDrop.appex/Frameworks"
 

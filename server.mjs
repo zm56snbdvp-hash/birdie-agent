@@ -267,6 +267,24 @@ async function getAuthoritativeNextTask() {
   return (await birdieOSGet("nextTask")).data;
 }
 
+async function getDayPilotSnapshot() {
+  const [briefing, task] = await Promise.all([
+    getLiveBriefing(),
+    getAuthoritativeNextTask()
+  ]);
+  const briefingText = typeof briefing === "string"
+    ? briefing
+    : briefing?.briefing || briefing?.summary || briefing?.message || "";
+  return {
+    generatedAt: new Date().toISOString(),
+    nextTask: task,
+    briefing: briefingText,
+    // Approvals remain empty until Birdie OS exposes a scoped, structured
+    // approval resource. Never infer them from free-form briefing text.
+    openApprovals: Array.isArray(briefing?.openApprovals) ? briefing.openApprovals : []
+  };
+}
+
 async function phraseNextTask(task) {
   if (!task?.found && !task?.taskId) {
     return task?.message || "Birdie OS hat aktuell keinen ausführbaren OPEN-Task gefunden.";
@@ -383,6 +401,7 @@ const routes = [
   "POST /tasks/{taskId}",
   "POST /chat",
   "GET /watch/briefing",
+  "GET /watch/day-pilot/v1",
   "POST /watch/command",
   "POST /watch/mail/reply",
   "POST /birdie-app/v1/captures",
@@ -552,7 +571,8 @@ const server = http.createServer(async (req, res) => {
         url,
         json,
         readBody,
-        handleChat
+        handleChat,
+        dayPilotProvider: getDayPilotSnapshot
       })) return;
       return json(res, 404, { success: false, error: "WATCH_ROUTE_NOT_FOUND" });
     }

@@ -17,8 +17,7 @@ platform :ios do
     api_key = app_store_connect_api_key(
       key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
       issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
-      key_content: ENV.fetch("APP_STORE_CONNECT_KEY_B64"),
-      is_key_content_base64: true,
+      key_filepath: ENV.fetch("APP_STORE_CONNECT_KEY_PATH"),
       in_house: false
     )
 
@@ -31,6 +30,7 @@ platform :ios do
 
     profiles = {
       "de.birdieandbreakfast.birdie" => "Birdie AppStore",
+      "de.birdieandbreakfast.birdie.daypilot" => "Birdie Day Pilot AppStore",
       "de.birdieandbreakfast.birdie.watchkitapp" => "Birdie Watch AppStore",
       "de.birdieandbreakfast.birdie.watchkitapp.widget" => "Birdie Watch Widget AppStore"
     }

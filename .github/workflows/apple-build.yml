@@ -25,6 +25,70 @@ jobs:
       - name: Generate project
         working-directory: clients/apple
         run: xcodegen generate
+      - name: Verify XcodeGen project and schemes
+        working-directory: clients/apple
+        run: |
+          set -euo pipefail
+          test -d Birdie.xcodeproj
+          xcodebuild -project Birdie.xcodeproj -list
+      - name: Run iOS unit, contract, and intent tests
+        working-directory: clients/apple
+        run: |
+          set -euo pipefail
+          SIMULATOR_ID="$(
+            xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          data = json.load(sys.stdin)["devices"]
+          candidates = [
+              device
+              for runtime in sorted(data.keys(), reverse=True)
+              if ".iOS-" in runtime
+              for device in data[runtime]
+              if device.get("isAvailable") and device.get("name", "").startswith("iPhone")
+          ]
+          preferred = next((d for d in candidates if d["name"] == "iPhone 16 Pro"), None)
+          chosen = preferred or (candidates[0] if candidates else None)
+          print(chosen["udid"] if chosen else "")
+          '
+          )"
+          test -n "$SIMULATOR_ID"
+          xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$SIMULATOR_ID" -b
+          xcodebuild \
+            -project Birdie.xcodeproj \
+            -scheme Birdie \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -derivedDataPath "$RUNNER_TEMP/BirdieDerivedData" \
+            -only-testing:BirdiePhoneTests \
+            -only-testing:BirdieCaptureTests \
+            test
+          WIDGET_INFO="$RUNNER_TEMP/BirdieDerivedData/Build/Products/Debug-iphonesimulator/Birdie.app/PlugIns/BirdieWidgets.appex/Info.plist"
+          DROP_INFO="$RUNNER_TEMP/BirdieDerivedData/Build/Products/Debug-iphonesimulator/Birdie.app/PlugIns/BirdieDrop.appex/Info.plist"
+          test -f "$WIDGET_INFO"
+          test -f "$DROP_INFO"
+          test "$(plutil -extract BirdieSharedSuiteName raw -o - "$WIDGET_INFO")" = "group.de.birdieandbreakfast.birdie"
+          test "$(plutil -extract BirdieURLScheme raw -o - "$WIDGET_INFO")" = "birdie"
+          test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$WIDGET_INFO")" = "com.apple.widgetkit-extension"
+          xcrun simctl install \
+            "$SIMULATOR_ID" \
+            "$RUNNER_TEMP/BirdieDerivedData/Build/Products/Debug-iphonesimulator/Birdie.app"
+          xcrun simctl launch \
+            --terminate-running-process \
+            "$SIMULATOR_ID" \
+            de.birdieandbreakfast.birdie
+          sleep 5
+          xcrun simctl io \
+            "$SIMULATOR_ID" \
+            screenshot \
+            "$RUNNER_TEMP/birdie-day-pilot-smoke.png"
+      - name: Upload simulator smoke screenshot
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: birdie-day-pilot-smoke
+          path: ${{ runner.temp }}/birdie-day-pilot-smoke.png
+          if-no-files-found: error
+          retention-days: 14
       - name: Build without signing
         working-directory: clients/apple
         run: |
@@ -34,6 +98,18 @@ jobs:
             -scheme Birdie \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+      - name: Build Day Pilot widget without signing
+        working-directory: clients/apple
+        run: |
+          set -euo pipefail
+          xcodebuild \
+            -project Birdie.xcodeproj \
+            -target BirdieWidgets \
+            -configuration Debug \
+            -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             build

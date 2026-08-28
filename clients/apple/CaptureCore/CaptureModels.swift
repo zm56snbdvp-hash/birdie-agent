@@ -181,7 +181,7 @@ public struct CaptureItem: Codable, Equatable, Identifiable, Sendable {
     }
 
     public var deepLink: URL {
-        URL(string: "birdie://capture/\(id.uuidString.lowercased())")!
+        CaptureDeepLink.url(for: id)
     }
 }
 

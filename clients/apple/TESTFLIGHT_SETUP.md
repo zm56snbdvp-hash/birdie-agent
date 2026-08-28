@@ -11,6 +11,17 @@ Create these identifiers once in Certificates, Identifiers & Profiles if they do
 - `de.birdieandbreakfast.birdie`
 - `de.birdieandbreakfast.birdie.watchkitapp`
 - `de.birdieandbreakfast.birdie.watchkitapp.widget`
+- `de.birdieandbreakfast.birdie.daypilot`
+
+Create the App Group `group.de.birdieandbreakfast.birdie` and enable it for
+the iPhone app and the Day Pilot widget extension. The group contains only the
+expiring, minimized widget snapshot and the display-only Focus context, never
+an API credential, intent draft, or confirmed thought.
+
+Before a signed archive, add the Day Pilot widget bundle ID and provisioning
+profile to the Fastlane signing map. The unsigned CI build does not create or
+modify signing assets and must not be used as evidence that TestFlight signing
+is ready.
 
 Create the Birdie app record in App Store Connect using the iPhone bundle ID `de.birdieandbreakfast.birdie`.
 
