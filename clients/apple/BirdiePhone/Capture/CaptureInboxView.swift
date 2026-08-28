@@ -105,48 +105,11 @@ private struct CaptureItemDetailView: View {
 
     var body: some View {
         List {
-            Section("Ziel") {
-                LabeledContent("Auswahl", value: item.intent.title)
-                LabeledContent("Status", value: statusTitle)
-                Text("Lokaler Mock-Adapter: kein Upload und keine Außenwirkung.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Inhalte") {
-                ForEach(item.payloads) { payload in
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(payload.displayName).font(.headline)
-                        if let text = payload.inlineText {
-                            Text(preview(text))
-                                .font(.body.monospaced(payload.kind == .recognizedText))
-                                .lineLimit(12)
-                        }
-                    }
-                }
-            }
-            if !item.suggestions.isEmpty {
-                Section("Vorschläge – noch keine Aktionen") {
-                    ForEach(item.suggestions) { suggestion in
-                        LabeledContent(
-                            suggestion.label,
-                            value: item.containsSensitiveData ? "[redigiert]" : suggestion.value
-                        )
-                    }
-                }
-            }
-            if let failure = item.lastFailure {
-                Section("Fehler") {
-                    Text(failure.message)
-                    if failure.isRetryable {
-                        Button("Jetzt erneut lokal vorbereiten") {
-                            model.retry(itemID: item.id)
-                        }
-                    }
-                }
-            }
-            Section {
-                Button("Löschen", role: .destructive) { confirmDelete = true }
-            }
+            targetSection
+            contentsSection
+            suggestionsSection
+            failureSection
+            deleteSection
         }
         .navigationTitle(item.intent.title)
         .privacySensitive()
@@ -155,6 +118,65 @@ private struct CaptureItemDetailView: View {
                 model.delete(itemID: item.id)
             }
             Button("Abbrechen", role: .cancel) {}
+        }
+    }
+
+    private var targetSection: some View {
+        Section("Ziel") {
+            LabeledContent("Auswahl", value: item.intent.title)
+            LabeledContent("Status", value: statusTitle)
+            Text("Lokaler Mock-Adapter: kein Upload und keine Außenwirkung.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var contentsSection: some View {
+        Section("Inhalte") {
+            ForEach(item.payloads) { payload in
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(payload.displayName).font(.headline)
+                    if let text = payload.inlineText {
+                        Text(preview(text))
+                            .font(.body.monospaced(payload.kind == .recognizedText))
+                            .lineLimit(12)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var suggestionsSection: some View {
+        if !item.suggestions.isEmpty {
+            Section("Vorschläge – noch keine Aktionen") {
+                ForEach(item.suggestions) { suggestion in
+                    LabeledContent(
+                        suggestion.label,
+                        value: item.containsSensitiveData ? "[redigiert]" : suggestion.value
+                    )
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var failureSection: some View {
+        if let failure = item.lastFailure {
+            Section("Fehler") {
+                Text(failure.message)
+                if failure.isRetryable {
+                    Button("Jetzt erneut lokal vorbereiten") {
+                        model.retry(itemID: item.id)
+                    }
+                }
+            }
+        }
+    }
+
+    private var deleteSection: some View {
+        Section {
+            Button("Löschen", role: .destructive) { confirmDelete = true }
         }
     }
 
