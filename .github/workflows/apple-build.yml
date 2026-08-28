@@ -61,9 +61,12 @@ jobs:
             -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -derivedDataPath "$RUNNER_TEMP/BirdieDerivedData" \
             -only-testing:BirdiePhoneTests \
+            -only-testing:BirdieCaptureTests \
             test
           WIDGET_INFO="$RUNNER_TEMP/BirdieDerivedData/Build/Products/Debug-iphonesimulator/Birdie.app/PlugIns/BirdieWidgets.appex/Info.plist"
+          DROP_INFO="$RUNNER_TEMP/BirdieDerivedData/Build/Products/Debug-iphonesimulator/Birdie.app/PlugIns/BirdieDrop.appex/Info.plist"
           test -f "$WIDGET_INFO"
+          test -f "$DROP_INFO"
           test "$(plutil -extract BirdieSharedSuiteName raw -o - "$WIDGET_INFO")" = "group.de.birdieandbreakfast.birdie"
           test "$(plutil -extract BirdieURLScheme raw -o - "$WIDGET_INFO")" = "birdie"
           test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$WIDGET_INFO")" = "com.apple.widgetkit-extension"

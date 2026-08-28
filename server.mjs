@@ -16,6 +16,8 @@ import {
 import { routeBirdieAppRequest } from "./src/app/birdie-app-router.mjs";
 import { createBirdieAppService } from "./src/app/birdie-app-service.mjs";
 import { createBirdieOsWorldStorage } from "./src/app/birdie-os-world-storage.mjs";
+import { createBirdieCaptureService } from "./src/app/birdie-capture-service.mjs";
+import { createFirestoreCaptureStorage } from "./src/app/birdie-capture-storage.mjs";
 import {
   routeMetaGovernedRequest,
   routeMetaPublicRequest
@@ -243,6 +245,16 @@ const birdieWorldStorage = createBirdieOsWorldStorage({
   reconcilerSubject: "birdie-agent"
 });
 const birdieAppService = createBirdieAppService({ storage: birdieWorldStorage });
+const birdieCaptureStorage = process.env.BIRDIE_CAPTURE_ENABLED === "true"
+  ? createFirestoreCaptureStorage({
+    projectID: process.env.BIRDIE_CAPTURE_FIRESTORE_PROJECT_ID || process.env.GOOGLE_CLOUD_PROJECT,
+    database: process.env.BIRDIE_CAPTURE_FIRESTORE_DATABASE || "(default)",
+    collection: process.env.BIRDIE_CAPTURE_FIRESTORE_COLLECTION || "captures"
+  })
+  : null;
+const birdieCaptureService = birdieCaptureStorage
+  ? createBirdieCaptureService({ storage: birdieCaptureStorage })
+  : null;
 const authenticateBirdie = (req) => authenticateBirdieAppRequest(req, {
   config: BIRDIE_APP_AUTH_CONFIG
 });
@@ -256,12 +268,10 @@ async function getAuthoritativeNextTask() {
 }
 
 async function getDayPilotSnapshot() {
-  const [briefingResult, taskResult] = await Promise.all([
-    birdieOSGet("briefing"),
-    birdieOSGet("nextTask")
+  const [briefing, task] = await Promise.all([
+    getLiveBriefing(),
+    getAuthoritativeNextTask()
   ]);
-  const briefing = briefingResult?.data;
-  const task = taskResult?.data;
   const briefingText = typeof briefing === "string"
     ? briefing
     : briefing?.briefing || briefing?.summary || briefing?.message || "";
@@ -394,6 +404,8 @@ const routes = [
   "GET /watch/day-pilot/v1",
   "POST /watch/command",
   "POST /watch/mail/reply",
+  "POST /birdie-app/v1/captures",
+  "DELETE /birdie-app/v1/captures/{captureID}",
   "POST /community/identity/evidence",
   "POST /community/identity/resolve",
   "GET /meta/webhook",
@@ -478,6 +490,7 @@ const server = http.createServer(async (req, res) => {
       readBody,
       service: birdieAppService,
       coinService,
+      captureService: birdieCaptureService,
       authenticateBirdie
     })) return;
 

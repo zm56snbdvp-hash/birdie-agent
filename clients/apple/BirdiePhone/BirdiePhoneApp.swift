@@ -10,7 +10,7 @@ struct BirdiePhoneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            BirdieRootView()
+            BirdiePhoneRootView()
         }
     }
 }

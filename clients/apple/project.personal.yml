@@ -29,14 +29,17 @@ targets:
         PRODUCT_NAME: Birdie
         PRODUCT_MODULE_NAME: BirdiePhone
         GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: BirdiePhone/Info.plist
+        INFOPLIST_FILE: Config/BirdiePhone-Info.plist
         CODE_SIGN_ENTITLEMENTS: BirdiePhone/BirdiePhone.entitlements
+        BIRDIE_APP_GROUP_IDENTIFIER: group.de.birdieandbreakfast.kevin.birdie.capture
         BIRDIE_SHARED_SUITE_NAME: group.de.birdieandbreakfast.kevin.birdie
         BIRDIE_URL_SCHEME: birdie-personal
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: BirdieWatch
       - target: BirdieWidgets
+      - target: CaptureCore
+      - target: BirdieShare
 
   BirdieWidgets:
     type: app-extension
@@ -72,6 +75,50 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Birdie.app/Birdie
         BUNDLE_LOADER: $(TEST_HOST)
+
+  CaptureCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: CaptureCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.capturecore
+        PRODUCT_NAME: CaptureCore
+        GENERATE_INFOPLIST_FILE: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+
+  BirdieShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BirdieShare
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.share
+        PRODUCT_NAME: BirdieDrop
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/BirdieShare-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/BirdieCapture.entitlements
+        BIRDIE_APP_GROUP_IDENTIFIER: group.de.birdieandbreakfast.kevin.birdie.capture
+        BIRDIE_URL_SCHEME: birdie-personal
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+    dependencies:
+      - target: CaptureCore
+
+  BirdieCaptureTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/CaptureCoreTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.capturetests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: CaptureCore
 
   BirdieWatch:
     type: application
@@ -113,11 +160,23 @@ schemes:
         BirdieWatch: all
         BirdieWatchWidget: all
         BirdiePhoneTests: [test]
-    test:
-      config: Debug
-      targets:
-        - BirdiePhoneTests
+        BirdieCaptureTests: [test]
     run:
       config: Debug
+    test:
+      gatherCoverageData: true
+      targets:
+        - BirdiePhoneTests
+        - BirdieCaptureTests
     archive:
       config: Release
+
+  BirdieCaptureTests:
+    build:
+      targets:
+        CaptureCore: all
+        BirdieCaptureTests: all
+    test:
+      gatherCoverageData: true
+      targets:
+        - BirdieCaptureTests

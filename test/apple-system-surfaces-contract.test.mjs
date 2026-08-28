@@ -129,6 +129,29 @@ test("Day Pilot remote slice is read-only, versioned, and snapshot-backed", asyn
   assert.doesNotMatch(router, /store\.save|applyConfirmed|URLSession|EKEventStore/);
 });
 
+test("phone root composes Day Pilot and Capture without losing either deep-link contract", async () => {
+  const root = await text("clients/apple/BirdiePhone/BirdiePhoneRootView.swift");
+  const app = await text("clients/apple/BirdiePhone/BirdiePhoneApp.swift");
+  const info = await text("clients/apple/Config/BirdiePhone-Info.plist");
+  const entitlements = await text("clients/apple/BirdiePhone/BirdiePhone.entitlements");
+
+  for (const tab of ["dayPilot", "drop", "lens", "watch"]) {
+    assert.match(root, new RegExp(`case ${tab}|\\.tag\\(Tab\\.${tab}\\)`));
+  }
+  assert.match(root, /captureModel\.handle\(deepLink: url\)[\s\S]*router\.handle\(url: url\)/);
+  assert.match(root, /BirdieActionComposerView/);
+  assert.match(root, /LockedCaptureCover/);
+  assert.match(app, /BirdieAppShortcuts\.updateAppShortcutParameters\(\)/);
+  assert.match(app, /BirdiePhoneRootView\(\)/);
+  assert.match(info, /BirdieAppGroupIdentifier/);
+  assert.match(info, /BirdieSharedSuiteName/);
+  assert.match(info, /NSCameraUsageDescription/);
+  assert.match(info, /NSCalendarsFullAccessUsageDescription/);
+  assert.match(info, /NSRemindersFullAccessUsageDescription/);
+  assert.match(entitlements, /\$\(BIRDIE_APP_GROUP_IDENTIFIER\)/);
+  assert.match(entitlements, /\$\(BIRDIE_SHARED_SUITE_NAME\)/);
+});
+
 test("app-only drafts expire while the minimized widget snapshot has a TTL", async () => {
   const routing = await text("clients/apple/BirdieShared/BirdieRouting.swift");
   const snapshots = await text("clients/apple/BirdieShared/DayPilotSnapshotStore.swift");

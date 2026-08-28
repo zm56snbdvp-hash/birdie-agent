@@ -6,6 +6,7 @@
 	<string>NSFileProtectionComplete</string>
 	<key>com.apple.security.application-groups</key>
 	<array>
+		<string>$(BIRDIE_APP_GROUP_IDENTIFIER)</string>
 		<string>$(BIRDIE_SHARED_SUITE_NAME)</string>
 	</array>
 </dict>

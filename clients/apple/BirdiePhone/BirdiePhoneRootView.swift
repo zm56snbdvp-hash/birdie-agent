@@ -1,12 +1,14 @@
 import SwiftUI
 
-struct BirdieRootView: View {
+struct BirdiePhoneRootView: View {
     private enum Tab: Hashable {
         case dayPilot
-        case setup
+        case drop
+        case lens
+        case watch
     }
 
-    @Environment(\.scenePhase) private var scenePhase
+    @StateObject private var captureModel = CaptureAppModel()
     @StateObject private var router = BirdieAppRouter()
     @StateObject private var dayPilot = DayPilotViewModel(
         remoteProvider: DayPilotAgentProvider()
@@ -14,6 +16,7 @@ struct BirdieRootView: View {
     @State private var selectedTab: Tab = .dayPilot
     @State private var composerRoute: BirdieRoute?
     @State private var highlightedAction: BirdieActionKind?
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -27,22 +30,54 @@ struct BirdieRootView: View {
             .tabItem { Label("Day Pilot", systemImage: "sun.horizon") }
             .tag(Tab.dayPilot)
 
+            CaptureInboxView(model: captureModel)
+                .tabItem { Label("Drop", systemImage: "tray.and.arrow.down") }
+                .tag(Tab.drop)
+
+            BirdieLensView(appModel: captureModel) {
+                selectedTab = .drop
+            }
+            .tabItem { Label("Lens", systemImage: "viewfinder") }
+            .tag(Tab.lens)
+
             BirdiePhoneSetupView()
-                .tabItem { Label("Setup", systemImage: "gearshape") }
-                .tag(Tab.setup)
+                .tabItem { Label("Watch", systemImage: "applewatch") }
+                .tag(Tab.watch)
         }
-        .onAppear { router.consumePendingRoute() }
-        .onOpenURL { router.handle(url: $0) }
-        .onReceive(NotificationCenter.default.publisher(for: BirdiePendingRouteStore.didChangeNotification)) { _ in
+        .onAppear {
+            captureModel.setSceneActive(scenePhase == .active)
             router.consumePendingRoute()
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { router.consumePendingRoute() }
+            captureModel.setSceneActive(phase == .active)
+            if phase == .active {
+                router.consumePendingRoute()
+            }
+        }
+        .onOpenURL { url in
+            if captureModel.handle(deepLink: url) {
+                selectedTab = .drop
+            } else {
+                router.handle(url: url)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: BirdiePendingRouteStore.didChangeNotification)) { _ in
+            router.consumePendingRoute()
+        }
+        .onChange(of: captureModel.navigationPath) { _, path in
+            if !path.isEmpty {
+                selectedTab = .drop
+            }
         }
         .onChange(of: router.route) { _, route in
             guard let route else { return }
             handle(route)
             router.clear()
+        }
+        .overlay {
+            if captureModel.isPrivacyProtected {
+                LockedCaptureCover()
+            }
         }
         .sheet(item: $composerRoute) { route in
             BirdieActionComposerView(route: route)
