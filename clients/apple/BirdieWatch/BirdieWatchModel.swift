@@ -8,7 +8,6 @@ final class BirdieWatchModel: ObservableObject {
     @Published var unreadCount = 0
     @Published var isBusy = false
     @Published var errorMessage: String?
-    @Published var mailStatus: String?
 
     private let api = BirdieWatchAPI()
 
@@ -40,31 +39,4 @@ final class BirdieWatchModel: ObservableObject {
         }
     }
 
-    func sendReply(to mail: WatchMailItem, text: String) async -> Bool {
-        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !clean.isEmpty else { return false }
-
-        isBusy = true
-        mailStatus = nil
-        defer { isBusy = false }
-
-        do {
-            let subject = mail.subject.lowercased().hasPrefix("re:")
-                ? mail.subject
-                : "Re: \(mail.subject)"
-            try await api.reply(
-                to: mail.from,
-                subject: subject,
-                text: clean,
-                replyToUid: mail.uid
-            )
-            mailStatus = "Antwort gesendet."
-            errorMessage = nil
-            await refresh()
-            return true
-        } catch {
-            errorMessage = error.localizedDescription
-            return false
-        }
-    }
 }

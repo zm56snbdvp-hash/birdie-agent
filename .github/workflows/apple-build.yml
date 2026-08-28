@@ -1,14 +1,19 @@
 name: Apple Build
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "clients/apple/**"
+      - "scripts/smoke-ios-birdie-trust.sh"
+      - "test/birdie-trust-contract.test.mjs"
       - ".github/workflows/apple-build.yml"
   push:
     branches: [main]
     paths:
       - "clients/apple/**"
+      - "scripts/smoke-ios-birdie-trust.sh"
+      - "test/birdie-trust-contract.test.mjs"
       - ".github/workflows/apple-build.yml"
 
 permissions:
@@ -19,21 +24,23 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Generate project
-        working-directory: clients/apple
-        run: xcodegen generate
-      - name: Build without signing
-        working-directory: clients/apple
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+      - name: Select Xcode 16.4
+        uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90
+        with:
+          xcode-version: "16.4"
+      - name: Install pinned XcodeGen 2.46.0
         run: |
           set -euo pipefail
-          xcodebuild \
-            -project Birdie.xcodeproj \
-            -scheme Birdie \
-            -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build
+          curl -fsSL https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip -o "$RUNNER_TEMP/xcodegen.zip"
+          echo "4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          ditto -x -k "$RUNNER_TEMP/xcodegen.zip" "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - name: Contract, unsigned build, and unit smoke test
+        run: bash scripts/smoke-ios-birdie-trust.sh

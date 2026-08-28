@@ -1,0 +1,21 @@
+{
+  "aps": {
+    "timestamp": 1787911200,
+    "event": "update",
+    "content-state": {
+      "recordVersion": 7,
+      "status": "blocked",
+      "progress": 0.5,
+      "currentStepIndex": 2,
+      "currentStepTotal": 4,
+      "currentStepTitle": "Wartet auf Freigabe",
+      "blockerCategory": "approval_required",
+      "allowsPause": true,
+      "allowsCancel": true,
+      "containsSensitiveDetails": true
+    },
+    "stale-date": 1787918400
+  },
+  "schemaVersion": "birdie.trust.notification/v1",
+  "notificationKind": "mission_activity"
+}

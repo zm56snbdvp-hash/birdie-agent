@@ -1,0 +1,18 @@
+{
+  "aps": {
+    "alert": {
+      "title": "Birdie braucht deine Entscheidung",
+      "body": "Details werden erst nach dem Entsperren angezeigt."
+    },
+    "category": "BIRDIE_APPROVAL_RED_V1",
+    "thread-id": "birdie.approvals",
+    "interruption-level": "active"
+  },
+  "schemaVersion": "birdie.trust.notification/v1",
+  "notificationKind": "approval",
+  "notificationId": "not_01K42S7N2CDX5H6W3X9Q8ZRTYV",
+  "approvalId": "apr_01K42S6X6JS85RBQ46QWEHTH8P",
+  "risk": "red",
+  "expiresAt": "2026-08-28T12:05:00Z",
+  "deepLink": "birdie://approvals/apr_01K42S6X6JS85RBQ46QWEHTH8P"
+}

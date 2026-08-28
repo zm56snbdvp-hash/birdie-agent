@@ -71,27 +71,6 @@ final class BirdieWatchAPI: NSObject, WCSessionDelegate {
         ], as: WatchCommandResult.self)
     }
 
-    func reply(
-        to: String,
-        subject: String,
-        text: String,
-        replyToUid: Int?
-    ) async throws {
-        var payload: [String: Any] = [
-            "to": to,
-            "subject": subject,
-            "text": text,
-            "founderApproved": true,
-            "confirmation": "SEND_EMAIL"
-        ]
-        if let replyToUid { payload["replyToUid"] = replyToUid }
-
-        let _: WatchSendReceipt = try await send([
-            "action": "mailReply",
-            "payload": payload
-        ], as: WatchSendReceipt.self)
-    }
-
     private func send<T: Decodable>(_ message: [String: Any], as type: T.Type) async throws -> T {
         guard let session else { throw BirdieWatchAPIError.connectivityUnavailable }
         guard session.activationState == .activated, session.isReachable else {
@@ -128,8 +107,4 @@ final class BirdieWatchAPI: NSObject, WCSessionDelegate {
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
     ) {}
-}
-
-private struct WatchSendReceipt: Decodable {
-    let accepted: Bool?
 }

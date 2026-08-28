@@ -8,8 +8,9 @@ Voice-first Apple Watch companion for Birdie.
 - Tap `Mit Birdie sprechen` and use native Apple Watch dictation.
 - Birdie's answer is rendered as a short watch-readable response.
 - The Inbox section shows up to five unread mail cards.
-- Tap a mail, dictate an answer, review the text, then explicitly confirm `Jetzt senden`.
-- Sending mail never happens from an implicit transcript alone.
+- Tap a mail to read its compact preview. Replies and every other controlled
+  mutation are reviewed in Birdie Approve on the paired iPhone.
+- The Watch cannot send mail or manufacture an approval flag.
 - A WidgetKit complication provides a direct Birdie entry point from the watch face.
 
 ## Production request path
@@ -26,7 +27,7 @@ iPhone Companion
 Birdie Agent /watch/*
     |
     +--> Birdie OS / OpenAI chat path
-    +--> Governed IONOS Mail Service
+    +--> Read-only briefing and Birdie chat
 ```
 
 The watch binary contains no Birdie backend credential.
@@ -35,20 +36,11 @@ The watch binary contains no Birdie backend credential.
 
 - `GET /watch/briefing`
 - `POST /watch/command`
-- `POST /watch/mail/reply`
 
-All `/watch/*` requests pass through the dedicated watch auth gate before the general Birdie Agent auth gate.
-
-`/watch/mail/reply` additionally fails closed unless the request contains:
-
-```json
-{
-  "founderApproved": true,
-  "confirmation": "SEND_EMAIL"
-}
-```
-
-The watch UI only produces that confirmation after the dedicated send confirmation dialog. The existing mail service remains authoritative for IMAP/SMTP execution.
+The native client does not call the legacy `/watch/mail/reply` route. The iPhone
+relay rejects such WatchConnectivity messages locally, including messages that
+claim a caller-authored approval flag. The backend route must be removed or
+migrated to Birdie Trust before production rollout.
 
 ## Credential boundary
 
@@ -94,7 +86,7 @@ Before production traffic:
 4. Verify unauthenticated `/watch/*` returns `401 WATCH_UNAUTHORIZED`.
 5. Verify authenticated `/watch/briefing` returns the compact inbox.
 6. Verify a voice command reaches `/watch/command` through the paired iPhone.
-7. Verify a mail reply requires the on-watch review dialog and exact `SEND_EMAIL` confirmation.
+7. Verify no mail reply control appears and a crafted `mailReply` relay message fails closed.
 
 ## Release gates
 

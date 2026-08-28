@@ -40,8 +40,10 @@ final class WatchRelay: NSObject, ObservableObject, WCSessionDelegate {
             guard let utterance = message["utterance"] as? String else { throw RelayError.invalidRequest }
             return try await request(path: "/watch/command", method: "POST", body: ["utterance": utterance])
         case "mailReply":
-            guard let payload = message["payload"] as? [String: Any] else { throw RelayError.invalidRequest }
-            return try await request(path: "/watch/mail/reply", method: "POST", body: payload)
+            // A paired Watch is never an approval authority. In particular, do
+            // not accept caller-authored founderApproved/confirmation flags or
+            // forward mail content around the Birdie Trust challenge flow.
+            throw RelayError.controlledActionRequiresPhoneReview
         default:
             throw RelayError.invalidRequest
         }
@@ -89,6 +91,7 @@ enum RelayError: LocalizedError {
     case notAuthenticated
     case backendRejected
     case backendMessage(String)
+    case controlledActionRequiresPhoneReview
 
     var errorDescription: String? {
         switch self {
@@ -100,6 +103,8 @@ enum RelayError: LocalizedError {
             return "Birdie Agent hat die Anfrage abgelehnt."
         case .backendMessage(let message):
             return message
+        case .controlledActionRequiresPhoneReview:
+            return "Mail-Antworten müssen in Birdie Approve auf dem iPhone geprüft werden."
         }
     }
 }

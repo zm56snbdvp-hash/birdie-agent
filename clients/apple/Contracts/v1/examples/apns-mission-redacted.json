@@ -1,0 +1,18 @@
+{
+  "aps": {
+    "alert": {
+      "title": "Birdie-Auftrag aktualisiert",
+      "body": "Oeffne Birdie, um den aktuellen Status zu sehen."
+    },
+    "category": "BIRDIE_MISSION_CONTROLS_V1",
+    "thread-id": "birdie.missions",
+    "interruption-level": "passive"
+  },
+  "schemaVersion": "birdie.trust.notification/v1",
+  "notificationKind": "mission",
+  "notificationId": "not_01K42SK0G25E9HK6F3AG12Q7VQ",
+  "missionId": "mis_01K42SJQYT9FY6QHWZP9S7MYDB",
+  "recordVersion": 7,
+  "status": "blocked",
+  "deepLink": "birdie://missions/mis_01K42SJQYT9FY6QHWZP9S7MYDB"
+}
