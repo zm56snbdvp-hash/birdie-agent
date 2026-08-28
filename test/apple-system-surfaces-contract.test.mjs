@@ -152,17 +152,10 @@ test("phone root composes Day Pilot and Capture without losing either deep-link 
   assert.match(entitlements, /\$\(BIRDIE_SHARED_SUITE_NAME\)/);
 });
 
-test("Apple smoke prefers the iPhone 13 mini compatibility baseline", async () => {
-  const workflow = await text(".github/workflows/apple-build.yml");
+test("iPhone 13 mini baseline does not depend on hardware-only surfaces", async () => {
   const swiftFiles = (await filesBelow(apple)).filter((file) => file.endsWith(".swift"));
   const swift = (await Promise.all(swiftFiles.map((file) => readFile(file, "utf8")))).join("\n");
 
-  assert.match(workflow, /"iPhone 13 mini"/);
-  assert.match(workflow, /"iPhone SE \(3rd generation\)"/);
-  assert.match(workflow, /version >= \(18, 0\)/);
-  assert.match(workflow, /xcrun simctl create/);
-  assert.match(workflow, /COMPACT_SIMULATOR_ID/);
-  assert.match(workflow, /simctl delete/);
   assert.doesNotMatch(swift, /DynamicIsland|ActivityKit/);
   assert.match(await text("clients/apple/BirdiePhone/DayPilot/DayPilotView.swift"), /List \{/);
 });

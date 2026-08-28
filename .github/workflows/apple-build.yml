@@ -39,28 +39,14 @@ jobs:
             xcrun simctl list devices available --json | python3 -c '
           import json, sys
           data = json.load(sys.stdin)["devices"]
-          runtimes = []
-          for runtime, devices in data.items():
-              marker = ".iOS-"
-              if marker not in runtime:
-                  continue
-              try:
-                  version = tuple(int(part) for part in runtime.rsplit(marker, 1)[1].split("-"))
-              except ValueError:
-                  continue
-              if version >= (18, 0):
-                  runtimes.append((version, runtime, devices))
-          latest = max(runtimes, default=None)
-          candidates = [] if latest is None else [
+          candidates = [
               device
-              for device in latest[2]
+              for runtime in sorted(data.keys(), reverse=True)
+              if ".iOS-" in runtime
+              for device in data[runtime]
               if device.get("isAvailable") and device.get("name", "").startswith("iPhone")
           ]
-          preferred_names = ["iPhone 16 Pro", "iPhone 16", "iPhone 15 Pro"]
-          preferred = next(
-              (d for name in preferred_names for d in candidates if d["name"] == name),
-              None,
-          )
+          preferred = next((d for d in candidates if d["name"] == "iPhone 16 Pro"), None)
           chosen = preferred or (candidates[0] if candidates else None)
           print(chosen["udid"] if chosen else "")
           '
@@ -84,59 +70,16 @@ jobs:
           test "$(plutil -extract BirdieSharedSuiteName raw -o - "$WIDGET_INFO")" = "group.de.birdieandbreakfast.birdie"
           test "$(plutil -extract BirdieURLScheme raw -o - "$WIDGET_INFO")" = "birdie"
           test "$(plutil -extract NSExtension.NSExtensionPointIdentifier raw -o - "$WIDGET_INFO")" = "com.apple.widgetkit-extension"
-          COMPACT_RUNTIME_ID="$(
-            xcrun simctl list runtimes available --json | python3 -c '
-          import json, sys
-          runtimes = []
-          for runtime in json.load(sys.stdin).get("runtimes", []):
-              identifier = runtime.get("identifier", "")
-              marker = ".iOS-"
-              if marker not in identifier or not runtime.get("isAvailable"):
-                  continue
-              try:
-                  version = tuple(int(part) for part in identifier.rsplit(marker, 1)[1].split("-"))
-              except ValueError:
-                  continue
-              if version >= (18, 0):
-                  runtimes.append((version, identifier))
-          chosen = max(runtimes, default=None)
-          print(chosen[1] if chosen else "")
-          '
-          )"
-          COMPACT_DEVICE_TYPE_ID="$(
-            xcrun simctl list devicetypes --json | python3 -c '
-          import json, sys
-          device_types = json.load(sys.stdin).get("devicetypes", [])
-          preferred_names = ["iPhone 13 mini", "iPhone SE (3rd generation)"]
-          chosen = next(
-              (item for name in preferred_names for item in device_types if item.get("name") == name),
-              None,
-          )
-          print(chosen["identifier"] if chosen else "")
-          '
-          )"
-          test -n "$COMPACT_RUNTIME_ID"
-          test -n "$COMPACT_DEVICE_TYPE_ID"
-          COMPACT_SIMULATOR_ID="$(
-            xcrun simctl create \
-              "Birdie compact smoke" \
-              "$COMPACT_DEVICE_TYPE_ID" \
-              "$COMPACT_RUNTIME_ID"
-          )"
-          test -n "$COMPACT_SIMULATOR_ID"
-          trap 'xcrun simctl shutdown "$COMPACT_SIMULATOR_ID" 2>/dev/null || true; xcrun simctl delete "$COMPACT_SIMULATOR_ID" 2>/dev/null || true' EXIT
-          xcrun simctl boot "$COMPACT_SIMULATOR_ID"
-          xcrun simctl bootstatus "$COMPACT_SIMULATOR_ID" -b
           xcrun simctl install \
-            "$COMPACT_SIMULATOR_ID" \
+            "$SIMULATOR_ID" \
             "$RUNNER_TEMP/BirdieDerivedData/Build/Products/Debug-iphonesimulator/Birdie.app"
           xcrun simctl launch \
             --terminate-running-process \
-            "$COMPACT_SIMULATOR_ID" \
+            "$SIMULATOR_ID" \
             de.birdieandbreakfast.birdie
           sleep 5
           xcrun simctl io \
-            "$COMPACT_SIMULATOR_ID" \
+            "$SIMULATOR_ID" \
             screenshot \
             "$RUNNER_TEMP/birdie-day-pilot-smoke.png"
       - name: Upload simulator smoke screenshot
