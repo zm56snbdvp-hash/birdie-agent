@@ -81,23 +81,50 @@ final class DayPilotSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.nextApproval?.id, "approval-1")
     }
 
-    func testRemoteDayPilotContractDecodesVersionedISO8601Payload() throws {
+    func testRemoteDayPilotContractDecodesServerEnvelopeWithFractionalSeconds() throws {
         let data = Data("""
         {
-          "contractVersion": 1,
-          "generatedAt": "2026-08-28T08:00:00Z",
-          "nextTask": { "id": "task-1", "title": "Prüfen", "dueAt": "2026-08-28T09:30:00Z" },
-          "briefing": "Morgenbriefing",
-          "openApprovals": [{ "id": "approval-1", "title": "Freigabe", "detail": "Prüfen" }]
+          "success": true,
+          "data": {
+            "contractVersion": 1,
+            "generatedAt": "2026-08-28T08:00:00.123Z",
+            "nextTask": {
+              "id": "task-1",
+              "title": "Prüfen",
+              "dueAt": "2026-08-28T09:30:00.456Z"
+            },
+            "briefing": "Morgenbriefing",
+            "openApprovals": [{ "id": "approval-1", "title": "Freigabe", "detail": "Prüfen" }]
+          }
         }
         """.utf8)
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
 
-        let snapshot = try decoder.decode(DayPilotRemoteSnapshot.self, from: data)
+        let snapshot = try DayPilotRemoteContract.decode(data)
 
         XCTAssertEqual(snapshot.contractVersion, 1)
         XCTAssertEqual(snapshot.nextTask?.id, "task-1")
+        let dueAt = try XCTUnwrap(snapshot.nextTask?.dueAt)
+        XCTAssertEqual(dueAt.timeIntervalSince1970, 1_787_909_400.456, accuracy: 0.001)
         XCTAssertEqual(snapshot.openApprovals.count, 1)
+    }
+
+    func testRemoteDayPilotContractAlsoAcceptsWholeSeconds() throws {
+        let data = Data("""
+        {
+          "success": true,
+          "data": {
+            "contractVersion": 1,
+            "generatedAt": "2026-08-28T08:00:00Z",
+            "nextTask": null,
+            "briefing": "Morgenbriefing",
+            "openApprovals": []
+          }
+        }
+        """.utf8)
+
+        let snapshot = try DayPilotRemoteContract.decode(data)
+
+        XCTAssertEqual(snapshot.contractVersion, 1)
+        XCTAssertNil(snapshot.nextTask)
     }
 }

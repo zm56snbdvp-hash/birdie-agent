@@ -59,6 +59,7 @@ struct BirdieAgentClient: Sendable {
 
         var request = URLRequest(url: baseURL.appending(path: "/watch/day-pilot/v1"))
         request.httpMethod = "GET"
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.timeoutInterval = 20
 
@@ -74,23 +75,50 @@ struct BirdieAgentClient: Sendable {
                 : BirdieAgentClientError.rejected(message)
         }
 
-        struct Envelope: Decodable {
-            let success: Bool
-            let data: DayPilotRemoteSnapshot
-        }
-
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
         do {
-            let envelope = try decoder.decode(Envelope.self, from: data)
-            guard envelope.success, envelope.data.contractVersion == 1 else {
-                throw BirdieAgentClientError.invalidResponse
-            }
-            return envelope.data
+            return try DayPilotRemoteContract.decode(data)
         } catch let error as BirdieAgentClientError {
             throw error
         } catch {
             throw BirdieAgentClientError.invalidResponse
         }
+    }
+}
+
+enum DayPilotRemoteContract {
+    private struct Envelope: Decodable {
+        let success: Bool
+        let data: DayPilotRemoteSnapshot
+    }
+
+    static func decode(_ data: Data) throws -> DayPilotRemoteSnapshot {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let value = try container.decode(String.self)
+
+            let fractionalFormatter = ISO8601DateFormatter()
+            fractionalFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = fractionalFormatter.date(from: value) {
+                return date
+            }
+
+            let standardFormatter = ISO8601DateFormatter()
+            standardFormatter.formatOptions = [.withInternetDateTime]
+            if let date = standardFormatter.date(from: value) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Expected an RFC 3339 timestamp."
+            )
+        }
+
+        let envelope = try decoder.decode(Envelope.self, from: data)
+        guard envelope.success, envelope.data.contractVersion == 1 else {
+            throw BirdieAgentClientError.invalidResponse
+        }
+        return envelope.data
     }
 }

@@ -1,17 +1,31 @@
 import * as defaultMailService from "./mail-service.mjs";
 
-function ok(json, res, data, extra = {}) {
+const DAY_PILOT_LIMITS = Object.freeze({
+  id: 128,
+  title: 256,
+  detail: 2_048,
+  briefing: 4_096,
+  timestamp: 64,
+  approvals: 20
+});
+
+const DAY_PILOT_RESPONSE_HEADERS = Object.freeze({
+  "Cache-Control": "private, no-store, max-age=0",
+  Pragma: "no-cache"
+});
+
+function ok(json, res, data, extra = {}, headers = {}) {
   json(res, 200, {
     success: true,
     source: "BIRDIE_WATCH",
     governed: true,
     ...extra,
     data
-  });
+  }, headers);
 }
 
-function normalizeText(value) {
-  return String(value || "").trim();
+function normalizeText(value, maximumLength = Number.POSITIVE_INFINITY) {
+  return String(value || "").slice(0, maximumLength).trim();
 }
 
 function compactMessage(message) {
@@ -28,35 +42,41 @@ function compactMessage(message) {
 
 function compactDayPilotTask(task) {
   if (!task || typeof task !== "object" || Array.isArray(task)) return null;
-  const id = normalizeText(task.id || task.taskId);
-  const title = normalizeText(task.title || task.task || task.name);
+  const id = normalizeText(task.id || task.taskId, DAY_PILOT_LIMITS.id);
+  const title = normalizeText(task.title || task.task || task.name, DAY_PILOT_LIMITS.title);
   if (!id || !title) return null;
-  const dueAt = task.dueAt || task.date || null;
-  if (dueAt !== null && (!Number.isFinite(Date.parse(String(dueAt))))) return null;
+  const dueAt = normalizeText(task.dueAt || task.date, DAY_PILOT_LIMITS.timestamp);
+  if (dueAt && !Number.isFinite(Date.parse(dueAt))) return null;
   return { id, title, dueAt: dueAt ? new Date(dueAt).toISOString() : null };
 }
 
 function compactApproval(approval) {
   if (!approval || typeof approval !== "object" || Array.isArray(approval)) return null;
-  const id = normalizeText(approval.id || approval.approvalId);
-  const title = normalizeText(approval.title || approval.name);
-  const detail = normalizeText(approval.detail || approval.description);
+  const id = normalizeText(approval.id || approval.approvalId, DAY_PILOT_LIMITS.id);
+  const title = normalizeText(approval.title || approval.name, DAY_PILOT_LIMITS.title);
+  const detail = normalizeText(approval.detail || approval.description, DAY_PILOT_LIMITS.detail);
   if (!id || !title || !detail) return null;
   return { id, title, detail };
 }
 
 function compactDayPilot(data) {
   const value = data && typeof data === "object" && !Array.isArray(data) ? data : {};
-  const generatedAt = value.generatedAt || new Date().toISOString();
-  if (!Number.isFinite(Date.parse(String(generatedAt)))) {
+  const generatedAt = normalizeText(value.generatedAt || new Date().toISOString(), DAY_PILOT_LIMITS.timestamp);
+  if (!Number.isFinite(Date.parse(generatedAt))) {
     const error = new Error("generatedAt must be an ISO date");
     error.code = "INVALID_DAY_PILOT_SNAPSHOT";
     error.status = 502;
     throw error;
   }
-  const briefing = normalizeText(value.briefing || value.summary || value.message);
+  const briefing = normalizeText(
+    value.briefing || value.summary || value.message,
+    DAY_PILOT_LIMITS.briefing
+  );
   const approvals = Array.isArray(value.openApprovals)
-    ? value.openApprovals.map(compactApproval).filter(Boolean).slice(0, 20)
+    ? value.openApprovals
+      .slice(0, DAY_PILOT_LIMITS.approvals)
+      .map(compactApproval)
+      .filter(Boolean)
     : [];
   return {
     contractVersion: 1,
@@ -96,7 +116,7 @@ export async function routeWatchRequest({
 
   if (req.method === "GET" && url.pathname === "/watch/day-pilot/v1") {
     const data = await dayPilotProvider();
-    ok(json, res, compactDayPilot(data));
+    ok(json, res, compactDayPilot(data), {}, DAY_PILOT_RESPONSE_HEADERS);
     return true;
   }
 

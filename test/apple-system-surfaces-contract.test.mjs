@@ -121,6 +121,9 @@ test("Day Pilot remote slice is read-only, versioned, and snapshot-backed", asyn
   assert.match(server, /birdieOSGet\("nextTask"\)/);
   assert.match(provider, /protocol DayPilotRemoteProviding/);
   assert.match(client, /\/watch\/day-pilot\/v1/);
+  assert.match(client, /cachePolicy = \.reloadIgnoringLocalCacheData/);
+  assert.match(client, /withFractionalSeconds/);
+  assert.match(router, /"Cache-Control": "private, no-store, max-age=0"/);
   assert.match(viewModel, /remoteProvider/);
   assert.match(viewModel, /catch BirdieAgentClientError\.notAuthenticated/);
   assert.doesNotMatch(router, /store\.save|applyConfirmed|URLSession|EKEventStore/);
