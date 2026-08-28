@@ -126,6 +126,21 @@ test("backend contract is explicit but remains disabled behind the local mock", 
   assert.match(architecture, /BIRDIE_CAPTURE_BACKEND_CONTRACT\.md/);
 });
 
+test("server exposes gated capture routes without changing Watch routes", async () => {
+  const [router, server, env] = await Promise.all([
+    read("src/app/birdie-app-router.mjs"),
+    read("server.mjs"),
+    read(".env.example"),
+  ]);
+  assert.match(router, /BIRDIE_CAPTURE_NOT_CONFIGURED/);
+  assert.match(router, /captureService\.submit/);
+  assert.match(router, /captureService\.remove/);
+  assert.match(server, /createFirestoreCaptureStorage/);
+  assert.match(server, /BIRDIE_CAPTURE_ENABLED === "true"/);
+  assert.match(env, /BIRDIE_CAPTURE_ENABLED=false/);
+  assert.match(server, /POST \/birdie-app\/v1\/captures/);
+});
+
 test("macOS verification script proves XcodeGen, tests, unsigned build and embedding", async () => {
   const script = await read("clients/apple/scripts/verify-capture.sh");
   assert.match(script, /node --test test\/apple-capture-contract\.test\.mjs/);

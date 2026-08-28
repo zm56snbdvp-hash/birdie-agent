@@ -31,7 +31,7 @@ Scope:       birdie-world:access
 Birdie claim: https://birdieandbreakfast.de/birdie_id
 ```
 
-The existing authenticated app surface uses the `/birdie-app/v1/*` prefix. A read-only `GET /birdie-app/v1/captures` probe currently returns `404 BIRDIE_APP_ROUTE_NOT_FOUND`; no capture route or durable capture storage exists in the checked-out server. Therefore the adapter below is a ready client scaffold, not an enabled production integration. Adding the route requires a separately reviewed server-side storage decision.
+The existing authenticated app surface uses the `/birdie-app/v1/*` prefix. A read-only probe of the currently deployed runtime returned `404 BIRDIE_APP_ROUTE_NOT_FOUND`; the checked-out server now contains the route behind `BIRDIE_CAPTURE_ENABLED`, but that gate is false by default. Therefore the adapter and route are ready scaffolds, not an enabled production integration. Firestore must be provisioned and the route deployed only through the normal reviewed deployment gate.
 
 ```text
 POST /birdie-app/v1/captures

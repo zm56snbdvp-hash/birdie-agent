@@ -1,6 +1,6 @@
 # Birdie Drop & Birdie Lens – Architekturentscheidung
 
-Status: implementiert als lokaler, nicht-produktiver Capture-Pfad. Es existiert noch kein freigegebener Capture-Backendvertrag.
+Status: implementiert als lokaler Capture-Pfad mit einem fail-closed serverseitigen Backend-Scaffold. Der Capture-Vertrag ist dokumentiert, aber noch nicht für Produktionsverkehr freigegeben.
 
 ## Entscheidung
 
