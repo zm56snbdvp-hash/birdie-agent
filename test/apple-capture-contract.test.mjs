@@ -111,6 +111,9 @@ test("macOS verification script proves XcodeGen, tests, unsigned build and embed
   assert.match(script, /test ! -d .*BirdieDrop\.appex\/Frameworks/);
   assert.match(script, /simctl list --json devices available/);
   assert.match(script, /version < \(18, 0\)/);
+  assert.match(script, /ditto "\$birdie_app" "\$smoke_app"/);
+  assert.match(script, /rm -r "\$smoke_app\/Watch"/);
+  assert.match(script, /simctl install "\$destination_id" "\$smoke_app"/);
   assert.match(script, /simctl launch .*de\.birdieandbreakfast\.birdie/);
   assert.match(script, /sleep 3/);
   assert.doesNotMatch(script, /simctl terminate .*\|\| true/);

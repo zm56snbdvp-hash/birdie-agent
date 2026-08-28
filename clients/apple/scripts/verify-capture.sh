@@ -74,7 +74,16 @@ test ! -d "$birdie_app/PlugIns/BirdieDrop.appex/Frameworks"
 
 xcrun simctl boot "$destination_id" 2>/dev/null || true
 xcrun simctl bootstatus "$destination_id" -b
-xcrun simctl install "$destination_id" "$birdie_app"
+smoke_app="$derived_root/smoke/Birdie.app"
+test "$smoke_app" = "$derived_root/smoke/Birdie.app"
+mkdir -p "$(dirname "$smoke_app")"
+ditto "$birdie_app" "$smoke_app"
+# The existing Watch widget on main is not simulator-installable. Keep the verified
+# build untouched and remove Watch only from this disposable iPhone launch copy.
+if [[ -d "$smoke_app/Watch" ]]; then
+  rm -r "$smoke_app/Watch"
+fi
+xcrun simctl install "$destination_id" "$smoke_app"
 xcrun simctl launch "$destination_id" de.birdieandbreakfast.birdie
 sleep 3
 xcrun simctl terminate "$destination_id" de.birdieandbreakfast.birdie

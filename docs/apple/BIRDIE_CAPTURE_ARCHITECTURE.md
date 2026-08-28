@@ -66,7 +66,7 @@ xcodebuild -project Birdie.xcodeproj -scheme Birdie \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
 ```
 
-Der vorhandene Personal-Workflow kann den unsignierten Gesamt-Build auf macOS ausführen. `clients/apple/scripts/verify-capture.sh` prüft zusätzlich beide XcodeGen-Specs, den unsignierten Standard-Build, Swift-Unit-Tests, die korrekte Einbettung von Extension und Framework sowie einen Install-/Launch-Smoke auf einem iOS-Simulator. Das Skript wird vor dem Draft-PR auf einem isolierten CI-Verifikationsbranch aufgerufen, damit die parallel laufende Watch-Toolchain-Arbeit in PR #60 nicht überschrieben wird.
+Der vorhandene Personal-Workflow kann den unsignierten Gesamt-Build auf macOS ausführen. `clients/apple/scripts/verify-capture.sh` prüft zusätzlich beide XcodeGen-Specs, den unsignierten Standard-Build, Swift-Unit-Tests, die korrekte Einbettung von Extension und Framework sowie einen Install-/Launch-Smoke auf einem iOS-Simulator. Weil das bereits auf `main` vorhandene Watch-Widget-Bundle dort ohne `NSExtension`-Dictionary nicht installierbar ist, verwendet nur der disposable iPhone-Smoke eine Kopie ohne `Watch/`; der geprüfte Build bleibt unverändert und Watch-Code wird nicht angefasst. Das Skript wird vor dem Draft-PR auf einem isolierten CI-Verifikationsbranch aufgerufen, damit die parallel laufende Watch-Toolchain-Arbeit in PR #60 nicht überschrieben wird.
 
 ## Kurzer manueller Smoke-Test
 
