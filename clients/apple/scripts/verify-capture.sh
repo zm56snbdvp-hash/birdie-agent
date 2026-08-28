@@ -7,12 +7,22 @@ repo_dir="$(cd "$apple_dir/../.." && pwd)"
 derived_root="$(mktemp -d "${RUNNER_TEMP:-/tmp}/birdie-capture.XXXXXX")"
 trap 'rm -rf "$derived_root"' EXIT
 
+verify_config_clean() {
+  git diff --exit-code -- Config
+  local untracked
+  untracked="$(git ls-files --others --exclude-standard -- Config)"
+  if [[ -n "$untracked" ]]; then
+    printf 'Unexpected untracked Config files:\n%s\n' "$untracked" >&2
+    return 1
+  fi
+}
+
 cd "$repo_dir"
 node --test test/apple-capture-contract.test.mjs
 
 cd "$apple_dir"
 xcodegen generate
-test -z "$(git status --porcelain --untracked-files=all -- Config)"
+verify_config_clean
 
 destination_id="$(xcodebuild \
   -project Birdie.xcodeproj \
@@ -54,5 +64,5 @@ sleep 3
 xcrun simctl terminate "$destination_id" de.birdieandbreakfast.birdie
 
 xcodegen generate --spec project.personal.yml
-test -z "$(git status --porcelain --untracked-files=all -- Config)"
+verify_config_clean
 xcodebuild -list -project BirdiePersonal.xcodeproj >/dev/null
