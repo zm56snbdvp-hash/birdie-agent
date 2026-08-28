@@ -8,7 +8,7 @@ Die Installation ist ausschließlich für Kevins eigene Geräte gedacht.
 
 - `BirdiePersonal.xcodeproj` wird automatisch auf GitHub erzeugt.
 - Die persönlichen Bundle-IDs sind von den späteren App-Store-IDs getrennt.
-- iPhone-App, Watch-App und Watch-Komplikation werden gemeinsam gebaut.
+- iPhone-App, Day-Pilot-Widget/Controls, Watch-App und Watch-Komplikation werden gemeinsam gebaut.
 - Der CI-Build prüft das Projekt ohne Signatur, bevor das Paket angeboten wird.
 
 ## Einmalige Voraussetzungen
@@ -35,8 +35,10 @@ für die erste Kopplung weiterhin eine funktionierende Kabelverbindung nötig.
 
 1. In Xcode `Settings` > `Accounts` öffnen und Kevins Apple-ID hinzufügen.
 2. Im Projektnavigator `BirdiePersonal` auswählen.
-3. Bei `Signing & Capabilities` für `BirdiePhone`, `BirdieWatch` und
-   `BirdieWatchWidget` jeweils Kevins **Personal Team** auswählen.
+3. Bei `Signing & Capabilities` für `BirdiePhone`, `BirdieWidgets`,
+   `BirdieWatch` und `BirdieWatchWidget` jeweils Kevins **Personal Team**
+   auswählen. Xcode muss außerdem die konfigurierte persönliche App Group
+   `group.de.birdieandbreakfast.kevin.birdie` für Phone und Widget verwalten.
 4. `Automatically manage signing` eingeschaltet lassen.
 5. In Xcodes Device Hub `Pair Nearby Device...` wählen und das iPhone koppeln.
    Vertrauen auf iPhone und Watch bestätigen.
