@@ -159,17 +159,19 @@ namespace BirdieWorld
             var train = CreateMaterial("ExpressBlack", new Color(0.055f, 0.075f, 0.065f, 1f), 0.45f, 0.4f);
             var window = CreateMaterial("TrainWindow", new Color(0.24f, 0.48f, 0.58f, 1f), 0.25f, 0.75f, new Color(0.10f, 0.24f, 0.32f, 1f));
 
-            // The forecourt surfaces are intentionally open underneath. This
-            // avoids a large base mesh hiding the playable plaza or player on
+            // The forecourt uses segmented warm-stone tiles instead of one
+            // unbroken slab. Besides reading more like a built 3-D plaza, the
+            // gaps keep the horizon and the avatar silhouette visible on
             // WebGL variants whose built-in cube bounds differ from the editor.
             Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.36f, 12f), new Vector3(9f, 0.55f, 58f), path);
-            Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.50f, -1f), new Vector3(17f, 0.70f, 11f), path);
+            for (var z = -5.0f; z <= 3.0f; z += 2.0f)
+                Primitive(PrimitiveType.Cube, $"SpawnPlazaTile_{z:0}", new Vector3(0f, 0.50f, z), new Vector3(17f, 0.52f, 1.35f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.90f, 4.3f), new Vector3(17f, 0.14f, 0.35f), brass);
             var plazaInlay = CreateMaterial("PlazaInlay", new Color(0.25f, 0.18f, 0.10f, 1f), 0.15f, 0.25f);
             for (var x = -7f; x <= 7f; x += 2.0f)
-                Primitive(PrimitiveType.Cube, $"PlazaInlayX_{x:0}", new Vector3(x, 0.91f, -1f), new Vector3(0.055f, 0.035f, 10.2f), plazaInlay);
+                Primitive(PrimitiveType.Cube, $"PlazaInlayX_{x:0}", new Vector3(x, 0.78f, -1f), new Vector3(0.055f, 0.035f, 10.2f), plazaInlay);
             for (var z = -5f; z <= 3f; z += 2.0f)
-                Primitive(PrimitiveType.Cube, $"PlazaInlayZ_{z:0}", new Vector3(0f, 0.91f, z), new Vector3(16.8f, 0.035f, 0.055f), plazaInlay);
+                Primitive(PrimitiveType.Cube, $"PlazaInlayZ_{z:0}", new Vector3(0f, 0.78f, z), new Vector3(16.8f, 0.035f, 0.055f), plazaInlay);
             Primitive(PrimitiveType.Cube, "River", new Vector3(0f, -0.02f, 12.5f), new Vector3(70f, 0.10f, 5.2f), water);
             Primitive(PrimitiveType.Cube, "Bridge", new Vector3(0f, 0.78f, 12.5f), new Vector3(10f, 0.38f, 8f), wood);
             Primitive(PrimitiveType.Cube, "BridgeRailLeft", new Vector3(-4.3f, 1.65f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
