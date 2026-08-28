@@ -492,15 +492,43 @@ namespace BirdieWorld
 
         private GameObject Primitive(PrimitiveType type, string name, Vector3 position, Vector3 scale, Material material, Transform parent = null, Quaternion? rotation = null)
         {
-            var go = GameObject.CreatePrimitive(type);
-            go.name = name;
+            // Unity's standard primitive factory also adds a physics collider.
+            // The beta intentionally ships without the Physics module, so
+            // construct the render-only primitive from built-in meshes instead.
+            var go = new GameObject(name);
             go.transform.SetParent(parent ?? environmentRoot.transform, false);
             go.transform.localPosition = position;
             go.transform.localScale = scale;
             if (rotation.HasValue) go.transform.localRotation = rotation.Value;
-            var renderer = go.GetComponent<Renderer>();
-            if (renderer != null) renderer.sharedMaterial = material;
+
+            var meshFilter = go.AddComponent<MeshFilter>();
+            meshFilter.sharedMesh = BuiltInMesh(type);
+            var renderer = go.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
             return go;
+        }
+
+        private Mesh BuiltInMesh(PrimitiveType type)
+        {
+            var resourceName = type switch
+            {
+                PrimitiveType.Sphere => "New-Sphere.fbx",
+                PrimitiveType.Capsule => "Capsule.fbx",
+                PrimitiveType.Cylinder => "Cylinder.fbx",
+                PrimitiveType.Plane => "Plane.fbx",
+                PrimitiveType.Quad => "Quad.fbx",
+                _ => "Cube.fbx"
+            };
+
+            try
+            {
+                return Resources.GetBuiltinResource<Mesh>(resourceName);
+            }
+            catch (Exception error)
+            {
+                Debug.LogError($"BirdieWorld 3D mesh '{resourceName}' could not be loaded: {error.Message}");
+                return null;
+            }
         }
 
         private Material CreateMaterial(string name, Color color, float metallic, float smoothness, Color? emission = null)

@@ -16,7 +16,9 @@ test("Beta 02 exposes a real generated 3-D world after the first journey", () =>
   const bootstrap = read(bootstrapPath);
 
   assert.match(world, /public sealed class BirdieWorldThreeDWorld/);
-  assert.match(world, /GameObject\.CreatePrimitive/);
+  assert.match(world, /BuiltInMesh\(type\)/);
+  assert.match(world, /AddComponent<MeshFilter>\(\)/);
+  assert.doesNotMatch(world, /GameObject\.CreatePrimitive/);
   assert.match(world, /AddComponent<Camera>\(\)/);
   assert.match(world, /AddComponent<Light>\(\)/);
   assert.match(world, /BuildEnvironment\(\)/);
