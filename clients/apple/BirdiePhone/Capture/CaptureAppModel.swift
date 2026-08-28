@@ -188,6 +188,15 @@ final class CaptureAppModel: ObservableObject {
         items.first { $0.id == id }
     }
 
+    func recallCapture(itemID: UUID) throws -> CaptureItemV1 {
+        guard let store else {
+            throw CaptureCoreError.appGroupUnavailable("BirdieCapture")
+        }
+        guard let item = try store.item(id: itemID) else {
+            throw CaptureCoreError.itemNotFound(itemID)
+        }
+        return try BirdieDropRecallBridgeV1.makeCapture(from: item, store: store)
+    }
     private func observeProtectedData() {
         let center = NotificationCenter.default
         observers.append(center.addObserver(

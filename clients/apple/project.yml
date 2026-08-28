@@ -76,6 +76,21 @@ targets:
     dependencies:
       - target: CaptureCore
 
+  BirdiePhoneTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BirdiePhoneTests
+    dependencies:
+      - target: BirdiePhone
+      - target: CaptureCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.birdie.tests
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Birdie.app/Birdie"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
   BirdieWatch:
     type: application
     platform: watchOS
@@ -97,12 +112,16 @@ targets:
     platform: watchOS
     sources:
       - path: BirdieWatchWidget
+    info:
+      path: BirdieWatchWidget/Info.plist
+      properties:
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.birdie.watchkitapp.widget
         PRODUCT_NAME: BirdieWidget
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        GENERATE_INFOPLIST_FILE: NO
         APPLICATION_EXTENSION_API_ONLY: YES
 
 schemes:
@@ -115,8 +134,10 @@ schemes:
     run:
       config: Debug
     test:
+      config: Debug
       gatherCoverageData: true
       targets:
+        - BirdiePhoneTests
         - BirdieCaptureTests
     archive:
       config: Release

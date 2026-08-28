@@ -25,6 +25,33 @@ jobs:
       - name: Generate project
         working-directory: clients/apple
         run: xcodegen generate
+      - name: Run BirdiePhone unit tests
+        working-directory: clients/apple
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="com.apple.CoreSimulator.SimRuntime.iOS-$(xcrun --sdk iphonesimulator --show-sdk-version | tr '.' '-')"
+          simulator_udid="$(
+            xcrun simctl list devices available --json |
+              jq -r --arg runtime "$runtime" '
+                (.devices[$runtime] // [])
+                | map(select(.isAvailable == true and (.name | startswith("iPhone"))))
+                | first
+                | .udid // empty
+              '
+          )"
+          test -n "$simulator_udid"
+          xcrun simctl boot "$simulator_udid" 2>/dev/null || true
+          xcrun simctl bootstatus "$simulator_udid" -b
+          xcodebuild \
+            -project Birdie.xcodeproj \
+            -scheme Birdie \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$simulator_udid" \
+            -destination-timeout 120 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test
       - name: Build without signing
         working-directory: clients/apple
         run: |

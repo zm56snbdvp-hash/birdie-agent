@@ -14,7 +14,8 @@ test("both XcodeGen specs contain isolated CaptureCore, Share and unit-test targ
     assert.match(source, /CODE_SIGN_ENTITLEMENTS: Config\/BirdieCapture\.entitlements/);
     assert.match(source, /INFOPLIST_FILE: Config\/Birdie(?:Phone|Share)-Info\.plist/);
     assert.match(source, /GENERATE_INFOPLIST_FILE: NO/);
-    assert.doesNotMatch(source, /^    (?:info|entitlements):\r?$/m);
+    assert.doesNotMatch(source, /^    entitlements:\r?$/m);
+    assert.match(source, /BirdieWatchWidget\/Info\.plist/);
     assert.match(source, /targets:\r?\n        - BirdieCaptureTests/);
   }
 });
