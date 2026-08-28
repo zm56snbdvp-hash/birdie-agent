@@ -1,6 +1,8 @@
 import './styles.css';
 import { RuntimeBridge, formatDiagnosticError } from './runtime-bridge.js';
 
+const BUILD_ID = __BIRDIE_DESKTOP_BUILD_ID__;
+
 // Birdie is intentionally headless in the desktop alpha. The WebView exists
 // only as a native IPC/event anchor; all user-facing work is voice-first and
 // desktop.app.open commands are executed by the Tauri host.
@@ -8,6 +10,7 @@ const app = document.querySelector('#app');
 app?.replaceChildren();
 document.documentElement.dataset.birdieMode = 'headless';
 document.body.dataset.birdieMode = 'headless';
+document.documentElement.dataset.buildId = BUILD_ID;
 
 const state = {
   runtime: 'CONNECTING',
@@ -45,6 +48,8 @@ const bridge = new RuntimeBridge({
     document.body.dataset.lastDiagnostic = `${stage ?? 'unknown'}:${detail ?? ''}`.slice(0, 240);
   },
 });
+
+bridge.reportDiagnostic('DESKTOP_FRONTEND', `buildId=${BUILD_ID} mode=headless`);
 
 window.__birdieRuntime = Object.freeze({
   state,

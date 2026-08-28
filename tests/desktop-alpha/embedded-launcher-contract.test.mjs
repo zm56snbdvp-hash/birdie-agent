@@ -19,7 +19,10 @@ test('embedded launcher builds and fingerprints the current frontend before Taur
   assert.match(launcher, /Frontend bundle does not contain build ID \$buildId/);
   assert.match(launcher, /Get-FileHash -LiteralPath \$desktopExe/);
   assert.match(launcher, /desktop-runtime-diagnostic\.log/);
-  assert.match(launcher, /DESKTOP BRIDGE READY/);
+  assert.match(launcher, /DESKTOP BRIDGE PROVEN/);
+  assert.match(launcher, /DESKTOP STABLE READY/);
+  assert.match(launcher, /ReadyHoldSeconds/);
+  assert.match(launcher, /STABILITY_GATE_COMPLETE/);
   assert.match(launcher, /Desktop bridge proof failed/);
   assert.doesNotMatch(
     launcher,
@@ -28,7 +31,31 @@ test('embedded launcher builds and fingerprints the current frontend before Taur
   );
 });
 
-test('desktop diagnostics cover every native, Tauri, JS and DOM boundary', async () => {
+test('embedded launcher requires matching native and WebView identities before sustained READY', async () => {
+  const launcher = await source('scripts/run-birdie-desktop-embedded.ps1');
+
+  assert.match(launcher, /DESKTOP_FRONTEND source=js buildId=\$buildId mode=headless/);
+  assert.match(
+    launcher,
+    /DESKTOP_START pid=\$\(\$desktopProcess\.Id\) buildId=\$buildId/,
+  );
+  assert.match(launcher, /\$nativeBuildReady/);
+  assert.match(launcher, /\$frontendReady -and \$nativeBuildReady/);
+  assert.match(launcher, /RUNTIME_DISCONNECTED/);
+  assert.match(launcher, /microphone left the ENABLED state/);
+  assert.match(launcher, /Get-BirdieOwnedProcesses/);
+  assert.match(launcher, /originalEnvironment/);
+  assert.match(launcher, /Get-LatestReadyJsSnapshotTimestamp/);
+  assert.match(launcher, /brainState=READY/);
+  assert.match(launcher, /ValidateRange\(60, 600\)/);
+  assert.equal(
+    launcher.match(/Stop-BirdieProcesses/g)?.length,
+    2,
+    'global process cleanup may run only during preflight, never final cleanup',
+  );
+});
+
+test('headless desktop diagnostics cover every native, Tauri, IPC and JS boundary', async () => {
   const [nativeHost, bridge, main, launcher] = await Promise.all([
     source('apps/desktop/src-tauri/src/lib.rs'),
     source('apps/desktop/src/runtime-bridge.js'),
@@ -48,8 +75,8 @@ test('desktop diagnostics cover every native, Tauri, JS and DOM boundary', async
     'TAURI_INVOKE_RESULT',
     'JS_SNAPSHOT',
     'JS_STATUS',
-    'MAIN_STATE',
-    'DOM_STATE',
+    'DESKTOP_FRONTEND',
+    'STABILITY_GATE_COMPLETE',
     'RUNTIME_DISCONNECTED',
     'ERROR',
   ];
@@ -57,6 +84,7 @@ test('desktop diagnostics cover every native, Tauri, JS and DOM boundary', async
   for (const event of requiredEvents) {
     assert.ok(combined.includes(event), `missing diagnostic event ${event}`);
   }
+  assert.match(main, /mode=headless/);
 });
 
 test('Windows CI parses the hardware launcher and verifies embedded build identity', async () => {
@@ -73,5 +101,6 @@ test('Windows CI parses the hardware launcher and verifies embedded build identi
   assert.match(workflow, /ready-runtime-fixture\.mjs/);
   assert.match(workflow, /READY_RUNTIME_FIXTURE presence=IDLE microphone=ENABLED/);
   assert.match(workflow, /RUST_STATE_UPDATED/);
-  assert.match(workflow, /DOM_STATE source=js state=IDLE/);
+  assert.match(workflow, /JS_SNAPSHOT source=js/);
+  assert.doesNotMatch(workflow, /DOM_STATE source=js state=IDLE/);
 });

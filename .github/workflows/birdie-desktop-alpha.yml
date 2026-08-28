@@ -196,7 +196,7 @@ jobs:
             $hello = $false
             $rustReady = $false
             $jsReady = $false
-            $domReady = $false
+            $projectionReady = $false
             do {
               $core.Refresh()
               if ($core.HasExited) {
@@ -214,30 +214,35 @@ jobs:
                   $_ -like '*RUST_STATE_UPDATED*' -and
                   $_ -like '*lifecycle=READY*' -and
                   $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*microphoneState=ENABLED*' -and
                   $_ -like '*brainState=READY*'
                 }).Count -gt 0
                 $jsReady = @($lines | Where-Object {
                   $_ -like '*TAURI_INVOKE_RESULT source=js command=runtime_get_snapshot*' -and
                   $_ -like '*lifecycle=READY*' -and
                   $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*microphoneState=ENABLED*' -and
                   $_ -like '*brainState=READY*'
                 }).Count -gt 0
-                $domReady = @($lines | Where-Object {
-                  $_ -like '*DOM_STATE source=js state=IDLE*' -and
-                  $_ -like '*runtime=Wake-on-Speak*'
+                $projectionReady = @($lines | Where-Object {
+                  $_ -like '*JS_SNAPSHOT source=js*' -and
+                  $_ -like '*lifecycle=READY*' -and
+                  $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*microphoneState=ENABLED*' -and
+                  $_ -like '*brainState=READY*'
                 }).Count -gt 0
-                if ($nativePipe -and $hello -and $rustReady -and $jsReady -and $domReady) { break }
+                if ($nativePipe -and $hello -and $rustReady -and $jsReady -and $projectionReady) { break }
               }
               Start-Sleep -Milliseconds 250
             } while ([DateTime]::UtcNow -lt $deadline)
 
-            if (-not ($nativePipe -and $hello -and $rustReady -and $jsReady -and $domReady)) {
+            if (-not ($nativePipe -and $hello -and $rustReady -and $jsReady -and $projectionReady)) {
               if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic | Out-Host }
               if (Test-Path -LiteralPath $coreOut) { Get-Content -LiteralPath $coreOut | Out-Host }
               if (Test-Path -LiteralPath $coreErr) { Get-Content -LiteralPath $coreErr | Out-Host }
               if (Test-Path -LiteralPath $fixtureOut) { Get-Content -LiteralPath $fixtureOut | Out-Host }
               if (Test-Path -LiteralPath $fixtureErr) { Get-Content -LiteralPath $fixtureErr | Out-Host }
-              throw 'Live Core named pipe did not reach the visible embedded WebView READY state.'
+              throw 'Live Core named pipe did not reach the headless embedded WebView READY state.'
             }
           }
           finally {
