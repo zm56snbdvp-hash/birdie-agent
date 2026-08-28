@@ -210,7 +210,7 @@ public actor CaptureQueueProcessor {
         store: CaptureQueueStore,
         adapter: any CaptureTransportAdapter,
         retryDelays: [TimeInterval] = [30, 120, 600, 3_600],
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.store = store
         self.adapter = adapter
