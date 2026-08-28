@@ -97,7 +97,8 @@ test("macOS verification script proves XcodeGen, tests, unsigned build and embed
   assert.match(script, /node --test test\/apple-capture-contract\.test\.mjs/);
   assert.match(script, /xcodegen generate\r?\n/);
   assert.match(script, /xcodegen generate --spec project\.personal\.yml/);
-  assert.match(script, /git status --porcelain --untracked-files=all -- Config/);
+  assert.match(script, /git diff --exit-code -- Config/);
+  assert.match(script, /git ls-files --others --exclude-standard -- Config/);
   assert.match(script, /-scheme BirdieCaptureTests/);
   assert.match(script, /CODE_SIGNING_ALLOWED=NO/);
   assert.match(script, /CODE_SIGNING_REQUIRED=NO/);
