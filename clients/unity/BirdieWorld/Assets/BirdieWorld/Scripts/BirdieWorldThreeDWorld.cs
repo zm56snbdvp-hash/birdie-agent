@@ -143,7 +143,7 @@ namespace BirdieWorld
 
         private void BuildEnvironment()
         {
-            var path = CreateMaterial("WarmStone", new Color(0.56f, 0.39f, 0.19f, 1f), 0.05f, 0.35f);
+            var path = CreateMaterial("WarmStone", new Color(0.74f, 0.46f, 0.20f, 1f), 0.05f, 0.35f, new Color(0.07f, 0.03f, 0.008f, 1f));
             var wood = CreateMaterial("DarkWood", new Color(0.25f, 0.12f, 0.06f, 1f), 0.05f, 0.25f);
             var roof = CreateMaterial("RoofGreen", new Color(0.045f, 0.17f, 0.12f, 1f), 0.1f, 0.25f);
             var brass = CreateMaterial("Brass", gold, 0.70f, 0.65f, new Color(0.15f, 0.08f, 0.015f, 1f));
@@ -158,18 +158,18 @@ namespace BirdieWorld
             // The forecourt surfaces are intentionally open underneath. This
             // avoids a large base mesh hiding the playable plaza or player on
             // WebGL variants whose built-in cube bounds differ from the editor.
-            Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.03f, 12f), new Vector3(9f, 0.12f, 58f), path);
-            Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.12f, -1f), new Vector3(17f, 0.16f, 11f), path);
-            Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.23f, 4.3f), new Vector3(17f, 0.16f, 0.35f), brass);
+            Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.36f, 12f), new Vector3(9f, 0.55f, 58f), path);
+            Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.50f, -1f), new Vector3(17f, 0.70f, 11f), path);
+            Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.90f, 4.3f), new Vector3(17f, 0.14f, 0.35f), brass);
             var plazaInlay = CreateMaterial("PlazaInlay", new Color(0.25f, 0.18f, 0.10f, 1f), 0.15f, 0.25f);
             for (var x = -7f; x <= 7f; x += 2.0f)
-                Primitive(PrimitiveType.Cube, $"PlazaInlayX_{x:0}", new Vector3(x, 0.235f, -1f), new Vector3(0.055f, 0.035f, 10.2f), plazaInlay);
+                Primitive(PrimitiveType.Cube, $"PlazaInlayX_{x:0}", new Vector3(x, 0.91f, -1f), new Vector3(0.055f, 0.035f, 10.2f), plazaInlay);
             for (var z = -5f; z <= 3f; z += 2.0f)
-                Primitive(PrimitiveType.Cube, $"PlazaInlayZ_{z:0}", new Vector3(0f, 0.24f, z), new Vector3(16.8f, 0.035f, 0.055f), plazaInlay);
+                Primitive(PrimitiveType.Cube, $"PlazaInlayZ_{z:0}", new Vector3(0f, 0.91f, z), new Vector3(16.8f, 0.035f, 0.055f), plazaInlay);
             Primitive(PrimitiveType.Cube, "River", new Vector3(0f, -0.02f, 12.5f), new Vector3(70f, 0.10f, 5.2f), water);
-            Primitive(PrimitiveType.Cube, "Bridge", new Vector3(0f, 0.18f, 12.5f), new Vector3(10f, 0.38f, 8f), wood);
-            Primitive(PrimitiveType.Cube, "BridgeRailLeft", new Vector3(-4.3f, 1.05f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
-            Primitive(PrimitiveType.Cube, "BridgeRailRight", new Vector3(4.3f, 1.05f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
+            Primitive(PrimitiveType.Cube, "Bridge", new Vector3(0f, 0.78f, 12.5f), new Vector3(10f, 0.38f, 8f), wood);
+            Primitive(PrimitiveType.Cube, "BridgeRailLeft", new Vector3(-4.3f, 1.65f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
+            Primitive(PrimitiveType.Cube, "BridgeRailRight", new Vector3(4.3f, 1.65f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
 
             BuildStation(wood, roof, brass, train, window);
             BuildNest(wood, roof, brass, window);
@@ -178,8 +178,8 @@ namespace BirdieWorld
             BuildTrees(foliage, foliageLight, wood);
             BuildLanterns(brass, wood);
 
-            nestMarker = BuildMarker("NestArrivalMarker", new Vector3(0f, 0.12f, 24.0f), brass);
-            trainMarker = BuildMarker("ExpressWorldMarker", new Vector3(0f, 0.12f, -4.0f), brass);
+            nestMarker = BuildMarker("NestArrivalMarker", new Vector3(0f, 0.86f, 24.0f), brass);
+            trainMarker = BuildMarker("ExpressWorldMarker", new Vector3(0f, 0.86f, -4.0f), brass);
             CreateWorldLabel("TheNestLabel", "THE NEST", new Vector3(0f, 7.8f, 24.0f), 0.10f, gold);
             CreateWorldLabel("CoinShopLabel", "COIN SHOP", new Vector3(-15f, 5.5f, 18.0f), 0.07f, ivory);
             CreateWorldLabel("CafeLabel", "BIRDIE CAFE", new Vector3(15f, 5.5f, 20.0f), 0.07f, ivory);
@@ -361,7 +361,7 @@ namespace BirdieWorld
 
         private void ResetWorldView()
         {
-            playerPosition = new Vector3(0f, 0.15f, -1.0f);
+            playerPosition = new Vector3(0f, 0.85f, -1.0f);
             hasArrivedAtNest = false;
             if (playerRoot == null)
                 BuildPlayer();
