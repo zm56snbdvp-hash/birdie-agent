@@ -101,18 +101,29 @@ public struct CaptureSubmissionRequest: Codable, Equatable, Sendable {
 public struct CaptureSubmissionReceipt: Codable, Equatable, Sendable {
     public enum Disposition: String, Codable, Sendable {
         case localPreviewOnly
+        case acceptedByBackend
     }
 
     public let captureID: UUID
     public let idempotencyKey: String
     public let disposition: Disposition
     public let receivedAt: Date
+    public let serverReceiptID: String?
+    public let processingState: String?
 
-    public init(request: CaptureSubmissionRequest, receivedAt: Date = Date()) {
+    public init(
+        request: CaptureSubmissionRequest,
+        receivedAt: Date = Date(),
+        disposition: Disposition = .localPreviewOnly,
+        serverReceiptID: String? = nil,
+        processingState: String? = nil
+    ) {
         self.captureID = request.captureID
         self.idempotencyKey = request.idempotencyKey
-        self.disposition = .localPreviewOnly
+        self.disposition = disposition
         self.receivedAt = receivedAt
+        self.serverReceiptID = serverReceiptID
+        self.processingState = processingState
     }
 }
 
@@ -144,6 +155,194 @@ public enum CaptureAdapterError: LocalizedError, Equatable {
 
 public protocol CaptureTransportAdapter: Sendable {
     func submit(_ request: CaptureSubmissionRequest) async throws -> CaptureSubmissionReceipt
+}
+
+public struct CaptureBackendConfiguration: Sendable, Equatable {
+    public let baseURL: URL
+    public let capturesPath: String
+
+    public init(baseURL: URL, capturesPath: String = "/v1/captures") throws {
+        guard baseURL.scheme?.lowercased() == "https", baseURL.host != nil else {
+            throw CaptureAdapterError.permanent(
+                code: "invalid_backend_configuration",
+                message: "Der Capture-Backend-Endpunkt muss HTTPS verwenden."
+            )
+        }
+        let normalizedPath = capturesPath.hasPrefix("/") ? capturesPath : "/\(capturesPath)"
+        guard normalizedPath.contains("/v1/") else {
+            throw CaptureAdapterError.permanent(
+                code: "invalid_backend_configuration",
+                message: "Der Capture-Backend-Endpunkt muss versioniert sein."
+            )
+        }
+        self.baseURL = baseURL
+        self.capturesPath = normalizedPath
+    }
+
+    var capturesURL: URL {
+        baseURL.appendingPathComponent(capturesPath.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+    }
+}
+
+public protocol CaptureAccessTokenProvider: Sendable {
+    func accessToken() async throws -> String?
+}
+
+/// Backend adapter scaffold. It is intentionally not used by the app until the
+/// contract in BIRDIE_CAPTURE_BACKEND_CONTRACT.md is approved and a token provider
+/// is supplied by the authenticated main-app session.
+public struct HTTPSCaptureBackendAdapter: CaptureTransportAdapter {
+    private let configuration: CaptureBackendConfiguration
+    private let tokenProvider: any CaptureAccessTokenProvider
+
+    public init(
+        configuration: CaptureBackendConfiguration,
+        tokenProvider: any CaptureAccessTokenProvider
+    ) {
+        self.configuration = configuration
+        self.tokenProvider = tokenProvider
+    }
+
+    public func submit(_ request: CaptureSubmissionRequest) async throws -> CaptureSubmissionReceipt {
+        guard request.originalPolicy == .derivedTextOnly else {
+            throw CaptureAdapterError.permanent(
+                code: "original_upload_not_enabled",
+                message: "Originaldatei-Uploads benötigen zuerst den freigegebenen Background-Upload-Vertrag."
+            )
+        }
+        guard let token = try await tokenProvider.accessToken(), !token.isEmpty else {
+            throw CaptureAdapterError.permanent(
+                code: "authentication_required",
+                message: "Für die externe Übergabe ist eine gültige Anmeldung erforderlich."
+            )
+        }
+
+        var urlRequest = URLRequest(url: configuration.capturesURL)
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = 30
+        urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue(request.idempotencyKey, forHTTPHeaderField: "Idempotency-Key")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try Self.encode(BackendCaptureRequest(request: request))
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: urlRequest)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw CaptureAdapterError.retryable(code: "invalid_response", message: "Das Backend hat keine HTTP-Antwort geliefert.")
+            }
+            switch httpResponse.statusCode {
+            case 200, 202:
+                guard let receipt = try? Self.decode(BackendCaptureResponse.self, from: data),
+                      receipt.captureID == request.captureID,
+                      !receipt.serverReceiptID.isEmpty else {
+                    throw CaptureAdapterError.permanent(code: "invalid_backend_response", message: "Die Backend-Antwort ist unvollständig.")
+                }
+                return CaptureSubmissionReceipt(
+                    request: request,
+                    disposition: .acceptedByBackend,
+                    serverReceiptID: receipt.serverReceiptID,
+                    processingState: receipt.processingState
+                )
+            case 401, 403:
+                throw CaptureAdapterError.permanent(code: "authentication_rejected", message: "Die Backend-Anmeldung wurde abgelehnt.")
+            case 409:
+                throw CaptureAdapterError.permanent(code: "idempotency_conflict", message: "Der Idempotenzschlüssel ist bereits mit anderem Inhalt belegt.")
+            case 413:
+                throw CaptureAdapterError.permanent(code: "payload_too_large", message: "Der Capture ist für das Backend zu groß.")
+            case 408, 429, 500...599:
+                throw CaptureAdapterError.retryable(code: "backend_temporary", message: "Das Backend ist vorübergehend nicht verfügbar.")
+            default:
+                throw CaptureAdapterError.permanent(code: "backend_rejected", message: "Das Backend hat den Capture abgelehnt (HTTP \(httpResponse.statusCode)).")
+            }
+        } catch let error as CaptureAdapterError {
+            throw error
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            throw CaptureAdapterError.retryable(code: "network_unavailable", message: "Die externe Übergabe konnte nicht erreicht werden.")
+        }
+    }
+
+    private static func encode<T: Encodable>(_ value: T) throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(value)
+    }
+
+    private static func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(type, from: data)
+    }
+}
+
+private struct BackendCaptureRequest: Encodable {
+    let contract: String
+    let captureID: UUID
+    let idempotencyKey: String
+    let createdAt: Date
+    let source: String
+    let intent: CaptureIntent
+    let parts: [BackendCapturePart]
+    let derivedText: String?
+    let suggestions: [CaptureSuggestion]
+    let requiresUserReview: Bool
+    let originalPolicy: CaptureOriginalPolicy
+    let pcTarget: String? = nil
+
+    init(request: CaptureSubmissionRequest) {
+        self.contract = request.contract
+        self.captureID = request.captureID
+        self.idempotencyKey = request.idempotencyKey
+        self.createdAt = request.createdAt
+        self.source = request.source.backendValue
+        self.intent = request.requestedIntent
+        self.parts = request.parts.map(BackendCapturePart.init)
+        self.derivedText = request.parts.compactMap(\.inlineText).joined(separator: "\n\n").nilIfEmpty
+        self.suggestions = request.suggestions
+        self.requiresUserReview = request.requiresUserReview
+        self.originalPolicy = request.originalPolicy
+    }
+}
+
+private extension CaptureSource {
+    var backendValue: String {
+        switch self {
+        case .shareExtension:
+            "share"
+        case .document, .receipt, .businessCard, .whiteboard, .errorMessage:
+            "lens"
+        }
+    }
+}
+
+private struct BackendCapturePart: Encodable {
+    let partID: UUID
+    let kind: CapturePayloadKind
+    let displayName: String
+    let contentType: String?
+    let byteCount: Int64?
+    let sha256: String?
+
+    init(_ part: CaptureContractPart) {
+        self.partID = part.id
+        self.kind = part.kind
+        self.displayName = part.displayName
+        self.contentType = part.typeIdentifier
+        self.byteCount = part.byteCount
+        self.sha256 = part.sha256
+    }
+}
+
+private struct BackendCaptureResponse: Decodable {
+    let captureID: UUID
+    let serverReceiptID: String
+    let processingState: String?
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
 
 /// Default adapter until a reviewed backend exists. It writes only the versioned request

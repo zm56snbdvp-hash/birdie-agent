@@ -56,7 +56,11 @@ test("Share Extension and local adapter cannot publish or reuse Watch credential
     shareModel.match(/return try await withCheckedThrowingContinuation/g)?.length,
     3,
   );
-  assert.doesNotMatch(transport, /URLSession|WatchRelay|WatchTokenStore/);
+  const localAdapter = transport.slice(
+    transport.indexOf("public struct LocalCaptureMockAdapter"),
+    transport.indexOf("public actor CaptureQueueProcessor"),
+  );
+  assert.doesNotMatch(localAdapter, /URLSession|WatchRelay|WatchTokenStore/);
   assert.match(transport, /birdie\.capture\.v1/);
   assert.match(transport, /localPreviewOnly/);
   assert.match(transport, /requiresUserReview/);
@@ -108,7 +112,14 @@ test("backend contract is explicit but remains disabled behind the local mock", 
   assert.match(contract, /derivedTextOnly\|includeOriginals/);
   assert.match(contract, /background `URLSession`/);
   assert.match(transport, /LocalCaptureMockAdapter/);
-  assert.doesNotMatch(transport, /URLSession/);
+  assert.match(transport, /HTTPSCaptureBackendAdapter/);
+  assert.match(transport, /original_upload_not_enabled/);
+  assert.match(transport, /Idempotency-Key/);
+  const localAdapter = transport.slice(
+    transport.indexOf("public struct LocalCaptureMockAdapter"),
+    transport.indexOf("public actor CaptureQueueProcessor"),
+  );
+  assert.doesNotMatch(localAdapter, /URLSession/);
   assert.match(architecture, /BIRDIE_CAPTURE_BACKEND_CONTRACT\.md/);
 });
 
