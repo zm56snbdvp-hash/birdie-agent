@@ -4,6 +4,8 @@
 //! hooks for a future authenticated gateway integration; exposing them to the
 //! WebView would bypass the signed-command and approval boundary.
 
+#![allow(dead_code)]
+
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum PocketRelayHostError {
     InvalidHttpsUrl,
@@ -13,7 +15,13 @@ pub(crate) enum PocketRelayHostError {
 }
 
 pub(crate) fn validate_https_url(url: &str) -> Result<(), PocketRelayHostError> {
-    if url.is_empty() || url.len() > 2048 || url.contains('\0') {
+    if url.is_empty()
+        || url.len() > 2048
+        || url.contains('\0')
+        || url
+            .chars()
+            .any(|character| character.is_whitespace() || character.is_control())
+    {
         return Err(PocketRelayHostError::InvalidHttpsUrl);
     }
     let Some(authority_and_path) = url.strip_prefix("https://") else {
@@ -23,13 +31,7 @@ pub(crate) fn validate_https_url(url: &str) -> Result<(), PocketRelayHostError> 
         .find(['/', '?', '#'])
         .unwrap_or(authority_and_path.len());
     let authority = &authority_and_path[..authority_end];
-    if authority.is_empty()
-        || authority.contains('@')
-        || authority.contains('\\')
-        || authority
-            .chars()
-            .any(|character| character.is_whitespace() || character.is_control())
-    {
+    if authority.is_empty() || authority.contains('@') || authority.contains('\\') {
         return Err(PocketRelayHostError::InvalidHttpsUrl);
     }
     Ok(())
@@ -102,6 +104,10 @@ mod tests {
         );
         assert_eq!(
             validate_https_url("https://example.com\\evil"),
+            Err(PocketRelayHostError::InvalidHttpsUrl)
+        );
+        assert_eq!(
+            validate_https_url("https://example.com/raw space"),
             Err(PocketRelayHostError::InvalidHttpsUrl)
         );
     }
