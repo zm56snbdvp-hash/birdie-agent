@@ -96,6 +96,22 @@ test("local queue is protected, integrity checked and recoverable", async () => 
   assert.match(writer, /isExcludedFromBackup = true/);
 });
 
+test("backend contract is explicit but remains disabled behind the local mock", async () => {
+  const [contract, transport, architecture] = await Promise.all([
+    read("docs/apple/BIRDIE_CAPTURE_BACKEND_CONTRACT.md"),
+    read("clients/apple/CaptureCore/CaptureTransport.swift"),
+    read("docs/apple/BIRDIE_CAPTURE_ARCHITECTURE.md"),
+  ]);
+  assert.match(contract, /Status: \*\*proposed, not enabled in the app\*\*/);
+  assert.match(contract, /Idempotency-Key/);
+  assert.match(contract, /capture_idempotency_conflict/);
+  assert.match(contract, /derivedTextOnly\|includeOriginals/);
+  assert.match(contract, /background `URLSession`/);
+  assert.match(transport, /LocalCaptureMockAdapter/);
+  assert.doesNotMatch(transport, /URLSession/);
+  assert.match(architecture, /BIRDIE_CAPTURE_BACKEND_CONTRACT\.md/);
+});
+
 test("macOS verification script proves XcodeGen, tests, unsigned build and embedding", async () => {
   const script = await read("clients/apple/scripts/verify-capture.sh");
   assert.match(script, /node --test test\/apple-capture-contract\.test\.mjs/);

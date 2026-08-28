@@ -31,7 +31,7 @@ Queue-Zustände: `staged/queued → processing → readyForReview`. Transiente A
 
 Ein Request wird abgelehnt, solange die lokale Übernahme nicht bestätigt ist. `derivedTextOnly` darf keine Bild-, PDF- oder Datei-Originale enthalten. Vor der lokalen Adapterübergabe werden Größe und SHA-256 jeder staged Datei erneut geprüft; veränderte Dateien enden ohne Outbox-Schreibvorgang als permanenter Vertragsfehler.
 
-Ein möglicher HTTP-Vertrag ist bewusst **nicht aktiviert**. Vor einem Produktionsadapter müssen Authentifizierung, Upload-Handshake, serverseitige Idempotenz und PC-Adressierung separat freigegeben werden. Der erwartete Idempotenzmechanismus wäre ein `Idempotency-Key` mit identischer Antwort für denselben Key und identischen Payload-Digest sowie `409` bei abweichendem Inhalt. Watch-Token sind dafür ausgeschlossen.
+Ein möglicher HTTP-Vertrag ist bewusst **nicht aktiviert**. Der vorgeschlagene Vertrag ist in [BIRDIE_CAPTURE_BACKEND_CONTRACT.md](BIRDIE_CAPTURE_BACKEND_CONTRACT.md) versioniert. Vor einem Produktionsadapter müssen Authentifizierung, Upload-Handshake, serverseitige Idempotenz, PC-Adressierung und Aufbewahrung separat freigegeben werden. Watch-Token sind dafür ausgeschlossen.
 
 ## Lens und Datenschutz
 
