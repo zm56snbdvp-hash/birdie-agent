@@ -31,6 +31,7 @@ platform :ios do
 
     profiles = {
       "de.birdieandbreakfast.birdie" => "Birdie AppStore",
+      "de.birdieandbreakfast.birdie.daypilot" => "Birdie Day Pilot AppStore",
       "de.birdieandbreakfast.birdie.watchkitapp" => "Birdie Watch AppStore",
       "de.birdieandbreakfast.birdie.watchkitapp.widget" => "Birdie Watch Widget AppStore"
     }
