@@ -127,4 +127,138 @@ final class DayPilotSnapshotTests: XCTestCase {
         XCTAssertEqual(snapshot.contractVersion, 1)
         XCTAssertNil(snapshot.nextTask)
     }
+
+    func testRefreshPublishesLocalDataWhenRemoteLoadFails() async throws {
+        let suite = "birdie.remote-failure-tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DayPilotSnapshotStore(defaults: defaults)
+        let now = Date(timeIntervalSince1970: 2_000)
+        let localTask = DayPilotItem(
+            id: "local-task",
+            kind: .task,
+            title: "Lokale Erinnerung",
+            date: now.addingTimeInterval(60)
+        )
+        let localEvent = DayPilotItem(
+            id: "local-event",
+            kind: .calendar,
+            title: "Lokaler Termin",
+            date: now.addingTimeInterval(120)
+        )
+        let eventStore = StubDayPilotEventStore(events: [localEvent], reminders: [localTask])
+        let remote = SequencedRemoteProvider(snapshot: nil)
+        let viewModel = DayPilotViewModel(
+            eventStore: eventStore,
+            remoteProvider: remote,
+            snapshotStore: store,
+            now: { now }
+        )
+
+        await viewModel.refresh()
+
+        XCTAssertEqual(viewModel.snapshot.nextTask, localTask)
+        XCTAssertEqual(viewModel.snapshot.nextEvent, localEvent)
+        XCTAssertEqual(viewModel.snapshot.openReminderCount, 1)
+        XCTAssertEqual(viewModel.statusMessage, RemoteFailure.unavailable.localizedDescription)
+        XCTAssertEqual(store.load(now: now), viewModel.snapshot)
+    }
+
+    func testRefreshRetainsLastRemoteContributionAfterTransientFailure() async throws {
+        let suite = "birdie.remote-retention-tests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DayPilotSnapshotStore(defaults: defaults)
+        let now = Date(timeIntervalSince1970: 3_000)
+        let remoteSnapshot = DayPilotRemoteSnapshot(
+            generatedAt: now,
+            nextTask: DayPilotRemoteTask(id: "remote-task", title: "Remote-Aufgabe", dueAt: nil),
+            briefing: "Remote-Briefing",
+            openApprovals: [DayPilotApproval(id: "approval", title: "Prüfen", detail: "Vor Freigabe")]
+        )
+        let eventStore = StubDayPilotEventStore(
+            events: [],
+            reminders: [DayPilotItem(id: "local-1", kind: .task, title: "Lokal eins", date: nil)]
+        )
+        let remote = SequencedRemoteProvider(snapshot: remoteSnapshot)
+        let viewModel = DayPilotViewModel(
+            eventStore: eventStore,
+            remoteProvider: remote,
+            snapshotStore: store,
+            now: { now }
+        )
+
+        await viewModel.refresh()
+        eventStore.events = [
+            DayPilotItem(id: "local-event", kind: .calendar, title: "Neuer Termin", date: now)
+        ]
+        eventStore.reminders = [
+            DayPilotItem(id: "local-2", kind: .task, title: "Lokal zwei", date: nil),
+            DayPilotItem(id: "local-3", kind: .task, title: "Lokal drei", date: nil)
+        ]
+
+        await viewModel.refresh()
+
+        XCTAssertEqual(viewModel.snapshot.nextTask?.id, "remote-task")
+        XCTAssertEqual(viewModel.snapshot.nextEvent?.id, "local-event")
+        XCTAssertEqual(viewModel.snapshot.openReminderCount, 2)
+        XCTAssertEqual(viewModel.snapshot.nextApproval?.id, "approval")
+        XCTAssertEqual(viewModel.snapshot.briefing, "Remote-Briefing")
+        XCTAssertEqual(viewModel.statusMessage, RemoteFailure.unavailable.localizedDescription)
+    }
+}
+
+private enum RemoteFailure: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? { "Remote vorübergehend nicht erreichbar." }
+}
+
+private actor SequencedRemoteProvider: DayPilotRemoteProviding {
+    private let snapshot: DayPilotRemoteSnapshot?
+    private var requestCount = 0
+
+    init(snapshot: DayPilotRemoteSnapshot?) {
+        self.snapshot = snapshot
+    }
+
+    func load() async throws -> DayPilotRemoteSnapshot {
+        requestCount += 1
+        guard requestCount == 1, let snapshot else {
+            throw RemoteFailure.unavailable
+        }
+        return snapshot
+    }
+}
+
+@MainActor
+private final class StubDayPilotEventStore: DayPilotEventProviding {
+    var calendarAccess: DayPilotAccessState = .granted
+    var reminderAccess: DayPilotAccessState = .granted
+    var events: [DayPilotItem]
+    var reminders: [DayPilotItem]
+
+    init(events: [DayPilotItem], reminders: [DayPilotItem]) {
+        self.events = events
+        self.reminders = reminders
+    }
+
+    func requestCalendarAccess() async throws -> Bool { true }
+    func requestReminderAccess() async throws -> Bool { true }
+
+    func load(now: Date) async -> (events: [DayPilotItem], reminders: [DayPilotItem]) {
+        (events, reminders)
+    }
+
+    func prepareProposal(
+        kind: DayPilotProposal.Kind,
+        title: String,
+        date: Date
+    ) throws -> DayPilotProposal {
+        throw DayPilotEventStoreError.invalidProposal
+    }
+
+    func applyConfirmed(_ proposal: DayPilotProposal) throws {
+        throw DayPilotEventStoreError.invalidProposal
+    }
 }

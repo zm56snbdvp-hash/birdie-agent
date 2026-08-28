@@ -13,6 +13,7 @@ final class DayPilotViewModel: ObservableObject {
     private let remoteProvider: (any DayPilotRemoteProviding)?
     private let snapshotStore: DayPilotSnapshotStore
     private let now: () -> Date
+    private var lastRemoteSnapshot: DayPilotRemoteSnapshot?
 
     init(
         eventStore: (any DayPilotEventProviding)? = nil,
@@ -37,15 +38,21 @@ final class DayPilotViewModel: ObservableObject {
         calendarAccess = eventStore.calendarAccess
         reminderAccess = eventStore.reminderAccess
         let data = await eventStore.load(now: now())
-        var remote: DayPilotRemoteSnapshot?
+        var remote = lastRemoteSnapshot
         if let remoteProvider {
             do {
-                remote = try await remoteProvider.load()
+                let loadedRemote = try await remoteProvider.load()
+                lastRemoteSnapshot = loadedRemote
+                remote = loadedRemote
             } catch BirdieAgentClientError.notAuthenticated {
                 // EventKit remains useful without a configured remote token.
+                lastRemoteSnapshot = nil
+                remote = nil
             } catch {
                 statusMessage = error.localizedDescription
-                return
+                // A transient remote failure must never hide freshly loaded EventKit data.
+                // Keep the last valid remote contribution when one exists and still publish
+                // the current local calendar and reminder state below.
             }
         }
         snapshot = Self.makeSnapshot(
