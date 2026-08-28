@@ -247,7 +247,7 @@ struct LiveMissionView: View {
 
     private var confirmationTitle: String {
         guard let command = store.pendingCommand?.command else { return "Aktion bestätigen" }
-        switch command {
+        return switch command {
         case .pause:
             "Mission wirklich pausieren?"
         case .resume:
@@ -259,7 +259,7 @@ struct LiveMissionView: View {
 
     private var confirmationMessage: String {
         guard let command = store.pendingCommand?.command else { return "" }
-        switch command {
+        return switch command {
         case .pause:
             "Birdie stoppt nach dem aktuellen sicheren Übergang."
         case .resume:

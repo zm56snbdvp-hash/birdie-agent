@@ -258,7 +258,7 @@ final class LiveMissionStore: ObservableObject {
 
     private func commandIsAllowed(_ command: LiveMissionCommand, for mission: LiveMissionRecord) -> Bool {
         guard Date() < mission.expiresAt else { return false }
-        switch command {
+        return switch command {
         case .pause:
             mission.status == .running && mission.allowsPause
         case .resume:

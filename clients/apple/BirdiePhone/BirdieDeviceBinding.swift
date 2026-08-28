@@ -357,7 +357,7 @@ actor MockDeviceBindingClient: BirdieDeviceBindingClient {
         else {
             throw BirdieTrustError.invalidContract("Mock-Registration ist nicht gebunden.")
         }
-        let expectedHash = BirdieCanonicalJSON.sha256Digest(request.assertionPayload)
+        let expectedHash = try BirdieCanonicalJSON.sha256Digest(request.assertionPayload)
         guard request.clientDataHash == expectedHash,
               request.attestation == BirdieCanonicalJSON.base64URL(
                   Data("mock-attestation:\(expectedHash)".utf8)
