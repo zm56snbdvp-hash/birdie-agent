@@ -45,6 +45,7 @@ namespace BirdieWorld
         private Transform nestMarker;
         private Transform trainMarker;
         private CharacterProfile profile;
+        private Mesh fallbackCubeMesh;
         private Vector3 playerPosition;
         private Vector3 cameraVelocity;
         private Color signatureColor;
@@ -522,13 +523,33 @@ namespace BirdieWorld
 
             try
             {
-                return Resources.GetBuiltinResource<Mesh>(resourceName);
+                var mesh = Resources.GetBuiltinResource<Mesh>(resourceName);
+                if (mesh != null) return mesh;
             }
-            catch (Exception error)
+            catch (Exception)
             {
-                Debug.LogError($"BirdieWorld 3D mesh '{resourceName}' could not be loaded: {error.Message}");
-                return null;
+                // Some Unity versions expose the sphere mesh under a different
+                // built-in name. A render-only cube keeps the world visible in
+                // that case without reintroducing the unavailable Physics module.
             }
+
+            if (fallbackCubeMesh != null) return fallbackCubeMesh;
+            fallbackCubeMesh = new Mesh { name = "BirdieWorldFallbackCube" };
+            fallbackCubeMesh.vertices = new[]
+            {
+                new Vector3(-0.5f, -0.5f, -0.5f), new Vector3(0.5f, -0.5f, -0.5f),
+                new Vector3(0.5f, 0.5f, -0.5f), new Vector3(-0.5f, 0.5f, -0.5f),
+                new Vector3(-0.5f, -0.5f, 0.5f), new Vector3(0.5f, -0.5f, 0.5f),
+                new Vector3(0.5f, 0.5f, 0.5f), new Vector3(-0.5f, 0.5f, 0.5f)
+            };
+            fallbackCubeMesh.triangles = new[]
+            {
+                0, 2, 1, 0, 3, 2, 1, 2, 6, 1, 6, 5,
+                4, 5, 6, 4, 6, 7, 0, 4, 7, 0, 7, 3,
+                3, 7, 6, 3, 6, 2, 0, 1, 5, 0, 5, 4
+            };
+            fallbackCubeMesh.RecalculateNormals();
+            return fallbackCubeMesh;
         }
 
         private Material CreateMaterial(string name, Color color, float metallic, float smoothness, Color? emission = null)
@@ -536,7 +557,9 @@ namespace BirdieWorld
             // WebGL strips shaders that are only requested dynamically. Keep the
             // Standard lookup for editor/desktop lighting, then fall back to the
             // UI shader which is guaranteed to ship with this Canvas-only beta.
-            var shader = Shader.Find("Standard")
+            var shader = Resources.Load<Shader>("BirdieWorldColor")
+                ?? Shader.Find("BirdieWorld/Color")
+                ?? Shader.Find("Standard")
                 ?? Shader.Find("Universal Render Pipeline/Lit")
                 ?? Shader.Find("Unlit/Color")
                 ?? Shader.Find("Sprites/Default")
