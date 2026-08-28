@@ -10,7 +10,7 @@ use std::{
     thread::{self, JoinHandle},
     time::Duration,
 };
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const EVENT_SUPERVISOR_COMPONENT_CHANGED: &str = "supervisor:component-changed";
 
@@ -26,6 +26,7 @@ struct ProcessSpec {
     program: PathBuf,
     args: Vec<String>,
     working_directory: Option<PathBuf>,
+    environment: Vec<(String, String)>,
 }
 
 #[derive(Clone, Serialize)]
@@ -57,7 +58,7 @@ impl ProcessSupervisor {
         let voice_enabled = Arc::new(AtomicBool::new(true));
         let mut workers = Vec::new();
 
-        let specs = discover_specs();
+        let specs = discover_specs(&app);
         let voice_managed = specs.iter().any(|spec| spec.component == "birdie-voice");
         if specs.is_empty() {
             let _ = app.emit(
@@ -226,6 +227,9 @@ fn spawn_worker(
                     .stdout(Stdio::null())
                     .stderr(Stdio::null())
                     .env("BIRDIE_SUPERVISED_BY", "birdie-desktop");
+                for (key, value) in &spec.environment {
+                    command.env(key, value);
+                }
 
                 if let Some(directory) = &spec.working_directory {
                     command.current_dir(directory);
@@ -349,12 +353,8 @@ fn sleep_until_restart(stop: &AtomicBool, duration: Duration) -> bool {
     stop.load(Ordering::Acquire)
 }
 
-fn discover_specs() -> Vec<ProcessSpec> {
-    if !cfg!(debug_assertions) && !env_flag("BIRDIE_ENABLE_DEV_SUPERVISOR") {
-        return Vec::new();
-    }
-
-    let Some(repo_root) = repo_root() else {
+fn discover_specs(app: &AppHandle) -> Vec<ProcessSpec> {
+    let Some(runtime_root) = runtime_root(app) else {
         return Vec::new();
     };
 
@@ -362,20 +362,23 @@ fn discover_specs() -> Vec<ProcessSpec> {
     if !env_disabled("BIRDIE_MANAGE_CORE") {
         let core_program = env::var_os("BIRDIE_CORE_PROGRAM")
             .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("node"));
+            .unwrap_or_else(discover_node_program);
         let core_script = env::var_os("BIRDIE_CORE_SCRIPT")
             .map(PathBuf::from)
-            .unwrap_or_else(|| repo_root.join("services/core/src/server-main.mjs"));
-        specs.push(ProcessSpec {
-            component: "birdie-core",
-            program: core_program,
-            args: vec![core_script.to_string_lossy().into_owned()],
-            working_directory: Some(repo_root.clone()),
-        });
+            .unwrap_or_else(|| runtime_root.join("services/core/src/server-main.mjs"));
+        if core_script.is_file() || env::var_os("BIRDIE_CORE_SCRIPT").is_some() {
+            specs.push(ProcessSpec {
+                component: "birdie-core",
+                program: core_program,
+                args: vec![core_script.to_string_lossy().into_owned()],
+                working_directory: Some(runtime_root.clone()),
+                environment: Vec::new(),
+            });
+        }
     }
 
     if !env_disabled("BIRDIE_MANAGE_VOICE") {
-        if let Some(voice_program) = discover_voice_executable(&repo_root) {
+        if let Some(voice_program) = discover_voice_executable(&runtime_root) {
             let mut args = vec!["--mic".to_string()];
             if env_flag("BIRDIE_DEV_AUTO_ACCEPT") {
                 args.push("--dev-auto-accept".to_string());
@@ -384,7 +387,8 @@ fn discover_specs() -> Vec<ProcessSpec> {
                 component: "birdie-voice",
                 program: voice_program,
                 args,
-                working_directory: Some(repo_root),
+                working_directory: Some(runtime_root.clone()),
+                environment: discover_voice_environment(&runtime_root),
             });
         }
     }
@@ -402,9 +406,56 @@ fn discover_voice_executable(repo_root: &Path) -> Option<PathBuf> {
         repo_root.join("build/voice/Debug/birdie-voice-host.exe"),
         repo_root.join("services/voice/build/Release/birdie-voice-host.exe"),
         repo_root.join("services/voice/build/Debug/birdie-voice-host.exe"),
+        repo_root.join("birdie-voice-host.exe"),
+        repo_root.join("voice/birdie-voice-host.exe"),
     ]
     .into_iter()
     .find(|candidate| candidate.is_file())
+}
+
+fn discover_node_program() -> PathBuf {
+    #[cfg(windows)]
+    {
+        let candidates = [
+            PathBuf::from(r"C:\Program Files\nodejs\node.exe"),
+            PathBuf::from(r"C:\Program Files (x86)\nodejs\node.exe"),
+        ];
+        if let Some(candidate) = candidates.into_iter().find(|path| path.is_file()) {
+            return candidate;
+        }
+    }
+    PathBuf::from("node")
+}
+
+fn discover_voice_environment(runtime_root: &Path) -> Vec<(String, String)> {
+    let mut environment = Vec::new();
+    if env::var_os("BIRDIE_GATE_STT_PROVIDER").is_none() {
+        let model = env::var_os("BIRDIE_GATE_STT_MODEL")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| runtime_root.join("models/whisper/ggml-base.bin"));
+        if model.is_file() {
+            environment.push(("BIRDIE_GATE_STT_PROVIDER".into(), "whisper.cpp".into()));
+            environment.push((
+                "BIRDIE_GATE_STT_MODEL".into(),
+                model.to_string_lossy().into_owned(),
+            ));
+            environment.push(("BIRDIE_GATE_STT_LANGUAGE".into(), "de".into()));
+            environment.push(("BIRDIE_GATE_STT_THREADS".into(), "4".into()));
+            environment.push(("BIRDIE_GATE_STT_USE_GPU".into(), "0".into()));
+            environment.push(("BIRDIE_GATE_STT_FLASH_ATTN".into(), "0".into()));
+        }
+    }
+    if env::var_os("BIRDIE_TTS_PROVIDER").is_none() {
+        environment.push(("BIRDIE_TTS_PROVIDER".into(), "windows-sapi".into()));
+    }
+    environment
+}
+
+fn runtime_root(app: &AppHandle) -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        return repo_root();
+    }
+    app.path().resource_dir().ok()
 }
 
 fn repo_root() -> Option<PathBuf> {

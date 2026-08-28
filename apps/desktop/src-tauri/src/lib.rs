@@ -4,7 +4,8 @@ mod process_supervisor;
 mod surface;
 
 use desktop_commands::{
-    CommandDisposition, CommandName, DesktopCommand, DesktopCommandResult, DesktopExecutionLedger,
+    CommandDisposition, CommandName, DesktopApp, DesktopCommand, DesktopCommandResult,
+    DesktopExecutionLedger,
 };
 use local_store::{now_ms, CaptureEntry, FocusState, LocalStore};
 use process_supervisor::ProcessSupervisor;
@@ -15,9 +16,10 @@ use std::{
     fs::{File, OpenOptions},
     io::{BufRead, BufReader, Write},
     path::PathBuf,
+    process::Command,
     sync::{
-        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
-        Arc, Mutex,
+        atomic::{AtomicU64, Ordering},
+        Mutex,
     },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -1057,6 +1059,31 @@ fn compact_error_code(error: &str) -> String {
         .collect()
 }
 
+fn launch_desktop_app(app_id: DesktopApp) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        let (program, args): (&str, &[&str]) = match app_id {
+            // Explorer delegates URLs to the user's configured default browser.
+            DesktopApp::Browser => ("explorer.exe", &["https://www.google.com"]),
+            DesktopApp::Calculator => ("calc.exe", &[]),
+            DesktopApp::Files => ("explorer.exe", &[]),
+            DesktopApp::Notepad => ("notepad.exe", &[]),
+            DesktopApp::Settings => ("explorer.exe", &["ms-settings:"]),
+            DesktopApp::Terminal => ("powershell.exe", &["-NoLogo"]),
+        };
+        Command::new(program)
+            .args(args)
+            .spawn()
+            .map(|_| ())
+            .map_err(|error| format!("DESKTOP.APP.SPAWN_FAILED:{error}"))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = app_id;
+        Err("DESKTOP.APP.UNSUPPORTED_PLATFORM".to_string())
+    }
+}
+
 fn reject_invalid_desktop_command_message(
     app: &tauri::AppHandle,
     message: &Value,
@@ -1123,14 +1150,13 @@ fn execute_desktop_command(
     }
 
     let transition = match command.name {
-        CommandName::ModuleOpen => command
-            .module()
+        CommandName::ModuleOpen | CommandName::SurfaceSetMode => {
+            Err("DESKTOP.UI_REMOVED".to_string())
+        }
+        CommandName::AppOpen => command
+            .app()
             .map_err(str::to_string)
-            .and_then(|module| apply_surface_transition(app, DesktopMode::Control, Some(module))),
-        CommandName::SurfaceSetMode => command
-            .mode()
-            .map_err(str::to_string)
-            .and_then(|mode| apply_surface_transition(app, mode, None)),
+            .and_then(launch_desktop_app),
     };
     let result = match transition {
         Ok(_) => DesktopCommandResult::acknowledged(&command, &connection_id, now_ms()),
@@ -1224,177 +1250,6 @@ fn reset_overlay_after_page_load(app: &tauri::AppHandle) {
     emit_surface_snapshot(app, &snapshot);
 }
 
-fn prepare_immersive_window(app: &tauri::AppHandle) {
-    let Some(window) = app.get_webview_window("core") else {
-        report_window_error(app, "window.lookup", "core window missing");
-        return;
-    };
-
-    let _ = window.set_fullscreen(false);
-    match place_on_primary_monitor(&window) {
-        Ok(Some(detail)) => app.state::<RuntimeState>().diagnostic.append(
-            "WINDOW_IMMERSIVE_READY",
-            format!("mode=PRIMARY_MONITOR {detail}"),
-        ),
-        Ok(None) => match window.set_fullscreen(true) {
-            Ok(()) => app.state::<RuntimeState>().diagnostic.append(
-                "WINDOW_IMMERSIVE_READY",
-                "mode=CURRENT_MONITOR_FULLSCREEN fallback=NO_PRIMARY_MONITOR",
-            ),
-            Err(error) => report_window_error(app, "window.fullscreen.fallback", error),
-        },
-        Err(error) => {
-            report_window_error(app, "window.primary_monitor", error);
-            if let Err(fallback_error) = window.set_fullscreen(true) {
-                report_window_error(app, "window.fullscreen.fallback", fallback_error);
-            }
-        }
-    }
-
-    let _ = apply_surface_transition(app, DesktopMode::Ambient, None);
-}
-
-struct GlobalShortcutRuntime {
-    stop: Arc<AtomicBool>,
-    thread_id: Arc<AtomicU32>,
-    worker: Mutex<Option<thread::JoinHandle<()>>>,
-}
-
-impl GlobalShortcutRuntime {
-    fn shutdown(&self) {
-        if self.stop.swap(true, Ordering::AcqRel) {
-            return;
-        }
-        #[cfg(windows)]
-        {
-            use windows_sys::Win32::UI::WindowsAndMessaging::{PostThreadMessageW, WM_QUIT};
-            let thread_id = self.thread_id.load(Ordering::Acquire);
-            if thread_id != 0 {
-                unsafe {
-                    let _ = PostThreadMessageW(thread_id, WM_QUIT, 0, 0);
-                }
-            }
-        }
-        if let Ok(mut worker) = self.worker.lock() {
-            if let Some(worker) = worker.take() {
-                let _ = worker.join();
-            }
-        }
-    }
-}
-
-impl Drop for GlobalShortcutRuntime {
-    fn drop(&mut self) {
-        self.shutdown();
-    }
-}
-
-#[cfg(windows)]
-fn start_global_shortcut(app: tauri::AppHandle) -> GlobalShortcutRuntime {
-    let stop = Arc::new(AtomicBool::new(false));
-    let thread_id = Arc::new(AtomicU32::new(0));
-    let worker_stop = stop.clone();
-    let worker_thread_id = thread_id.clone();
-    let error_app = app.clone();
-    let worker = thread::Builder::new()
-        .name("birdie-global-shortcut".into())
-        .spawn(move || unsafe {
-            use windows_sys::Win32::System::Threading::GetCurrentThreadId;
-            use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-                RegisterHotKey, UnregisterHotKey,
-            };
-            use windows_sys::Win32::UI::WindowsAndMessaging::{
-                GetMessageW, PeekMessageW, MSG, PM_NOREMOVE, WM_HOTKEY,
-            };
-
-            const HOTKEY_ID: i32 = 0xB17D;
-            const MOD_CONTROL: u32 = 0x0002;
-            const MOD_SHIFT: u32 = 0x0004;
-            const MOD_NOREPEAT: u32 = 0x4000;
-            const VK_SPACE: u32 = 0x20;
-
-            let mut message: MSG = std::mem::zeroed();
-            let _ = PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_NOREMOVE);
-            worker_thread_id.store(GetCurrentThreadId(), Ordering::Release);
-            if worker_stop.load(Ordering::Acquire) {
-                worker_thread_id.store(0, Ordering::Release);
-                return;
-            }
-
-            let registered = RegisterHotKey(
-                std::ptr::null_mut(),
-                HOTKEY_ID,
-                MOD_CONTROL | MOD_SHIFT | MOD_NOREPEAT,
-                VK_SPACE,
-            ) != 0;
-            let status = if registered {
-                "REGISTERED"
-            } else {
-                "UNAVAILABLE"
-            };
-            let snapshot = app
-                .state::<SurfaceState>()
-                .set_global_shortcut_status(status);
-            emit_surface_snapshot(&app, &snapshot);
-            if !registered {
-                worker_thread_id.store(0, Ordering::Release);
-                report_window_error(
-                    &app,
-                    "shortcut.register",
-                    "DESKTOP.SHORTCUT.REGISTRATION_FAILED",
-                );
-                return;
-            }
-
-            while GetMessageW(&mut message, std::ptr::null_mut(), 0, 0) > 0 {
-                if message.message != WM_HOTKEY || message.wParam != HOTKEY_ID as usize {
-                    continue;
-                }
-                let current = app.state::<SurfaceState>().snapshot();
-                let next_mode = if current.mode == DesktopMode::Ambient {
-                    DesktopMode::Control
-                } else {
-                    DesktopMode::Ambient
-                };
-                if let Err(error) = apply_surface_transition(&app, next_mode, None) {
-                    report_window_error(&app, "shortcut.surface.toggle", error);
-                }
-            }
-            let _ = UnregisterHotKey(std::ptr::null_mut(), HOTKEY_ID);
-            worker_thread_id.store(0, Ordering::Release);
-            let snapshot = app
-                .state::<SurfaceState>()
-                .set_global_shortcut_status("STOPPED");
-            emit_surface_snapshot(&app, &snapshot);
-        })
-        .map_err(|error| {
-            report_window_error(&error_app, "shortcut.thread", error);
-            let snapshot = error_app
-                .state::<SurfaceState>()
-                .set_global_shortcut_status("UNAVAILABLE");
-            emit_surface_snapshot(&error_app, &snapshot);
-        })
-        .ok();
-    GlobalShortcutRuntime {
-        stop,
-        thread_id,
-        worker: Mutex::new(worker),
-    }
-}
-
-#[cfg(not(windows))]
-fn start_global_shortcut(app: tauri::AppHandle) -> GlobalShortcutRuntime {
-    let snapshot = app
-        .state::<SurfaceState>()
-        .set_global_shortcut_status("UNAVAILABLE");
-    emit_surface_snapshot(&app, &snapshot);
-    GlobalShortcutRuntime {
-        stop: Arc::new(AtomicBool::new(false)),
-        thread_id: Arc::new(AtomicU32::new(0)),
-        worker: Mutex::new(None),
-    }
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let diagnostic = DiagnosticLog::open().unwrap_or_else(|error| panic!("{error}"));
@@ -1463,7 +1318,9 @@ pub fn run() {
             }
         })
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            prepare_immersive_window(app);
+            app.state::<RuntimeState>()
+                .diagnostic
+                .append("SINGLE_INSTANCE", "duplicate_launch=ignored mode=HEADLESS");
         }))
         .plugin(tauri_plugin_autostart::Builder::new().build())
         .setup(|app| {
@@ -1473,41 +1330,15 @@ pub fn run() {
                 .join("function-layer-v1.json");
             let _ = app.manage(LocalStore::open(local_data_path));
 
-            let shortcut = start_global_shortcut(app.handle().clone());
-            let _ = app.manage(shortcut);
-
             let supervisor = ProcessSupervisor::start(app.handle().clone());
             let _ = app.manage(supervisor);
             start_core_ipc(app.handle().clone());
-            prepare_immersive_window(app.handle());
-
-            let show = MenuItem::with_id(app, "show", "Birdie anzeigen", true, None::<&str>)?;
-            let interact =
-                MenuItem::with_id(app, "interact", "Birdie bedienen", true, None::<&str>)?;
-            let passive = MenuItem::with_id(app, "passive", "Präsenzmodus", true, None::<&str>)?;
-            let hide = MenuItem::with_id(app, "hide", "Birdie verbergen", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Birdie beenden", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &interact, &passive, &hide, &quit])?;
+            let menu = Menu::with_items(app, &[&quit])?;
             TrayIconBuilder::new()
                 .menu(&menu)
                 .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => {
-                        prepare_immersive_window(app);
-                    }
-                    "interact" => {
-                        let _ = apply_surface_transition(app, DesktopMode::Control, None);
-                    }
-                    "passive" => {
-                        let _ = apply_surface_transition(app, DesktopMode::Ambient, None);
-                    }
-                    "hide" => {
-                        let _ = apply_surface_transition(app, DesktopMode::Ambient, None);
-                        if let Some(window) = app.get_webview_window("core") {
-                            let _ = window.hide();
-                        }
-                    }
                     "quit" => {
-                        app.state::<GlobalShortcutRuntime>().shutdown();
                         app.state::<ProcessSupervisor>().shutdown();
                         app.exit(0);
                     }

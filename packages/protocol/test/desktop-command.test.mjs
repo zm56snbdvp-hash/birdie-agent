@@ -47,6 +47,14 @@ test('desktop intent schema rejects extra keys, future clocks, and expired deadl
 
 test('desktop command schema is exact, typed, targeted, and time bounded', () => {
   assert.equal(validateDesktopCommandEnvelope(command(), { nowMs: 2_000 }).ok, true);
+  assert.equal(validateDesktopCommandEnvelope(command({
+    name: 'desktop.app.open',
+    args: { appId: 'CALCULATOR' },
+  }), { nowMs: 2_000 }).ok, true);
+  assert.equal(validateDesktopCommandEnvelope(command({
+    name: 'desktop.app.open',
+    args: { appId: 'POWERSHELL_WITH_ARBITRARY_ARGS' },
+  }), { nowMs: 2_000 }).errorCode, 'DESKTOP.COMMAND.ARGS_INVALID');
   assert.equal(validateDesktopCommandEnvelope(command({ args: { moduleId: 'SHELL' } }), { nowMs: 2_000 }).errorCode, 'DESKTOP.COMMAND.ARGS_INVALID');
   assert.equal(validateDesktopCommandEnvelope(command({ issuedAtMs: 8_000, expiresAtMs: 9_000 }), { nowMs: 2_000 }).errorCode, 'DESKTOP.COMMAND.FUTURE');
   assert.equal(validateDesktopCommandEnvelope({ ...command(), extra: true }, { nowMs: 2_000 }).errorCode, 'DESKTOP.COMMAND.SCHEMA_INVALID');

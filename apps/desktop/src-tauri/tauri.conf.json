@@ -13,20 +13,29 @@
     "windows": [{
       "label": "core",
       "title": "Birdie",
-      "width": 1280,
-      "height": 720,
+      "width": 1,
+      "height": 1,
       "decorations": false,
       "transparent": true,
       "shadow": false,
       "resizable": false,
       "maximizable": false,
       "minimizable": false,
-      "alwaysOnTop": true,
+      "alwaysOnTop": false,
       "skipTaskbar": true,
       "focus": false,
       "visible": false
     }],
     "security": { "csp": null }
   },
-  "bundle": { "active": true, "targets": ["nsis"] }
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": {
+      "../../../services/core": "services/core",
+      "../../../packages/protocol": "packages/protocol",
+      "../../../build/voice/Release/birdie-voice-host.exe": "build/voice/Release/birdie-voice-host.exe",
+      "../../../models/whisper/ggml-base.bin": "models/whisper/ggml-base.bin"
+    }
+  }
 }

@@ -72,31 +72,22 @@ function sendPublish(client, requestId, payload) {
   return client.waitFor((message) => message.requestId === requestId);
 }
 
-test('intent router accepts the six promised German phrases and explicit English variants', () => {
+test('intent router accepts the local application voice phrases', () => {
   const router = new DesktopIntentRouter();
   const cases = [
-    ['Birdie, öffne den Command Center', 'COMMAND_CENTER'],
-    ['Birdie, zeig mir das System', 'SYSTEM'],
-    ['Birdie, starte Fokus', 'FOCUS'],
-    ['Birdie, öffne Capture', 'CAPTURE'],
+    ['Birdie, öffne den Browser', 'BROWSER'],
+    ['Birdie, öffne den Rechner', 'CALCULATOR'],
+    ['Birdie, öffne die Dateien', 'FILES'],
+    ['Birdie, öffne den Notizblock', 'NOTEPAD'],
+    ['Birdie, öffne die Einstellungen', 'SETTINGS'],
+    ['Birdie, öffne das Terminal', 'TERMINAL'],
   ];
-  for (const [phrase, moduleId] of cases) {
+  for (const [phrase, appId] of cases) {
     const result = router.route(phrase);
     assert.equal(result.matched, true, phrase);
-    assert.equal(result.name, 'desktop.module.open');
-    assert.equal(result.args.moduleId, moduleId);
+    assert.equal(result.name, 'desktop.app.open');
+    assert.equal(result.args.appId, appId);
   }
-  assert.deepEqual(router.route('Birdie, geh in den Hintergrund'), {
-    matched: true,
-    name: 'desktop.surface.set_mode',
-    args: { mode: 'AMBIENT' },
-  });
-  assert.deepEqual(router.route('Birdie, übernimm den Bildschirm'), {
-    matched: true,
-    name: 'desktop.surface.set_mode',
-    args: { mode: 'CONTROL' },
-  });
-  assert.equal(router.route('Birdie, go into the background').args.mode, 'AMBIENT');
   assert.equal(router.route('Birdie, execute PowerShell').matched, false);
 });
 
@@ -140,13 +131,14 @@ test('Voice-to-Desktop command round-trip is correlated, idempotent, and returns
       const finalized = runtimeEvent('voice.utterance.finalized', 3, {
         turnId: 'turn-command',
         classification: 'content',
-        payload: { transcript: 'Birdie, öffne Capture' },
+        payload: { transcript: 'Birdie, öffne den Browser' },
       });
       await sendPublish(voice, 'finalized', finalized);
 
       const routed = await desktop.waitFor((message) => message.type === 'desktop.command');
       assert.equal(routed.requestId, routed.payload.commandId);
-      assert.equal(routed.payload.args.moduleId, 'CAPTURE');
+      assert.equal(routed.payload.name, 'desktop.app.open');
+      assert.equal(routed.payload.args.appId, 'BROWSER');
       assert.equal(routed.payload.provenance.sessionId, 'voice-session-a');
       desktop.send({
         type: 'desktop.command.result',
@@ -185,7 +177,7 @@ test('pending command redispatches only to the same stable Desktop instance', as
       requestId: 'intent-reconnect',
       payload: {
         commandId: 'command-reconnect-1',
-        text: 'System',
+        text: 'Öffne den Browser',
         issuedAtMs: now,
         expiresAtMs: now + 5_000,
       },
@@ -222,7 +214,7 @@ test('an ACK received after the Core deadline is terminally reported as TIMEOUT'
         requestId: 'intent-late-ack',
         payload: {
           commandId: 'command-late-ack',
-          text: 'Focus',
+          text: 'Öffne den Browser',
           issuedAtMs: now,
           expiresAtMs: now + 1_000,
         },

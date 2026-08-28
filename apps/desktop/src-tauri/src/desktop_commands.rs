@@ -11,6 +11,8 @@ pub enum CommandName {
     ModuleOpen,
     #[serde(rename = "desktop.surface.set_mode")]
     SurfaceSetMode,
+    #[serde(rename = "desktop.app.open")]
+    AppOpen,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -25,11 +27,29 @@ pub struct ModeArgs {
     pub mode: DesktopMode,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum DesktopApp {
+    Browser,
+    Calculator,
+    Files,
+    Notepad,
+    Settings,
+    Terminal,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AppArgs {
+    pub app_id: DesktopApp,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum CommandArgs {
     Module(ModuleArgs),
     Mode(ModeArgs),
+    App(AppArgs),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,16 +95,9 @@ pub struct DesktopCommand {
 }
 
 impl DesktopCommand {
-    pub fn module(&self) -> Result<ModuleId, &'static str> {
+    pub fn app(&self) -> Result<DesktopApp, &'static str> {
         match (&self.name, &self.args) {
-            (CommandName::ModuleOpen, CommandArgs::Module(args)) => Ok(args.module_id),
-            _ => Err("DESKTOP.COMMAND.ARGS_INVALID"),
-        }
-    }
-
-    pub fn mode(&self) -> Result<DesktopMode, &'static str> {
-        match (&self.name, &self.args) {
-            (CommandName::SurfaceSetMode, CommandArgs::Mode(args)) => Ok(args.mode),
+            (CommandName::AppOpen, CommandArgs::App(args)) => Ok(args.app_id),
             _ => Err("DESKTOP.COMMAND.ARGS_INVALID"),
         }
     }
@@ -264,6 +277,7 @@ impl DesktopExecutionLedger {
             (&command.name, &command.args),
             (CommandName::ModuleOpen, CommandArgs::Module(_))
                 | (CommandName::SurfaceSetMode, CommandArgs::Mode(_))
+                | (CommandName::AppOpen, CommandArgs::App(_))
         ) {
             return CommandDisposition::Reject(DesktopCommandResult::rejected(
                 command,
@@ -471,6 +485,24 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn app_open_accepts_only_the_typed_allowlist() {
+        let mut value = serde_json::to_value(command("command-app-1", "connection-1234"))
+            .expect("serialize command");
+        value["name"] = serde_json::json!("desktop.app.open");
+        value["args"] = serde_json::json!({ "appId": "CALCULATOR" });
+        let parsed: DesktopCommand = serde_json::from_value(value).expect("valid app command");
+        let ledger = DesktopExecutionLedger::default();
+        assert!(matches!(
+            ledger.prepare(&parsed, "desktop-instance", "connection-1234", 2_000),
+            CommandDisposition::Execute
+        ));
+
+        let mut invalid = serde_json::to_value(parsed).expect("serialize app command");
+        invalid["args"] = serde_json::json!({ "appId": "ARBITRARY_EXE" });
+        assert!(serde_json::from_value::<DesktopCommand>(invalid).is_err());
     }
 
     #[test]

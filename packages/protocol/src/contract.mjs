@@ -90,6 +90,16 @@ export const DesktopMode = Object.freeze({
 export const DesktopCommandName = Object.freeze({
   MODULE_OPEN: "desktop.module.open",
   SURFACE_SET_MODE: "desktop.surface.set_mode",
+  APP_OPEN: "desktop.app.open",
+});
+
+export const DesktopApp = Object.freeze({
+  BROWSER: "BROWSER",
+  CALCULATOR: "CALCULATOR",
+  FILES: "FILES",
+  NOTEPAD: "NOTEPAD",
+  SETTINGS: "SETTINGS",
+  TERMINAL: "TERMINAL",
 });
 
 export const DesktopCommandStatus = Object.freeze({

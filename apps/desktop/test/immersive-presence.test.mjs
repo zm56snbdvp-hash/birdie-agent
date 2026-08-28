@@ -128,7 +128,7 @@ test('audio reactivity is clamped and directionally gated by presence state', ()
   assert.equal(approach(1, 0, 0.25, 0.1), 0.9);
 });
 
-test('desktop surface is hidden-first, transparent, full-monitor, and click-through', async () => {
+test('desktop alpha is headless, hidden-first, transparent, and click-through', async () => {
   const [configSource, css, rendererSource, mainSource, rustSource] = await Promise.all([
     readFile(new URL('../src-tauri/tauri.conf.json', import.meta.url), 'utf8'),
     readFile(new URL('../src/styles.css', import.meta.url), 'utf8'),
@@ -141,14 +141,13 @@ test('desktop surface is hidden-first, transparent, full-monitor, and click-thro
 
   assert.equal(window.transparent, true);
   assert.equal(window.decorations, false);
-  assert.equal(window.alwaysOnTop, true);
+  assert.equal(window.alwaysOnTop, false);
   assert.equal(window.skipTaskbar, true);
   assert.equal(window.visible, false);
-  assert.notEqual(window.width, 260);
-  assert.notEqual(window.height, 260);
-  assert.match(css, /width:\s*100vw/);
-  assert.match(css, /height:\s*100dvh/);
-  assert.doesNotMatch(css, /220px/);
+  assert.equal(window.width, 1);
+  assert.equal(window.height, 1);
+  assert.match(css, /visibility:\s*hidden/);
+  assert.match(css, /pointer-events:\s*none/);
   assert.match(rendererSource, /ResizeObserver/);
   assert.match(rendererSource, /renderer\.setSize\(viewport\.width, viewport\.height/);
   assert.doesNotMatch(rendererSource, /setSize\(220,\s*220/);
@@ -162,15 +161,9 @@ test('desktop surface is hidden-first, transparent, full-monitor, and click-thro
   assert.match(rustSource, /reset_overlay_after_page_load/);
   assert.match(rustSource, /\.on_page_load\(/);
   assert.match(rustSource, /\.on_window_event\(/);
-  assert.match(rustSource, /RegisterHotKey/);
-  assert.match(rustSource, /MOD_NOREPEAT/);
-  assert.match(rustSource, /lock_transition/);
-  assert.match(rustSource, /"Birdie bedienen"/);
-  assert.match(rustSource, /"Präsenzmodus"/);
-  assert.match(mainSource, /id="release-overlay"/);
-  assert.match(mainSource, /__birdieRequestControlMode/);
-  assert.match(mainSource, /event\.key === 'Escape'/);
-  assert.doesNotMatch(mainSource, /panel\.hidden\s*=\s*!panel\.hidden/);
-  assert.match(mainSource, /surface\.escape\(\)/);
-  assert.doesNotMatch(mainSource, /Ctrl\+Shift\+Space/);
+  assert.doesNotMatch(rustSource, /RegisterHotKey/);
+  assert.doesNotMatch(rustSource, /"Birdie bedienen"/);
+  assert.doesNotMatch(mainSource, /field-chrome|module-rail|command-form/);
+  assert.match(mainSource, /headless/);
+  assert.match(mainSource, /desktop\.app\.open/);
 });

@@ -80,16 +80,6 @@ impl SurfaceState {
         }
         state.clone()
     }
-
-    pub fn set_global_shortcut_status(&self, status: impl Into<String>) -> SurfaceSnapshot {
-        let mut state = self.inner.lock().expect("surface state poisoned");
-        let status = status.into();
-        if state.global_shortcut_status != status {
-            state.global_shortcut_status = status;
-            state.revision = state.revision.saturating_add(1);
-        }
-        state.clone()
-    }
 }
 
 #[cfg(test)]

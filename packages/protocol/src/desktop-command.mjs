@@ -3,6 +3,7 @@ import {
   DesktopCommandStatus,
   DesktopMode,
   DesktopModule,
+  DesktopApp,
 } from './contract.mjs';
 
 export const DESKTOP_COMMAND_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$/;
@@ -12,6 +13,7 @@ export const DESKTOP_INTENT_MAX_TEXT_LENGTH = 500;
 
 const MODULES = new Set(Object.values(DesktopModule));
 const MODES = new Set(Object.values(DesktopMode));
+const APPS = new Set(Object.values(DesktopApp));
 const RESULT_STATUSES = new Set([
   DesktopCommandStatus.ACKNOWLEDGED,
   DesktopCommandStatus.REJECTED,
@@ -112,6 +114,9 @@ export function validateDesktopCommandEnvelope(payload, { nowMs = Date.now(), al
   } else if (payload.name === DesktopCommandName.SURFACE_SET_MODE) {
     if (!exactKeys(payload.args, ['mode']) || !MODES.has(payload.args.mode)) return fail('DESKTOP.COMMAND.ARGS_INVALID');
     args = { mode: payload.args.mode };
+  } else if (payload.name === DesktopCommandName.APP_OPEN) {
+    if (!exactKeys(payload.args, ['appId']) || !APPS.has(payload.args.appId)) return fail('DESKTOP.COMMAND.ARGS_INVALID');
+    args = { appId: payload.args.appId };
   } else {
     return fail('DESKTOP.COMMAND.UNKNOWN');
   }
