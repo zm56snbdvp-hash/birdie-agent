@@ -19,17 +19,6 @@ targets:
     platform: iOS
     sources:
       - path: BirdiePhone
-    info:
-      path: BirdiePhone/Info.plist
-      properties:
-        CFBundleDisplayName: Birdie
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        CFBundleURLTypes:
-          - CFBundleTypeRole: Editor
-            CFBundleURLName: de.birdieandbreakfast.birdie.recall
-            CFBundleURLSchemes:
-              - birdie
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.birdie

@@ -304,7 +304,10 @@ test("both XcodeGen projects and Apple workflows run unsigned BirdiePhone tests 
     assert.match(testTarget, /TEST_HOST: "\$\(BUILT_PRODUCTS_DIR\)\/Birdie\.app\/Birdie"/);
     assert.match(testTarget, /BUNDLE_LOADER: "\$\(TEST_HOST\)"/);
     const schemeBlock = spec.slice(spec.indexOf(`  ${scheme}:`));
-    assert.match(schemeBlock, /test:\n\s+config: Debug\n\s+targets:\n\s+- BirdiePhoneTests/);
+    assert.match(
+      schemeBlock,
+      /test:\r?\n\s+config: Debug\r?\n(?:\s+gatherCoverageData: true\r?\n)?\s+targets:\r?\n\s+- BirdiePhoneTests/
+    );
   }
 
   for (const [name, workflow, generateCommand, projectName, scheme] of [

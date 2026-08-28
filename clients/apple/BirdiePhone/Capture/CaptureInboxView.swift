@@ -101,7 +101,9 @@ private struct CaptureItemRow: View {
 private struct CaptureItemDetailView: View {
     let item: CaptureItem
     @ObservedObject var model: CaptureAppModel
+    @EnvironmentObject private var recall: RecallViewModel
     @State private var confirmDelete = false
+    @State private var isRemembering = false
 
     var body: some View {
         List {
@@ -128,6 +130,20 @@ private struct CaptureItemDetailView: View {
             Text("Lokaler Mock-Adapter: kein Upload und keine Außenwirkung.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
+            if item.source == .shareExtension,
+               item.intent == .remember,
+               item.status == .readyForReview {
+                Button {
+                    rememberInRecall()
+                } label: {
+                    if isRemembering {
+                        ProgressView()
+                    } else {
+                        Label("In Recall merken", systemImage: "sparkle.magnifyingglass")
+                    }
+                }
+                .disabled(isRemembering)
+            }
         }
     }
 
@@ -194,6 +210,22 @@ private struct CaptureItemDetailView: View {
         return LensAnalyzer.analyze(text: text, profile: profile).redactedText
     }
 
+    private func rememberInRecall() {
+        isRemembering = true
+        Task { @MainActor in
+            defer { isRemembering = false }
+            do {
+                let capture = try model.recallCapture(itemID: item.id)
+                guard await recall.ingest(capture) else {
+                    recall.errorMessage = "Der Birdie-Drop-Inhalt konnte nicht in Recall gespeichert werden."
+                    return
+                }
+                recall.selectedTab = 0
+            } catch {
+                recall.errorMessage = error.localizedDescription
+            }
+        }
+    }
     private var statusTitle: String {
         switch item.status {
         case .staged, .queued: "Lokal in der Warteschlange"

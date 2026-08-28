@@ -123,6 +123,18 @@ Birdie Drop darf bei Datei-Captures nur eine lokal verfügbare, vom Nutzer
 ausgewählte Datei-URL übergeben. Es darf weder eine Cloud-URL als
 `localFileURL` tarnen noch Recall zu einem Quellenscan verwenden.
 
+## Birdie-Drop-Bridge
+
+Die iPhone-App enthält mit `BirdieDropRecallBridgeV1` eine bewusst schmale
+Verbindung zwischen dem lokalen Birdie-Drop-Queue-Vertrag und Recall. Ein
+freigegebener `shareExtension`-Eintrag mit Ziel „Merken“ kann aus seiner
+Detailansicht ausdrücklich in Recall übernommen werden. Die Bridge akzeptiert
+genau einen bereits lokal geprüften Payload und bildet URL, Text, Bild oder PDF
+auf genau ein `CaptureItemV1` ab. Mehrteilige Einträge, Lens-Inhalte und
+unbekannte Payload-Typen werden ohne Heuristik abgewiesen. CaptureCore bleibt
+für die Queue zuständig; Recall-Speicher- und Index-Interna werden nicht
+importiert oder dupliziert.
+
 ## Öffentlicher Suchvertrag
 
 ```swift
@@ -398,8 +410,9 @@ führt zusätzlich die bestehende Repository-Testsuite mit `npm test` aus.
 - Kein semantisches Modell in V1. Natürliche Sprache bedeutet derzeit
   deterministische Term-/Präfixsuche plus die dokumentierten kleinen
   Datumsregeln.
-- Keine Cloud-Synchronisation, geräteübergreifende Suche, Share Extension oder
-  fertige Birdie-Drop-Transportimplementierung.
+- Keine Cloud-Synchronisation, geräteübergreifende Suche oder produktive
+  externe Capture-Zustellung; Birdie Drop bleibt lokal und verwendet den
+  versionierten Bridge-/Mock-Pfad.
 - Kein separates, app-eigenes AES-GCM-Envelope für Bild-/PDF-Dateikopien; sie
   verlassen sich auf `NSFileProtectionComplete`. Der Metadaten- und
   Index-Vault ist AES-GCM-verschlüsselt.
@@ -418,12 +431,12 @@ führt zusätzlich die bestehende Repository-Testsuite mit `npm test` aus.
   `schemaVersion = 1` hinaus sind noch nicht implementiert und unbekannte
   Versionen werden abgewiesen.
 
-## Genau der nächste Birdie-Drop-Integrationsschritt
+## Birdie-Drop-Integrationsschritt (implementiert)
 
-Birdie Drop muss als nächsten und einzigen Integrationsschritt seinen bereits
-bewusst ausgewählten Inhalt in genau ein `CaptureItemV1` mit
+Die Bridge bildet den bereits bewusst ausgewählten Inhalt in genau ein
+`CaptureItemV1` mit
 `contractVersion = 1`, `provenance.channel = .birdieDrop`, stabiler UUID und
-gegebenenfalls einer security-scoped lokalen Datei-URL abbilden und dieses
+gegebenenfalls einer security-scoped lokalen Datei-URL ab und übergibt dieses
 Objekt über die injizierte `any BirdieRecallIntakeV1`-Instanz an
 `ingest(_:)` übergeben; Recall-Repository, Speicher- oder Indexinternas dürfen
 dabei nicht importiert oder dupliziert werden.
