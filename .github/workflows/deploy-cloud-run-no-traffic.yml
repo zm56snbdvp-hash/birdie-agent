@@ -24,7 +24,7 @@ on:
 permissions: {}
 
 concurrency:
-  group: birdie-agent-coin-supporter-production
+  group: birdie-agent-${{ inputs.mode == 'capture' && 'capture' || 'coin-supporter-production' }}
   cancel-in-progress: false
 
 env:
