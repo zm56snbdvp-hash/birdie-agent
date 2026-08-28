@@ -133,7 +133,7 @@ private struct CaptureItemDetailView: View {
 
     private var contentsSection: some View {
         Section("Inhalte") {
-            ForEach(item.payloads) { payload in
+            ForEach(item.payloads, id: \.id) { (payload: CapturePayload) in
                 VStack(alignment: .leading, spacing: 5) {
                     Text(payload.displayName).font(.headline)
                     if let text = payload.inlineText {
@@ -150,7 +150,7 @@ private struct CaptureItemDetailView: View {
     private var suggestionsSection: some View {
         if !item.suggestions.isEmpty {
             Section("Vorschläge – noch keine Aktionen") {
-                ForEach(item.suggestions) { suggestion in
+                ForEach(item.suggestions, id: \.id) { (suggestion: CaptureSuggestion) in
                     LabeledContent(
                         suggestion.label,
                         value: item.containsSensitiveData ? "[redigiert]" : suggestion.value
