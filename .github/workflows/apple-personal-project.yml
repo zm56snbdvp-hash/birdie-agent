@@ -24,6 +24,8 @@ jobs:
         uses: actions/checkout@v4
       - name: Install XcodeGen
         run: brew install xcodegen
+      - name: Verify Birdie Drop and Lens
+        run: bash clients/apple/scripts/verify-capture.sh
       - name: Generate free Personal Team project
         working-directory: clients/apple
         run: xcodegen generate --spec project.personal.yml
