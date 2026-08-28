@@ -189,7 +189,9 @@ public final class BirdiePendingRouteStore: @unchecked Sendable {
         }
         defaults.set(data, forKey: key)
         lock.unlock()
-        NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: Self.didChangeNotification, object: nil)
+        }
     }
 
     public func consume() -> BirdieRoute? {

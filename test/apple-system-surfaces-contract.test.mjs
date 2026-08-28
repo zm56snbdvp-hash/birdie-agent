@@ -63,6 +63,10 @@ test("intents stage navigation and cannot reach write, EventKit, or transport AP
   assert.match(coordinator, /guard !contract\.allowsDirectIntentExecution/);
   assert.match(coordinator, /unsupportedSource/);
   assert.doesNotMatch(coordinator, /URLSession|EKEventStore|WatchTokenStore|\.save\(/);
+  assert.match(
+    await text("clients/apple/BirdiePhone/SystemSurfaces/BirdieActionComposerView.swift"),
+    /BirdieRoute\.sanitizedDraft\(text\)/,
+  );
 
   for (const source of [siri, control]) {
     assert.doesNotMatch(

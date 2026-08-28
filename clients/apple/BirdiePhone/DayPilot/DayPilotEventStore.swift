@@ -88,8 +88,9 @@ final class DayPilotEventStore: DayPilotEventProviding {
         title: String,
         date: Date
     ) throws -> DayPilotProposal {
-        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !cleanTitle.isEmpty else { throw DayPilotEventStoreError.invalidProposal }
+        guard let cleanTitle = BirdieRoute.sanitizedDraft(title) else {
+            throw DayPilotEventStoreError.invalidProposal
+        }
 
         let destination: EKCalendar
         let endDate: Date?

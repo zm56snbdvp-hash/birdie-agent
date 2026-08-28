@@ -89,10 +89,7 @@ struct BirdieActionComposerView: View {
     }
 
     private var cleanText: String {
-        String(
-            text.trimmingCharacters(in: .whitespacesAndNewlines)
-                .prefix(BirdieRoute.maximumDraftLength)
-        )
+        BirdieRoute.sanitizedDraft(text) ?? ""
     }
 
     private var safetyMessage: String {
