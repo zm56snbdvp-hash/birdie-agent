@@ -547,6 +547,12 @@ jobs:
           version: "577.0.0"
           project_id: ${{ env.GCP_PROJECT_ID }}
 
+      - name: Ensure Firestore API is enabled for Capture
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud services enable firestore.googleapis.com --project "$GCP_PROJECT_ID"
+
       - name: Verify Firestore and runtime identity
         id: before
         shell: bash
