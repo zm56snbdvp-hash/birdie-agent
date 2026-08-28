@@ -25,6 +25,12 @@ target and lease, invokes each hook with the lease abort signal, checks the
 lease again after the hook, and returns the same receipt on an exact
 `effectId` retry without repeating the OS effect.
 
+PR #64 now also contains crate-local native implementations in
+`apps/desktop/src-tauri/src/pocket_relay_host.rs`. They validate the HTTPS
+authority and call only Windows `ShellExecuteW` with the fixed `open` verb or
+`LockWorkStation`. They are intentionally not Tauri commands and are not yet
+reachable from the WebView or the local core pipe.
+
 ## Next host step
 
 After the Pocket Relay gateway and Desktop Alpha have a reviewed deployment

@@ -1,5 +1,6 @@
 mod desktop_commands;
 mod local_store;
+mod pocket_relay_host;
 mod process_supervisor;
 mod surface;
 
