@@ -14,16 +14,17 @@ final class DayPilotViewModel: ObservableObject {
     private let now: () -> Date
 
     init(
-        eventStore: any DayPilotEventProviding = DayPilotEventStore(),
+        eventStore: (any DayPilotEventProviding)? = nil,
         snapshotStore: DayPilotSnapshotStore = .shared,
         now: @escaping () -> Date = Date.init
     ) {
-        self.eventStore = eventStore
+        let resolvedEventStore = eventStore ?? DayPilotEventStore()
+        self.eventStore = resolvedEventStore
         self.snapshotStore = snapshotStore
         self.now = now
         snapshot = snapshotStore.load(now: now())
-        calendarAccess = eventStore.calendarAccess
-        reminderAccess = eventStore.reminderAccess
+        calendarAccess = resolvedEventStore.calendarAccess
+        reminderAccess = resolvedEventStore.reminderAccess
     }
 
     func refresh() async {
