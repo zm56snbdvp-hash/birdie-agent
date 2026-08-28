@@ -27,7 +27,7 @@ public actor RecallRepository: BirdieRecallIntakeV1, BirdieRecallSearchV1 {
             externalIndex: CoreSpotlightRecallIndex(),
             semanticRanker: NoopRecallSemanticRanker(),
             textExtractor: LocalRecallTextExtractor(),
-            now: Date.init,
+            now: { Date() },
             calendar: .autoupdatingCurrent
         )
     }
@@ -38,7 +38,7 @@ public actor RecallRepository: BirdieRecallIntakeV1, BirdieRecallSearchV1 {
         externalIndex: any RecallExternalIndexing = NoopRecallExternalIndex(),
         semanticRanker: any RecallSemanticRanking = NoopRecallSemanticRanker(),
         textExtractor: any RecallTextExtracting = NoopRecallTextExtractor(),
-        now: @escaping @Sendable () -> Date = Date.init,
+        now: @escaping @Sendable () -> Date = { Date() },
         calendar: Calendar = .autoupdatingCurrent
     ) throws {
         let encryptionKey = try keyProvider.loadOrCreateKey()

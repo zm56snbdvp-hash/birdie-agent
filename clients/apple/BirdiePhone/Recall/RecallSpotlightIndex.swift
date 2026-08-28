@@ -29,7 +29,7 @@ actor CoreSpotlightRecallIndex: RecallExternalIndexing {
         await acquireExclusiveAccess()
         defer { releaseExclusiveAccess() }
         let searchableItems = items.map(makeSearchableItem)
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             index.indexSearchableItems(searchableItems) { error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: ()) }
@@ -41,7 +41,7 @@ actor CoreSpotlightRecallIndex: RecallExternalIndexing {
         guard !identifiers.isEmpty else { return }
         await acquireExclusiveAccess()
         defer { releaseExclusiveAccess() }
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             index.deleteSearchableItems(withIdentifiers: identifiers.map(Self.searchableIdentifier)) { error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: ()) }
@@ -52,7 +52,7 @@ actor CoreSpotlightRecallIndex: RecallExternalIndexing {
     func removeAll() async throws {
         await acquireExclusiveAccess()
         defer { releaseExclusiveAccess() }
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             index.deleteSearchableItems(withDomainIdentifiers: [Self.domainIdentifier]) { error in
                 if let error { continuation.resume(throwing: error) }
                 else { continuation.resume(returning: ()) }

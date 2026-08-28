@@ -14,7 +14,7 @@ struct LocalRecallTextExtractor: RecallTextExtracting {
     private static let maximumExtractedCharacters = 500_000
 
     func extractText(from localFileURL: URL, kind: RecallItemKindV1) async throws -> String? {
-        let extractionTask = Task.detached(priority: .utility) {
+        let extractionTask = Task.detached(priority: .utility) { () throws -> String? in
             try Task.checkCancellation()
             let accessedSecurityScope = localFileURL.startAccessingSecurityScopedResource()
             defer {
