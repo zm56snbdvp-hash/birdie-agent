@@ -107,6 +107,25 @@ test("EventKit access is stepwise and all writes use the confirmed proposal boun
   assert.match(proposal, /model\.applyConfirmed\(preview\)/);
 });
 
+test("Day Pilot remote slice is read-only, versioned, and snapshot-backed", async () => {
+  const router = await text("src/watch-router.mjs");
+  const server = await text("server.mjs");
+  const provider = await text("clients/apple/BirdiePhone/DayPilot/DayPilotAgentProvider.swift");
+  const client = await text("clients/apple/BirdiePhone/SystemSurfaces/BirdieAgentClient.swift");
+  const viewModel = await text("clients/apple/BirdiePhone/DayPilot/DayPilotViewModel.swift");
+
+  assert.match(router, /url\.pathname === "\/watch\/day-pilot\/v1"/);
+  assert.match(server, /GET \/watch\/day-pilot\/v1/);
+  assert.match(router, /contractVersion: 1/);
+  assert.match(server, /birdieOSGet\("briefing"\)/);
+  assert.match(server, /birdieOSGet\("nextTask"\)/);
+  assert.match(provider, /protocol DayPilotRemoteProviding/);
+  assert.match(client, /\/watch\/day-pilot\/v1/);
+  assert.match(viewModel, /remoteProvider/);
+  assert.match(viewModel, /catch BirdieAgentClientError\.notAuthenticated/);
+  assert.doesNotMatch(router, /store\.save|applyConfirmed|URLSession|EKEventStore/);
+});
+
 test("app-only drafts expire while the minimized widget snapshot has a TTL", async () => {
   const routing = await text("clients/apple/BirdieShared/BirdieRouting.swift");
   const snapshots = await text("clients/apple/BirdieShared/DayPilotSnapshotStore.swift");

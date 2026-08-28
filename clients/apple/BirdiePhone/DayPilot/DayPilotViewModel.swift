@@ -10,16 +10,19 @@ final class DayPilotViewModel: ObservableObject {
     @Published var statusMessage: String?
 
     private let eventStore: any DayPilotEventProviding
+    private let remoteProvider: (any DayPilotRemoteProviding)?
     private let snapshotStore: DayPilotSnapshotStore
     private let now: () -> Date
 
     init(
         eventStore: (any DayPilotEventProviding)? = nil,
+        remoteProvider: (any DayPilotRemoteProviding)? = nil,
         snapshotStore: DayPilotSnapshotStore = .shared,
         now: @escaping () -> Date = Date.init
     ) {
         let resolvedEventStore = eventStore ?? DayPilotEventStore()
         self.eventStore = resolvedEventStore
+        self.remoteProvider = remoteProvider
         self.snapshotStore = snapshotStore
         self.now = now
         snapshot = snapshotStore.load(now: now())
@@ -34,7 +37,23 @@ final class DayPilotViewModel: ObservableObject {
         calendarAccess = eventStore.calendarAccess
         reminderAccess = eventStore.reminderAccess
         let data = await eventStore.load(now: now())
-        snapshot = Self.makeSnapshot(events: data.events, reminders: data.reminders, now: now())
+        var remote: DayPilotRemoteSnapshot?
+        if let remoteProvider {
+            do {
+                remote = try await remoteProvider.load()
+            } catch BirdieAgentClientError.notAuthenticated {
+                // EventKit remains useful without a configured remote token.
+            } catch {
+                statusMessage = error.localizedDescription
+                return
+            }
+        }
+        snapshot = Self.makeSnapshot(
+            events: data.events,
+            reminders: data.reminders,
+            now: now(),
+            remote: remote
+        )
         snapshotStore.save(snapshot)
         WidgetCenter.shared.reloadTimelines(ofKind: DayPilotWidgetContract.kind)
     }
@@ -82,13 +101,29 @@ final class DayPilotViewModel: ObservableObject {
     static func makeSnapshot(
         events: [DayPilotItem],
         reminders: [DayPilotItem],
-        now: Date
+        now: Date,
+        remote: DayPilotRemoteSnapshot? = nil
     ) -> DayPilotSnapshot {
-        let nextTask = reminders.first
+        let remoteTask = remote?.nextTask.flatMap { task -> DayPilotItem? in
+            guard let title = BirdieRoute.sanitizedDraft(task.title), !task.id.isEmpty else { return nil }
+            return DayPilotItem(id: task.id, kind: .task, title: title, date: task.dueAt)
+        }
+        let remoteApprovals = (remote?.openApprovals ?? []).compactMap { approval -> DayPilotApproval? in
+            guard
+                !approval.id.isEmpty,
+                let title = BirdieRoute.sanitizedDraft(approval.title),
+                let detail = BirdieRoute.sanitizedDraft(approval.detail)
+            else { return nil }
+            return DayPilotApproval(id: approval.id, title: title, detail: detail)
+        }
+        let nextTask = remoteTask ?? reminders.first
         let nextEvent = events.first
         let briefing: String
 
-        if nextTask == nil, nextEvent == nil {
+        if let remoteBriefing = remote?.briefing,
+           let cleanBriefing = BirdieRoute.sanitizedDraft(remoteBriefing) {
+            briefing = cleanBriefing
+        } else if nextTask == nil, nextEvent == nil {
             briefing = "Für die nächsten zwei Tage ist noch nichts Dringendes sichtbar."
         } else {
             var parts = [String]()
@@ -103,8 +138,8 @@ final class DayPilotViewModel: ObservableObject {
             nextTask: nextTask,
             nextEvent: nextEvent,
             openReminderCount: reminders.count,
-            openApprovalCount: 0,
-            nextApproval: nil,
+            openApprovalCount: remoteApprovals.count,
+            nextApproval: remoteApprovals.first,
             briefing: briefing
         )
     }

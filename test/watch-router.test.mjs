@@ -2,7 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { routeWatchRequest } from "../src/watch-router.mjs";
 
-function harness({ method, path, body = {}, mailService = {}, handleChat = async () => ({}) }) {
+function harness({
+  method,
+  path,
+  body = {},
+  mailService = {},
+  handleChat = async () => ({}),
+  dayPilotProvider = async () => ({})
+}) {
   let result;
   const req = { method };
   const res = {};
@@ -11,11 +18,57 @@ function harness({ method, path, body = {}, mailService = {}, handleChat = async
   const readBody = async () => body;
   return {
     invoke: async () => {
-      const handled = await routeWatchRequest({ req, res, url, json, readBody, mailService, handleChat });
+      const handled = await routeWatchRequest({
+        req,
+        res,
+        url,
+        json,
+        readBody,
+        mailService,
+        handleChat,
+        dayPilotProvider
+      });
       return { handled, result };
     }
   };
 }
+
+test("day pilot returns a bounded read-only snapshot contract", async () => {
+  const { handled, result } = await harness({
+    method: "GET",
+    path: "/watch/day-pilot/v1",
+    dayPilotProvider: async () => ({
+      generatedAt: "2026-08-28T08:00:00Z",
+      nextTask: { taskId: "task-1", task: "Angebot prüfen", dueAt: "2026-08-28T09:30:00Z" },
+      briefing: "Ein Termin steht an.",
+      openApprovals: [
+        { approvalId: "approval-1", title: "Mail prüfen", detail: "Vor dem Senden ansehen" },
+        { approvalId: "bad", title: "", detail: "wird verworfen" }
+      ]
+    })
+  }).invoke();
+
+  assert.equal(handled, true);
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.payload.data, {
+    contractVersion: 1,
+    generatedAt: "2026-08-28T08:00:00.000Z",
+    nextTask: { id: "task-1", title: "Angebot prüfen", dueAt: "2026-08-28T09:30:00.000Z" },
+    briefing: "Ein Termin steht an.",
+    openApprovals: [{ id: "approval-1", title: "Mail prüfen", detail: "Vor dem Senden ansehen" }]
+  });
+});
+
+test("day pilot rejects malformed provider timestamps", async () => {
+  await assert.rejects(
+    () => harness({
+      method: "GET",
+      path: "/watch/day-pilot/v1",
+      dayPilotProvider: async () => ({ generatedAt: "not-a-date" })
+    }).invoke(),
+    (error) => error.code === "INVALID_DAY_PILOT_SNAPSHOT" && error.status === 502
+  );
+});
 
 test("watch briefing returns a compact unread inbox", async () => {
   const mailService = {

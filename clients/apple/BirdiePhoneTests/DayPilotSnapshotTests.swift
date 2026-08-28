@@ -51,4 +51,53 @@ final class DayPilotSnapshotTests: XCTestCase {
 
         XCTAssertEqual(store.load(now: now), snapshot)
     }
+
+    func testRemoteDayPilotDataMergesIntoLocalSnapshot() {
+        let now = Date(timeIntervalSince1970: 1_000)
+        let remote = DayPilotRemoteSnapshot(
+            generatedAt: now,
+            nextTask: DayPilotRemoteTask(
+                id: "remote-task",
+                title: "Remote-Aufgabe",
+                dueAt: now.addingTimeInterval(60)
+            ),
+            briefing: "Remote-Briefing",
+            openApprovals: [
+                DayPilotApproval(id: "approval-1", title: "Prüfen", detail: "Vor dem Senden"),
+                DayPilotApproval(id: "approval-2", title: "\u{202E}", detail: "")
+            ]
+        )
+
+        let snapshot = DayPilotViewModel.makeSnapshot(
+            events: [],
+            reminders: [DayPilotItem(id: "local", kind: .task, title: "Lokal", date: now)],
+            now: now,
+            remote: remote
+        )
+
+        XCTAssertEqual(snapshot.nextTask?.id, "remote-task")
+        XCTAssertEqual(snapshot.briefing, "Remote-Briefing")
+        XCTAssertEqual(snapshot.openApprovalCount, 1)
+        XCTAssertEqual(snapshot.nextApproval?.id, "approval-1")
+    }
+
+    func testRemoteDayPilotContractDecodesVersionedISO8601Payload() throws {
+        let data = Data("""
+        {
+          "contractVersion": 1,
+          "generatedAt": "2026-08-28T08:00:00Z",
+          "nextTask": { "id": "task-1", "title": "Prüfen", "dueAt": "2026-08-28T09:30:00Z" },
+          "briefing": "Morgenbriefing",
+          "openApprovals": [{ "id": "approval-1", "title": "Freigabe", "detail": "Prüfen" }]
+        }
+        """.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let snapshot = try decoder.decode(DayPilotRemoteSnapshot.self, from: data)
+
+        XCTAssertEqual(snapshot.contractVersion, 1)
+        XCTAssertEqual(snapshot.nextTask?.id, "task-1")
+        XCTAssertEqual(snapshot.openApprovals.count, 1)
+    }
 }

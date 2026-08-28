@@ -8,7 +8,9 @@ struct BirdieRootView: View {
 
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var router = BirdieAppRouter()
-    @StateObject private var dayPilot = DayPilotViewModel()
+    @StateObject private var dayPilot = DayPilotViewModel(
+        remoteProvider: DayPilotAgentProvider()
+    )
     @State private var selectedTab: Tab = .dayPilot
     @State private var composerRoute: BirdieRoute?
     @State private var highlightedAction: BirdieActionKind?

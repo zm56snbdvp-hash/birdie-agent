@@ -26,6 +26,47 @@ function compactMessage(message) {
   };
 }
 
+function compactDayPilotTask(task) {
+  if (!task || typeof task !== "object" || Array.isArray(task)) return null;
+  const id = normalizeText(task.id || task.taskId);
+  const title = normalizeText(task.title || task.task || task.name);
+  if (!id || !title) return null;
+  const dueAt = task.dueAt || task.date || null;
+  if (dueAt !== null && (!Number.isFinite(Date.parse(String(dueAt))))) return null;
+  return { id, title, dueAt: dueAt ? new Date(dueAt).toISOString() : null };
+}
+
+function compactApproval(approval) {
+  if (!approval || typeof approval !== "object" || Array.isArray(approval)) return null;
+  const id = normalizeText(approval.id || approval.approvalId);
+  const title = normalizeText(approval.title || approval.name);
+  const detail = normalizeText(approval.detail || approval.description);
+  if (!id || !title || !detail) return null;
+  return { id, title, detail };
+}
+
+function compactDayPilot(data) {
+  const value = data && typeof data === "object" && !Array.isArray(data) ? data : {};
+  const generatedAt = value.generatedAt || new Date().toISOString();
+  if (!Number.isFinite(Date.parse(String(generatedAt)))) {
+    const error = new Error("generatedAt must be an ISO date");
+    error.code = "INVALID_DAY_PILOT_SNAPSHOT";
+    error.status = 502;
+    throw error;
+  }
+  const briefing = normalizeText(value.briefing || value.summary || value.message);
+  const approvals = Array.isArray(value.openApprovals)
+    ? value.openApprovals.map(compactApproval).filter(Boolean).slice(0, 20)
+    : [];
+  return {
+    contractVersion: 1,
+    generatedAt: new Date(generatedAt).toISOString(),
+    nextTask: compactDayPilotTask(value.nextTask),
+    briefing,
+    openApprovals: approvals
+  };
+}
+
 export async function routeWatchRequest({
   req,
   res,
@@ -33,7 +74,8 @@ export async function routeWatchRequest({
   json,
   readBody,
   handleChat,
-  mailService = defaultMailService
+  mailService = defaultMailService,
+  dayPilotProvider = async () => ({})
 }) {
   if (!url.pathname.startsWith("/watch/")) return false;
 
@@ -49,6 +91,12 @@ export async function routeWatchRequest({
       inbox: items.slice(0, 5).map(compactMessage),
       primaryAction: items.length ? "READ_INBOX" : "TALK_TO_BIRDIE"
     });
+    return true;
+  }
+
+  if (req.method === "GET" && url.pathname === "/watch/day-pilot/v1") {
+    const data = await dayPilotProvider();
+    ok(json, res, compactDayPilot(data));
     return true;
   }
 

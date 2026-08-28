@@ -92,4 +92,6 @@ Apple CI must generate both XcodeGen projects, run the XCTest bundle on an avail
 
 ## Next integration step
 
-Add one scoped, read-only, versioned endpoint such as `GET /watch/day-pilot/v1` that returns structured `nextTask`, `briefing`, and `openApprovals` under the existing narrow mobile/Watch authentication boundary. Replace only the currently unavailable provider after that contract has server tests. Keep idea writes and all approval execution as separate confirmed in-app flows.
+The first vertical backend slice is now `GET /watch/day-pilot/v1` under the existing narrow mobile/Watch authentication boundary. It returns a bounded `contractVersion: 1` payload with `generatedAt`, optional `nextTask` (`id`, `title`, `dueAt`), `briefing`, and a bounded `openApprovals` list (`id`, `title`, `detail`). The route is read-only; it never infers approvals from free-form text and never performs a write.
+
+The iPhone provider merges that payload with local EventKit data and stores the resulting snapshot in the existing expiring App Group store. If no Watch token exists, EventKit-only Day Pilot remains available; if the remote request fails, the last valid snapshot remains visible. Keep idea writes and all approval execution as separate confirmed in-app flows.
