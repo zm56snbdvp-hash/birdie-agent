@@ -15,6 +15,7 @@ Shader "BirdieWorld/Color"
 
         Pass
         {
+            Cull Off
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag

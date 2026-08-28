@@ -160,6 +160,11 @@ namespace BirdieWorld
             Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.03f, 12f), new Vector3(9f, 0.12f, 58f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.12f, -1f), new Vector3(17f, 0.16f, 11f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.23f, 4.3f), new Vector3(17f, 0.16f, 0.35f), brass);
+            var plazaInlay = CreateMaterial("PlazaInlay", new Color(0.25f, 0.18f, 0.10f, 1f), 0.15f, 0.25f);
+            for (var x = -7f; x <= 7f; x += 2.0f)
+                Primitive(PrimitiveType.Cube, $"PlazaInlayX_{x:0}", new Vector3(x, 0.235f, -1f), new Vector3(0.055f, 0.035f, 10.2f), plazaInlay);
+            for (var z = -5f; z <= 3f; z += 2.0f)
+                Primitive(PrimitiveType.Cube, $"PlazaInlayZ_{z:0}", new Vector3(0f, 0.24f, z), new Vector3(16.8f, 0.035f, 0.055f), plazaInlay);
             Primitive(PrimitiveType.Cube, "River", new Vector3(0f, -0.02f, 12.5f), new Vector3(70f, 0.10f, 5.2f), water);
             Primitive(PrimitiveType.Cube, "Bridge", new Vector3(0f, 0.18f, 12.5f), new Vector3(10f, 0.38f, 8f), wood);
             Primitive(PrimitiveType.Cube, "BridgeRailLeft", new Vector3(-4.3f, 1.05f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
@@ -198,7 +203,6 @@ namespace BirdieWorld
             Primitive(PrimitiveType.Cube, "ExpressWindowD", new Vector3(1.05f, 0.45f, -1.0f), new Vector3(0.10f, 0.82f, 1.6f), window, trainRoot.transform);
             Primitive(PrimitiveType.Cylinder, "ExpressWheelA", new Vector3(-1.7f, -1.1f, 2.0f), new Vector3(0.55f, 0.22f, 0.55f), brass, trainRoot.transform, Quaternion.Euler(90f, 0f, 0f));
             Primitive(PrimitiveType.Cylinder, "ExpressWheelB", new Vector3(1.7f, -1.1f, 2.0f), new Vector3(0.55f, 0.22f, 0.55f), brass, trainRoot.transform, Quaternion.Euler(90f, 0f, 0f));
-            CreateWorldLabel("ExpressLabel", "BIRDIE EXPRESS", new Vector3(5.7f, 3.5f, -6f), 0.032f, gold);
         }
 
         private void BuildNest(Material wood, Material roof, Material brass, Material window)
