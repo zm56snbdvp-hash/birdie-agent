@@ -96,7 +96,9 @@ actor CoreSpotlightRecallIndex: RecallExternalIndexing {
     }
 
     private func safeSnippet(for item: RecallItemV1) -> String? {
-        let candidate = item.summary ?? item.note ?? item.extractedText
+        // Keep free-form notes and OCR text out of the system index. The optional
+        // summary is the explicitly structured description permitted for Spotlight.
+        let candidate = item.summary
         guard let candidate else { return nil }
         return String(candidate.replacingOccurrences(of: "\n", with: " ").prefix(240))
     }

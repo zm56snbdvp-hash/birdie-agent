@@ -145,6 +145,8 @@ test("Recall vault, attachments, key, and optional Spotlight index stay locally 
   assert.match(spotlight, /attributes\.contentURL = item\.deepLinkURL/);
   assert.match(spotlight, /item\.retention\.expiresAt \?\? \.distantFuture/);
   assert.match(spotlight, /item\.tags \+ \[item\.kind\.rawValue\]/);
+  assert.match(spotlight, /let candidate = item\.summary/);
+  assert.doesNotMatch(spotlight, /item\.summary \?\? item\.note|item\.note \?\? item\.extractedText/);
   assert.match(spotlight, /actor CoreSpotlightRecallIndex/);
   assert.match(spotlight, /await acquireExclusiveAccess\(\)/);
   assert.doesNotMatch(spotlight, /CSImportExtension|CSSearchableIndexDelegate/);

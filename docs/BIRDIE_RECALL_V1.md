@@ -211,7 +211,7 @@ Recall-Einstellungen ausdrücklich aktiviert werden. Der private Index nutzt
 die Protection Class `complete`, die Domain
 `de.birdieandbreakfast.birdie.recall.v1` und ist weder für Public Indexing noch
 für Handoff freigegeben. Übergeben werden nur Titel, ein auf 240 Zeichen
-gekürzter Ausschnitt aus Zusammenfassung, Notiz oder extrahiertem Text, Tags,
+gekürzter Ausschnitt ausschließlich aus der optionalen Zusammenfassung, Tags,
 Typ, Erfassungsdatum, Ablaufdatum und der Deep Link. Dauerhaft aufbewahrte
 Elemente erhalten für Spotlight ein fernes Ablaufdatum. Originaldatei und
 Thumbnail werden nicht an Spotlight übergeben.
