@@ -38,6 +38,21 @@ jobs:
       - name: Generate Xcode project
         working-directory: clients/apple
         run: xcodegen generate
+      - name: Materialize App Store Connect key
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import os
+          import pathlib
+
+          key_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "AuthKey.p8"
+          key_path.write_bytes(base64.b64decode(os.environ["APP_STORE_CONNECT_KEY_B64"], validate=True))
+          key_path.chmod(0o600)
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as env_file:
+              env_file.write(f"APP_STORE_CONNECT_KEY_PATH={key_path}\n")
+          PY
       - name: Build and upload to TestFlight
         working-directory: clients/apple
         run: bundle exec fastlane ios beta
