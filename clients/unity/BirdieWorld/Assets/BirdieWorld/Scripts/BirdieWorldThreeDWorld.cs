@@ -160,7 +160,7 @@ namespace BirdieWorld
             // Unity WebGL built-in meshes expose a taller cube bound than the
             // editor primitive, so a lower base prevents it from hiding the
             // plaza tiles or the player model from the camera.
-            Primitive(PrimitiveType.Cube, "WorldGround", new Vector3(0f, -1.0f, 11f), new Vector3(70f, 0.6f, 78f), ground);
+            Primitive(PrimitiveType.Cube, "WorldGround", new Vector3(0f, -4.0f, 11f), new Vector3(70f, 0.6f, 78f), ground);
             Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.03f, 12f), new Vector3(9f, 0.12f, 58f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.12f, -1f), new Vector3(17f, 0.16f, 11f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.23f, 4.3f), new Vector3(17f, 0.16f, 0.35f), brass);
