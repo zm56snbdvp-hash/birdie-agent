@@ -18,16 +18,37 @@ targets:
     platform: iOS
     sources:
       - path: BirdiePhone
+        excludes:
+          - Info.plist
+          - BirdiePhone.entitlements
+      - path: BirdieShared
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie
         PRODUCT_NAME: Birdie
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Birdie
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: BirdiePhone/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: BirdieWatch
+      - target: BirdieLiveActivity
+
+  BirdieLiveActivity:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BirdieLiveActivity
+        excludes:
+          - Info.plist
+      - path: BirdieShared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.liveactivity
+        PRODUCT_NAME: BirdieLiveActivity
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: BirdieLiveActivity/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
 
   BirdieWatch:
     type: application
@@ -50,13 +71,27 @@ targets:
     platform: watchOS
     sources:
       - path: BirdieWatchWidget
+        excludes:
+          - Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.watchkitapp.widget
         PRODUCT_NAME: BirdieWidget
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: BirdieWatchWidget/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
+
+  BirdiePhoneTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: BirdiePhoneTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.tests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: BirdiePhone
 
 schemes:
   BirdiePersonal:
@@ -65,7 +100,11 @@ schemes:
         BirdiePhone: all
         BirdieWatch: all
         BirdieWatchWidget: all
+        BirdieLiveActivity: all
     run:
       config: Debug
+    test:
+      targets:
+        - BirdiePhoneTests
     archive:
       config: Release

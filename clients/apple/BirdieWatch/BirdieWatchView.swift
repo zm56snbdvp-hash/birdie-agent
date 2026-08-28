@@ -39,7 +39,7 @@ struct BirdieWatchView: View {
                     } else {
                         ForEach(model.inbox.prefix(5)) { mail in
                             NavigationLink {
-                                BirdieMailReplyView(mail: mail)
+                                BirdieMailDetailView(mail: mail)
                             } label: {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(mail.subject)
@@ -61,13 +61,6 @@ struct BirdieWatchView: View {
                     }
                 }
 
-                if let status = model.mailStatus {
-                    Section {
-                        Text(status)
-                            .font(.caption)
-                    }
-                }
-
                 if let error = model.errorMessage {
                     Section {
                         Text(error)
@@ -83,14 +76,8 @@ struct BirdieWatchView: View {
     }
 }
 
-private struct BirdieMailReplyView: View {
-    @EnvironmentObject private var model: BirdieWatchModel
-    @Environment(\.dismiss) private var dismiss
-
+private struct BirdieMailDetailView: View {
     let mail: WatchMailItem
-
-    @State private var replyText = ""
-    @State private var showingApproval = false
 
     var body: some View {
         List {
@@ -106,42 +93,12 @@ private struct BirdieMailReplyView: View {
                 }
             }
 
-            Section("Antwort") {
-                TextField("Antwort diktieren", text: $replyText, axis: .vertical)
-                    .lineLimit(2...6)
-
-                if !replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(replyText)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             Section {
-                Button("Antwort prüfen & senden") {
-                    showingApproval = true
-                }
-                .disabled(replyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || model.isBusy)
+                Label("Antworten in Birdie Approve auf dem iPhone prüfen", systemImage: "iphone")
+                    .font(.footnote)
             }
         }
-        .navigationTitle("Antwort")
+        .navigationTitle("Mail")
         .tint(BirdiePalette.gold)
-        .confirmationDialog(
-            "Diese Mail wirklich senden?",
-            isPresented: $showingApproval,
-            titleVisibility: .visible
-        ) {
-            Button("Jetzt senden") {
-                let text = replyText
-                Task {
-                    if await model.sendReply(to: mail, text: text) {
-                        dismiss()
-                    }
-                }
-            }
-            Button("Abbrechen", role: .cancel) {}
-        } message: {
-            Text("Birdie sendet erst nach dieser ausdrücklichen Bestätigung.")
-        }
     }
 }
