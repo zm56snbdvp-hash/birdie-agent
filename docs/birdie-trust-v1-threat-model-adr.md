@@ -1,6 +1,6 @@
 # Birdie Trust v1: Threat Model und Architekturentscheidung
 
-Status: **clientseitig implementiert, Backend-Integration blockiert**, 28. August 2026. Der Vertrag ist in
+Status: **clientseitig implementiert, lokaler Backend-Referenzadapter vorhanden, Produktionsintegration blockiert**, 28. August 2026. Der Vertrag ist in
 `clients/apple/Contracts/v1/birdie-trust.openapi.json` festgeschrieben. Er enthaelt
 bewusst keine Produktions-URL, keinen OAuth-Issuer, keine APNs-Zugangsdaten und
 keinen Schluessel.
@@ -210,10 +210,18 @@ Release (`production`). `project.personal.yml` enthaelt dieses Entitlement bewus
 nicht, weil ein kostenloses Personal Team App Attest nicht provisionieren kann;
 dort ist nur der explizite lokale DEBUG-Mock nutzbar.
 
-Der **genau naechste Integrationsschritt** ist, im Backend einen rein lokalen
-Trust-v1-Adapter fuer App-Attest-Registration, Approval-Challenge/-Decision samt
-Decision-ID-Lookup sowie Mission-Challenge/-Command zu implementieren. Eine
-Transaktion muss Version, Action-Digest, Device Binding, Nonce-Consume und
-Idempotenz pruefen und mit einem nur fuer Tests erzeugten Ed25519-Key verifizierbare
-Receipts liefern. Erst wenn diese Contract- und Response-Loss-Tests gruen sind,
-werden echte OAuth-, App-Attest- und APNs-Konfigurationen separat angebunden.
+Der lokale Referenzschritt ist in `src/birdie-trust-v1-adapter.mjs` umgesetzt und
+mit `test/birdie-trust-v1-adapter.test.mjs` abgesichert. Er ist nur mit dem
+expliziten Flag `allowLocalMock=true` aktivierbar, hält Approval- und Mission-
+Versionen atomar, verbraucht Challenges genau einmal, dedupliziert über den
+Idempotency-Key, simuliert Response-Loss nach Commit und signiert testbare
+Ed25519-Receipts. Er wird nicht in Produktionsrouten importiert und enthält keine
+Produktions-URL, Credentials oder Secrets.
+
+Der **genau naechste Integrationsschritt** ist jetzt die Anbindung eines echten
+versionierten Backend-Adapters an dieselben Contract-Endpunkte: authentisierte
+Benutzer-/Device-Bindung, Apple-App-Attest-Verifikation mit persistiertem Counter,
+Nonce-/Idempotency-Constraints, rotierbare Receipt-Key-Discovery sowie APNs-
+Provider und ActivityKit-Token-Registrierung. Diese Werte müssen aus der
+verantworteten Produktionskonfiguration kommen; erst danach darf der lokale
+Adapter in einem separat geprüften Integrations-Environment ersetzt werden.
