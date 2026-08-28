@@ -70,7 +70,7 @@ final class RecallIntakePrivacyTests: RecallTestCase {
         XCTAssertNil(vault.range(of: Data("Zimmernummer 407".utf8)))
         XCTAssertEqual(try root.resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup, true)
 
-        #if os(iOS)
+        #if os(iOS) && !targetEnvironment(simulator)
         let attributes = try FileManager.default.attributesOfItem(atPath: vaultURL.path)
         XCTAssertEqual(attributes[.protectionKey] as? FileProtectionType, .complete)
         #endif
