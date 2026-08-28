@@ -53,6 +53,7 @@ namespace BirdieWorld
     public sealed class BirdieWorldCharacterApi : MonoBehaviour
     {
         private const string ProductionHost = "agent.birdieandbreakfast.de";
+        private const string BetaCloudRunHost = "birdie-agent-893591677320.europe-west3.run.app";
         [SerializeField] private string baseUrl = "https://agent.birdieandbreakfast.de";
         private string accessToken;
 
@@ -68,12 +69,13 @@ namespace BirdieWorld
             if (!Uri.TryCreate(candidate, UriKind.Absolute, out var uri)) return false;
             if (!string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment)) return false;
             if (!string.IsNullOrEmpty(uri.UserInfo) || (uri.AbsolutePath != "/" && !string.IsNullOrEmpty(uri.AbsolutePath))) return false;
-            var production = uri.Scheme == Uri.UriSchemeHttps &&
+            var approvedRemote = uri.Scheme == Uri.UriSchemeHttps &&
                 uri.IsDefaultPort &&
-                string.Equals(uri.Host, ProductionHost, StringComparison.OrdinalIgnoreCase);
+                (string.Equals(uri.Host, ProductionHost, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(uri.Host, BetaCloudRunHost, StringComparison.OrdinalIgnoreCase));
             var localDevelopment = uri.Scheme == Uri.UriSchemeHttp && uri.IsLoopback &&
                 (Application.isEditor || Debug.isDebugBuild);
-            if (!production && !localDevelopment) return false;
+            if (!approvedRemote && !localDevelopment) return false;
 
             baseUrl = candidate;
             accessToken = bearerToken.Trim();

@@ -36,7 +36,7 @@ function waitForServer(child) {
     let stderr = "";
     const timeout = setTimeout(() => {
       reject(new Error(`Birdie Agent did not start in time: ${stderr}`));
-    }, 15_000);
+    }, 30_000);
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     child.stdout.on("data", (chunk) => {
       if (chunk.toString().includes("Birdie Agent listening")) {

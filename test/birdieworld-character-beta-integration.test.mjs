@@ -100,6 +100,15 @@ test("the Unity and WebGL shells adapt to iPhone portrait and safe-area insets",
   assert.match(template, /@media \(orientation: portrait\)/);
 });
 
+test("the Unity 6 WebGL template automatically syncs persistent data", () => {
+  const template = read("clients/unity/BirdieWorld/Assets/WebGLTemplates/BirdieWorldBeta/index.html");
+  const projectVersion = read("clients/unity/BirdieWorld/ProjectSettings/ProjectVersion.txt");
+  assert.match(projectVersion, /6000\.0\.76f1/);
+  assert.equal(template.match(/autoSyncPersistentDataPath\s*:/g)?.length, 1);
+  assert.match(template, /productVersion:\s*"\{\{\{ PRODUCT_VERSION \}\}\}",\s*autoSyncPersistentDataPath:\s*true\s*\n\s*};/);
+  assert.doesNotMatch(template, /autoSyncPersistentDataPath:\s*false/);
+});
+
 test("authenticated persistence isolates account state from signed-out drafts", () => {
   const bootstrap = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldBetaBootstrap.cs");
   assert.match(bootstrap, /new GameObject\("BirdieWorld Auth Session"\)/);
@@ -143,6 +152,22 @@ test("the Unity write DTO cannot serialize identity, timestamps or economics", (
   assert.match(api, /uri\.IsDefaultPort/);
   assert.match(api, /uri\.AbsolutePath/);
   assert.match(api, /uri\.UserInfo/);
+});
+
+test("the character API permits only the exact production and evidenced Beta Cloud Run hosts", () => {
+  const api = read("clients/unity/BirdieWorld/Assets/BirdieWorld/Scripts/BirdieWorldCharacterApi.cs");
+  assert.match(api, /ProductionHost = "agent\.birdieandbreakfast\.de"/);
+  assert.match(api, /BetaCloudRunHost = "birdie-agent-893591677320\.europe-west3\.run\.app"/);
+  assert.match(api, /uri\.Scheme == Uri\.UriSchemeHttps\s*&&\s*uri\.IsDefaultPort/);
+  assert.match(api, /uri\.Query[\s\S]*uri\.Fragment/);
+  assert.match(api, /uri\.UserInfo[\s\S]*uri\.AbsolutePath/);
+  assert.match(
+    api,
+    /string\.Equals\(uri\.Host, ProductionHost, StringComparison\.OrdinalIgnoreCase\)\s*\|\|\s*string\.Equals\(uri\.Host, BetaCloudRunHost, StringComparison\.OrdinalIgnoreCase\)/
+  );
+  assert.match(api, /if \(!approvedRemote && !localDevelopment\) return false;/);
+  assert.doesNotMatch(api, /(?:uri\.Host|ProductionHost|BetaCloudRunHost)\s*\.\s*(?:EndsWith|StartsWith|Contains)\s*\(/);
+  assert.doesNotMatch(api, /Regex\.(?:IsMatch|Match)\s*\([^;]*uri\.Host|\*\.run\.app|\.run\.app\$/);
 });
 
 test("the WebGL auth bridge accepts an in-memory JSON session and supports account switching", () => {

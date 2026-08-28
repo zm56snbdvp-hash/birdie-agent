@@ -134,7 +134,7 @@ test("Beta 02 documentation keeps review and release gates explicit", () => {
   for (const source of docs) {
     assert.match(source, /Beta 02/i);
     assert.match(source, /opener[\s\S]*creator[\s\S]*ready[\s\S]*platform[\s\S]*human Leni[\s\S]*route map[\s\S]*Birdie Express ride[\s\S]*The Nest forecourt/i);
-    assert.match(source, /not live, public, or Founder-accepted/i);
+    assert.match(source, /not (?:live, public|public, Production), or Founder-accepted/i);
     assert.match(source, /account sync/i);
   }
 });
