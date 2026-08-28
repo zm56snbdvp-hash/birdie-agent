@@ -505,7 +505,20 @@ namespace BirdieWorld
 
         private Material CreateMaterial(string name, Color color, float metallic, float smoothness, Color? emission = null)
         {
-            var shader = Shader.Find("Standard") ?? Shader.Find("Unlit/Color");
+            // WebGL strips shaders that are only requested dynamically. Keep the
+            // Standard lookup for editor/desktop lighting, then fall back to the
+            // UI shader which is guaranteed to ship with this Canvas-only beta.
+            var shader = Shader.Find("Standard")
+                ?? Shader.Find("Universal Render Pipeline/Lit")
+                ?? Shader.Find("Unlit/Color")
+                ?? Shader.Find("Sprites/Default")
+                ?? Shader.Find("UI/Default");
+            if (shader == null)
+            {
+                Debug.LogError($"BirdieWorld 3D material '{name}' could not find a compatible shader.");
+                return null;
+            }
+
             var material = new Material(shader) { name = name, color = color };
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
