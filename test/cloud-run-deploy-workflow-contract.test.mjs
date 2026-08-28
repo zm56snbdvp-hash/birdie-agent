@@ -6,7 +6,7 @@ import { test } from "node:test";
 const workflow = readFileSync(
   ".github/workflows/deploy-cloud-run-no-traffic.yml",
   "utf8"
-);
+).replace(/\r\n/g, "\n");
 
 function extractRunBlocks(source) {
   const lines = source.split("\n");

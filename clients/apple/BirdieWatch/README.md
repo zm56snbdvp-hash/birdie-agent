@@ -99,8 +99,10 @@ Before production traffic:
 ## Release gates
 
 - Build/sign the paired iOS + watchOS targets in Xcode on a Mac.
-- Bind the production Watch secret to Cloud Run without exposing it in source or chat.
-- Run paired-device smoke tests on the actual iPhone and Apple Watch.
+- Complete the [safe backend activation](../WATCH_BACKEND_ACTIVATION_DE.md)
+  without exposing the Watch secret in source or chat.
+- Run the reproducible [paired-device smoke test](../PHYSICAL_DEVICE_SMOKE_TEST_DE.md)
+  on the actual iPhone and Apple Watch.
 
 ## Free own-device install
 

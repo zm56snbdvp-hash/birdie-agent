@@ -1,12 +1,21 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 
 const workflow = readFileSync(
   ".github/workflows/deploy-watch-live.yml",
   "utf8"
-);
+).replace(/\r\n/g, "\n");
+
+const productionServiceWorkflows = [
+  ".github/workflows/deploy-cloud-run-no-traffic.yml",
+  ".github/workflows/deploy-meta-live.yml",
+  ".github/workflows/deploy-watch-live.yml"
+].map((path) => ({
+  path,
+  source: readFileSync(path, "utf8").replace(/\r\n/g, "\n")
+}));
 
 function extractRunBlocks(source) {
   const lines = source.split("\n");
@@ -41,6 +50,19 @@ test("Watch production release is manual and bound to exact protected main", () 
   assert.match(workflow, /test "\$RELEASE_SHA" = "\$GITHUB_SHA"/);
   assert.match(workflow, /DEPLOY_BIRDIE_WATCH_PRODUCTION/);
   assert.match(workflow, /environment:\n      name: birdie-watch-live/);
+  assert.match(workflow, /BIRDIE_WATCH_ENVIRONMENT_GUARD/);
+  assert.match(workflow, /BIRDIE_WATCH_PROTECTED_V1/);
+});
+
+test("all active production mutations share one lock and the one-time lane is retired", () => {
+  for (const { path, source } of productionServiceWorkflows) {
+    assert.match(
+      source,
+      /concurrency:\n  group: birdie-agent-production-service\n  cancel-in-progress: false/,
+      path
+    );
+  }
+  assert.equal(existsSync(".github/workflows/framer-v4-zero-traffic-once.yml"), false);
 });
 
 test("full tests precede a credential-free immutable image build", () => {
@@ -65,10 +87,13 @@ test("provider and runtime coordinates stay exact", () => {
   assert.match(workflow, /GCP_REGION: europe-west3/);
   assert.match(workflow, /CLOUD_RUN_SERVICE: birdie-agent/);
   assert.match(workflow, /ARTIFACT_REPOSITORY: birdie-agent-releases/);
-  assert.match(workflow, /github-birdie-agent\/providers\/github-birdie-agent/);
+  assert.match(workflow, /github-birdie-agent\/providers\/github-birdie-watch/);
   assert.match(workflow, /birdie-github-deployer@gen-lang-client-0251788487\.iam\.gserviceaccount\.com/);
   assert.match(workflow, /893591677320-compute@developer\.gserviceaccount\.com/);
   assert.match(workflow, /WATCH_SECRET: birdie-watch-api-key/);
+  assert.match(workflow, /id: watch_secret/);
+  assert.match(workflow, /secret_version_resource=.*versions describe latest/);
+  assert.match(workflow, /\^\[1-9\]\[0-9\]\*\$/);
   assert.match(workflow, /secret_state.*ENABLED/s);
 });
 
@@ -81,7 +106,9 @@ test("Watch candidate is secret-bound and proven at zero traffic before promotio
   assert.match(workflow, /--revision-suffix "\$revision_suffix"/);
   assert.match(workflow, /--tag "\$candidate_tag"/);
   assert.match(workflow, /--no-traffic/);
-  assert.match(workflow, /--update-secrets "BIRDIE_WATCH_API_KEY=\$WATCH_SECRET:latest"/);
+  assert.match(workflow, /--update-secrets "BIRDIE_WATCH_API_KEY=\$WATCH_SECRET:\$WATCH_SECRET_VERSION"/);
+  assert.match(workflow, /\.valueFrom\.secretKeyRef\.key == \$secret_version/);
+  assert.doesNotMatch(workflow, /BIRDIE_WATCH_API_KEY=\$WATCH_SECRET:latest/);
   assert.match(workflow, /\.watch == "SCOPED_AUTH_READY"/);
   assert.match(workflow, /GET \/watch\/briefing/);
   assert.match(workflow, /POST \/watch\/command/);
@@ -102,6 +129,9 @@ test("previous revision, IAM and runtime identity are captured and verified", ()
   assert.match(workflow, /live_runtime_sa/);
   assert.match(workflow, /length == 1 and \.\[0\]\.revisionName == \$revision and \.\[0\]\.percent == 100/);
   assert.match(workflow, /--to-revisions "\$PREVIOUS_REVISION=100"/);
+  assert.match(workflow, /steps\.promote\.outcome == 'failure'/);
+  assert.match(workflow, /steps\.verify_live\.outcome != 'success'/);
+  assert.match(workflow, /service-rollback\.json/);
 });
 
 test("all actions are immutable and all embedded shell blocks parse", () => {

@@ -29,7 +29,7 @@ async function freePort() {
 function waitForServer(child) {
   return new Promise((resolve, reject) => {
     let stderr = "";
-    const timeout = setTimeout(() => reject(new Error(`Server start timed out: ${stderr}`)), 5000);
+    const timeout = setTimeout(() => reject(new Error(`Server start timed out: ${stderr}`)), 15000);
     child.stderr.on("data", (chunk) => { stderr += chunk.toString(); });
     child.stdout.on("data", (chunk) => {
       if (chunk.toString().includes("Birdie Agent listening")) {

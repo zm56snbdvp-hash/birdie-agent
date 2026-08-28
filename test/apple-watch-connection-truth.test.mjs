@@ -4,6 +4,15 @@ import { readFile } from "node:fs/promises";
 
 const relayPath = new URL("../clients/apple/BirdiePhone/WatchRelay.swift", import.meta.url);
 const setupViewPath = new URL("../clients/apple/BirdiePhone/BirdiePhoneSetupView.swift", import.meta.url);
+const tokenStorePath = new URL("../clients/apple/BirdiePhone/WatchTokenStore.swift", import.meta.url);
+const watchSourcePaths = [
+  "BirdieBrand.swift",
+  "BirdieWatchAPI.swift",
+  "BirdieWatchApp.swift",
+  "BirdieWatchModel.swift",
+  "BirdieWatchView.swift"
+].map((name) => new URL(`../clients/apple/BirdieWatch/${name}`, import.meta.url));
+const widgetPath = new URL("../clients/apple/BirdieWatchWidget/BirdieWatchWidget.swift", import.meta.url);
 
 test("iPhone relay publishes the physical Watch session state", async () => {
   const source = await readFile(relayPath, "utf8");
@@ -29,4 +38,23 @@ test("iPhone setup keeps API credential state separate from Watch connectivity",
   assert.match(source, /Watch erreichbar/);
   assert.doesNotMatch(source, /@State private var isConnected/);
   assert.doesNotMatch(source, /Birdie Watch ist verbunden/);
+});
+
+test("Watch credential remains confined to the iPhone Keychain", async () => {
+  const [relay, tokenStore, ...watchSources] = await Promise.all([
+    readFile(relayPath, "utf8"),
+    readFile(tokenStorePath, "utf8"),
+    ...watchSourcePaths.map((path) => readFile(path, "utf8")),
+    readFile(widgetPath, "utf8")
+  ]);
+
+  assert.match(relay, /WatchTokenStore\.shared\.load\(\)/);
+  assert.match(tokenStore, /kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly/);
+  assert.match(tokenStore, /kSecClassGenericPassword/);
+
+  const forbiddenWatchCredentialSurface =
+    /BIRDIE_WATCH_API_KEY|WatchTokenStore|kSecAttr|Authorization|Bearer\s/;
+  for (const source of watchSources) {
+    assert.doesNotMatch(source, forbiddenWatchCredentialSurface);
+  }
 });
