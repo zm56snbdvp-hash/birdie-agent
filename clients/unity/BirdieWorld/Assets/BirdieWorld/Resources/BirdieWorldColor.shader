@@ -47,8 +47,11 @@ Shader "BirdieWorld/Color"
             {
                 float3 normal = normalize(input.worldNormal);
                 float3 lightDirection = normalize(float3(-0.35, 0.80, -0.25));
-                float diffuse = saturate(dot(normal, lightDirection)) * 0.65 + 0.35;
-                return fixed4(_Color.rgb * diffuse + _EmissionColor.rgb, _Color.a);
+                float diffuse = saturate(dot(normal, lightDirection));
+                // Keep the stylised dusk palette readable even on WebGL, where
+                // dynamic scene lighting can be stripped or differ by device.
+                float light = 0.58 + diffuse * 0.72;
+                return fixed4(saturate(_Color.rgb * light + _EmissionColor.rgb), _Color.a);
             }
             ENDCG
         }

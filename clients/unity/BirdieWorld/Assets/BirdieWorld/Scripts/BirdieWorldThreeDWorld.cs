@@ -15,8 +15,8 @@ namespace BirdieWorld
     {
         private readonly Color ink = new(0.008f, 0.018f, 0.016f, 1f);
         private readonly Color panel = new(0.020f, 0.065f, 0.048f, 0.94f);
-        private readonly Color forest = new(0.035f, 0.16f, 0.095f, 1f);
-        private readonly Color forestDeep = new(0.018f, 0.075f, 0.050f, 1f);
+        private readonly Color forest = new(0.08f, 0.30f, 0.16f, 1f);
+        private readonly Color forestDeep = new(0.035f, 0.14f, 0.085f, 1f);
         private readonly Color gold = new(0.83f, 0.61f, 0.25f, 1f);
         private readonly Color ivory = new(0.95f, 0.92f, 0.83f, 1f);
         private readonly Color quiet = new(0.65f, 0.69f, 0.63f, 1f);
@@ -116,7 +116,7 @@ namespace BirdieWorld
             worldCamera = cameraObject.AddComponent<Camera>();
             worldCamera.clearFlags = CameraClearFlags.SolidColor;
             worldCamera.backgroundColor = new Color(0.025f, 0.055f, 0.095f, 1f);
-            worldCamera.fieldOfView = 52f;
+            worldCamera.fieldOfView = 58f;
             worldCamera.nearClipPlane = 0.1f;
             worldCamera.farClipPlane = 240f;
             worldCamera.allowHDR = false;
@@ -143,21 +143,23 @@ namespace BirdieWorld
 
         private void BuildEnvironment()
         {
-            var ground = CreateMaterial("Ground", new Color(0.035f, 0.12f, 0.075f, 1f), 0.05f, 0.15f);
-            var path = CreateMaterial("WarmStone", new Color(0.34f, 0.25f, 0.15f, 1f), 0.05f, 0.35f);
-            var wood = CreateMaterial("DarkWood", new Color(0.13f, 0.065f, 0.035f, 1f), 0.05f, 0.25f);
-            var roof = CreateMaterial("RoofGreen", new Color(0.018f, 0.07f, 0.055f, 1f), 0.1f, 0.25f);
+            var ground = CreateMaterial("Ground", new Color(0.12f, 0.30f, 0.18f, 1f), 0.05f, 0.15f);
+            var path = CreateMaterial("WarmStone", new Color(0.56f, 0.39f, 0.19f, 1f), 0.05f, 0.35f);
+            var wood = CreateMaterial("DarkWood", new Color(0.25f, 0.12f, 0.06f, 1f), 0.05f, 0.25f);
+            var roof = CreateMaterial("RoofGreen", new Color(0.045f, 0.17f, 0.12f, 1f), 0.1f, 0.25f);
             var brass = CreateMaterial("Brass", gold, 0.70f, 0.65f, new Color(0.15f, 0.08f, 0.015f, 1f));
-            var water = CreateMaterial("River", new Color(0.04f, 0.20f, 0.30f, 1f), 0.15f, 0.75f);
-            var mountain = CreateMaterial("Mountain", new Color(0.075f, 0.12f, 0.16f, 1f), 0.0f, 0.25f);
-            var snow = CreateMaterial("Snow", new Color(0.65f, 0.72f, 0.75f, 1f), 0.0f, 0.35f);
-            var foliage = CreateMaterial("Pine", new Color(0.018f, 0.11f, 0.070f, 1f), 0.0f, 0.2f);
-            var foliageLight = CreateMaterial("PineLit", new Color(0.035f, 0.22f, 0.12f, 1f), 0.0f, 0.2f);
-            var train = CreateMaterial("ExpressBlack", new Color(0.025f, 0.035f, 0.03f, 1f), 0.45f, 0.4f);
-            var window = CreateMaterial("TrainWindow", new Color(0.15f, 0.32f, 0.40f, 1f), 0.25f, 0.75f, new Color(0.08f, 0.18f, 0.24f, 1f));
+            var water = CreateMaterial("River", new Color(0.06f, 0.30f, 0.46f, 1f), 0.15f, 0.75f);
+            var mountain = CreateMaterial("Mountain", new Color(0.13f, 0.22f, 0.30f, 1f), 0.0f, 0.25f);
+            var snow = CreateMaterial("Snow", new Color(0.78f, 0.84f, 0.86f, 1f), 0.0f, 0.35f);
+            var foliage = CreateMaterial("Pine", new Color(0.035f, 0.22f, 0.12f, 1f), 0.0f, 0.2f);
+            var foliageLight = CreateMaterial("PineLit", new Color(0.07f, 0.36f, 0.18f, 1f), 0.0f, 0.2f);
+            var train = CreateMaterial("ExpressBlack", new Color(0.055f, 0.075f, 0.065f, 1f), 0.45f, 0.4f);
+            var window = CreateMaterial("TrainWindow", new Color(0.24f, 0.48f, 0.58f, 1f), 0.25f, 0.75f, new Color(0.10f, 0.24f, 0.32f, 1f));
 
             Primitive(PrimitiveType.Cube, "WorldGround", new Vector3(0f, -0.45f, 11f), new Vector3(70f, 0.8f, 78f), ground);
             Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.03f, 12f), new Vector3(9f, 0.12f, 58f), path);
+            Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.12f, -1f), new Vector3(17f, 0.16f, 11f), path);
+            Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.23f, 4.3f), new Vector3(17f, 0.16f, 0.35f), brass);
             Primitive(PrimitiveType.Cube, "River", new Vector3(0f, -0.02f, 12.5f), new Vector3(70f, 0.10f, 5.2f), water);
             Primitive(PrimitiveType.Cube, "Bridge", new Vector3(0f, 0.18f, 12.5f), new Vector3(10f, 0.38f, 8f), wood);
             Primitive(PrimitiveType.Cube, "BridgeRailLeft", new Vector3(-4.3f, 1.05f, 12.5f), new Vector3(0.22f, 1.5f, 8f), brass);
@@ -196,7 +198,7 @@ namespace BirdieWorld
             Primitive(PrimitiveType.Cube, "ExpressWindowD", new Vector3(1.05f, 0.45f, -1.0f), new Vector3(0.10f, 0.82f, 1.6f), window, trainRoot.transform);
             Primitive(PrimitiveType.Cylinder, "ExpressWheelA", new Vector3(-1.7f, -1.1f, 2.0f), new Vector3(0.55f, 0.22f, 0.55f), brass, trainRoot.transform, Quaternion.Euler(90f, 0f, 0f));
             Primitive(PrimitiveType.Cylinder, "ExpressWheelB", new Vector3(1.7f, -1.1f, 2.0f), new Vector3(0.55f, 0.22f, 0.55f), brass, trainRoot.transform, Quaternion.Euler(90f, 0f, 0f));
-            CreateWorldLabel("ExpressLabel", "BIRDIE EXPRESS", new Vector3(5.7f, 3.5f, -6f), 0.07f, gold);
+            CreateWorldLabel("ExpressLabel", "BIRDIE EXPRESS", new Vector3(5.7f, 3.5f, -6f), 0.032f, gold);
         }
 
         private void BuildNest(Material wood, Material roof, Material brass, Material window)
@@ -362,8 +364,8 @@ namespace BirdieWorld
             cameraVelocity = Vector3.zero;
             if (worldCamera != null)
             {
-                worldCamera.transform.position = playerPosition + new Vector3(0f, 7.3f, -11.5f);
-                worldCamera.transform.LookAt(playerPosition + Vector3.up * 1.25f);
+                worldCamera.transform.position = playerPosition + new Vector3(0f, 6.2f, -10.2f);
+                worldCamera.transform.LookAt(playerPosition + Vector3.up * 1.55f);
             }
             UpdateObjective();
         }
@@ -383,7 +385,7 @@ namespace BirdieWorld
             Primitive(PrimitiveType.Cube, "PlayerBootLeft", new Vector3(-0.25f, 0.24f, 0f), new Vector3(0.20f, 0.50f, 0.32f), bootMaterial, playerRoot.transform);
             Primitive(PrimitiveType.Cube, "PlayerBootRight", new Vector3(0.25f, 0.24f, 0f), new Vector3(0.20f, 0.50f, 0.32f), bootMaterial, playerRoot.transform);
             playerScarf = Primitive(PrimitiveType.Cube, "PlayerScarf", new Vector3(0f, 1.75f, -0.43f), new Vector3(0.78f, 0.13f, 0.12f), scarfMaterial, playerRoot.transform).GetComponent<Renderer>();
-            CreateWorldLabel("PlayerLabel", "DEIN BIRDIE", new Vector3(0f, 3.45f, -1.0f), 0.055f, ivory, playerRoot.transform);
+            CreateWorldLabel("PlayerLabel", "DEIN BIRDIE", new Vector3(0f, 3.45f, -1.0f), 0.045f, ivory, playerRoot.transform);
         }
 
         private void HandleMovement()
@@ -431,9 +433,9 @@ namespace BirdieWorld
         private void UpdateCamera()
         {
             if (worldCamera == null || playerRoot == null) return;
-            var desired = playerRoot.transform.position + new Vector3(0f, 7.3f, -11.5f);
+            var desired = playerRoot.transform.position + new Vector3(0f, 6.2f, -10.2f);
             worldCamera.transform.position = Vector3.SmoothDamp(worldCamera.transform.position, desired, ref cameraVelocity, 0.20f, 40f, Time.unscaledDeltaTime);
-            worldCamera.transform.LookAt(playerRoot.transform.position + Vector3.up * 1.25f);
+            worldCamera.transform.LookAt(playerRoot.transform.position + Vector3.up * 1.55f);
         }
 
         private void UpdateObjective()
@@ -573,10 +575,10 @@ namespace BirdieWorld
             var material = new Material(shader) { name = name, color = color };
             if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", metallic);
             if (material.HasProperty("_Glossiness")) material.SetFloat("_Glossiness", smoothness);
-            if (emission.HasValue && material.HasProperty("_EmissionColor"))
+            if (material.HasProperty("_EmissionColor"))
             {
                 material.EnableKeyword("_EMISSION");
-                material.SetColor("_EmissionColor", emission.Value);
+                material.SetColor("_EmissionColor", emission ?? new Color(color.r * 0.08f, color.g * 0.08f, color.b * 0.08f, 1f));
             }
             return material;
         }
