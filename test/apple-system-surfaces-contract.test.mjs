@@ -25,6 +25,8 @@ test("both XcodeGen projects wire the phone, iOS widget, shared contracts, and t
     const source = await text(spec);
     assert.match(source, /BirdieWidgets:\s*\n\s+type: app-extension\s*\n\s+platform: iOS/);
     assert.match(source, /BirdiePhoneTests:\s*\n\s+type: bundle\.unit-test/);
+    assert.match(source, /TEST_HOST: \$\(BUILT_PRODUCTS_DIR\)\/Birdie\.app\/Birdie/);
+    assert.match(source, /BUNDLE_LOADER: \$\(TEST_HOST\)/);
     assert.match(source, /- path: BirdieShared/);
     assert.match(source, /- path: BirdieIntents/);
     assert.match(source, /- target: BirdieWidgets/);
