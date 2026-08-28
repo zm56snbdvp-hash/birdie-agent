@@ -33,7 +33,19 @@ test("both XcodeGen projects wire the phone, iOS widget, shared contracts, and t
     assert.match(source, /CODE_SIGN_ENTITLEMENTS: BirdiePhone\/BirdiePhone\.entitlements/);
     assert.match(source, /CODE_SIGN_ENTITLEMENTS: BirdieWidgets\/BirdieWidgets\.entitlements/);
     assert.match(source, /INFOPLIST_FILE: BirdieWidgets\/Info\.plist/);
+    assert.match(source, /INFOPLIST_FILE: BirdieWatchWidget\/Info\.plist/);
     assert.match(source, /targets:\s*\n\s+- BirdiePhoneTests/);
+  }
+});
+
+test("embedded widget extensions declare their WidgetKit extension point explicitly", async () => {
+  for (const plist of [
+    "clients/apple/BirdieWidgets/Info.plist",
+    "clients/apple/BirdieWatchWidget/Info.plist",
+  ]) {
+    const source = await text(plist);
+    assert.match(source, /<key>NSExtension<\/key>[\s\S]*<key>NSExtensionPointIdentifier<\/key>/);
+    assert.match(source, /<string>com\.apple\.widgetkit-extension<\/string>/);
   }
 });
 

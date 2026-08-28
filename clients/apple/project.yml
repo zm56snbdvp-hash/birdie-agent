@@ -95,12 +95,14 @@ targets:
     platform: watchOS
     sources:
       - path: BirdieWatchWidget
+        excludes:
+          - Info.plist
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.birdie.watchkitapp.widget
         PRODUCT_NAME: BirdieWidget
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_NSExtension_NSExtensionPointIdentifier: com.apple.widgetkit-extension
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: BirdieWatchWidget/Info.plist
         APPLICATION_EXTENSION_API_ONLY: YES
 
 schemes:
