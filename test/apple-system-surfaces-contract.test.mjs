@@ -160,7 +160,8 @@ test("Apple smoke prefers the iPhone 13 mini compatibility baseline", async () =
   assert.match(workflow, /"iPhone 13 mini"/);
   assert.match(workflow, /"iPhone SE \(3rd generation\)"/);
   assert.match(workflow, /version >= \(18, 0\)/);
-  assert.match(workflow, /Using \{chosen\['name'\]\} on \{latest\[1\]\}/);
+  assert.match(workflow, /chosen_name = chosen\["name"\]/);
+  assert.match(workflow, /Using \{chosen_name\} on \{latest\[1\]\}/);
   assert.doesNotMatch(swift, /DynamicIsland|ActivityKit/);
   assert.match(await text("clients/apple/BirdiePhone/DayPilot/DayPilotView.swift"), /List \{/);
 });

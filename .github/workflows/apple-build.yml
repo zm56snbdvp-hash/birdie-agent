@@ -63,7 +63,8 @@ jobs:
           )
           chosen = preferred or (candidates[0] if candidates else None)
           if chosen:
-              print(f"Using {chosen['name']} on {latest[1]}", file=sys.stderr)
+              chosen_name = chosen["name"]
+              print(f"Using {chosen_name} on {latest[1]}", file=sys.stderr)
           print(chosen["udid"] if chosen else "")
           '
           )"
