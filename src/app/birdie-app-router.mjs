@@ -77,6 +77,7 @@ export async function routeBirdieAppRequest({
   readBody,
   service,
   coinService,
+  captureService,
   authenticateBirdie
 }) {
   if (url.pathname !== PREFIX && !url.pathname.startsWith(`${PREFIX}/`)) return false;
@@ -99,6 +100,36 @@ export async function routeBirdieAppRequest({
       json(res, 200, resultBody(result.data));
       return true;
     }
+  }
+
+  if (url.pathname === `${PREFIX}/captures` && req.method === "POST") {
+    const authContext = await authenticateBirdie(req);
+    if (!captureService) {
+      throw new BirdieAppError(
+        "BIRDIE_CAPTURE_NOT_CONFIGURED",
+        "Birdie Capture backend storage is not configured",
+        503
+      );
+    }
+    const body = await readBody(req);
+    const result = await captureService.submit(authContext, body);
+    json(res, result.idempotent ? 200 : 202, resultBody(result));
+    return true;
+  }
+
+  const captureDeleteMatch = url.pathname.match(/^\/birdie-app\/v1\/captures\/([^/]+)$/);
+  if (captureDeleteMatch && req.method === "DELETE") {
+    const authContext = await authenticateBirdie(req);
+    if (!captureService) {
+      throw new BirdieAppError(
+        "BIRDIE_CAPTURE_NOT_CONFIGURED",
+        "Birdie Capture backend storage is not configured",
+        503
+      );
+    }
+    const result = await captureService.remove(authContext, decodeURIComponent(captureDeleteMatch[1]));
+    json(res, 200, resultBody(result));
+    return true;
   }
 
   if (req.method === "GET" && url.pathname === `${PREFIX}/world`) {

@@ -8,7 +8,7 @@ struct BirdiePhoneApp: App {
 
     var body: some Scene {
         WindowGroup {
-            BirdiePhoneSetupView()
+            BirdiePhoneRootView()
         }
     }
 }
