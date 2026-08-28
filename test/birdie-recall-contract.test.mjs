@@ -301,6 +301,8 @@ test("both XcodeGen projects and Apple workflows run unsigned BirdiePhone tests 
     assert.match(testTarget, /type: bundle\.unit-test/, `${name} must define a unit-test bundle`);
     assert.match(testTarget, /- path: BirdiePhoneTests/);
     assert.match(testTarget, /- target: BirdiePhone/);
+    assert.match(testTarget, /TEST_HOST: "\$\(BUILT_PRODUCTS_DIR\)\/Birdie\.app\/Birdie"/);
+    assert.match(testTarget, /BUNDLE_LOADER: "\$\(TEST_HOST\)"/);
     const schemeBlock = spec.slice(spec.indexOf(`  ${scheme}:`));
     assert.match(schemeBlock, /test:\n\s+config: Debug\n\s+targets:\n\s+- BirdiePhoneTests/);
   }
