@@ -211,17 +211,17 @@ int main(int argc, char** argv) {
           }
         }
 
-        if (applied) {
-          std::cerr
-              << "[birdie-voice] addressability="
-              << birdie::voice::addressability_decision_name(
-                     evaluation.result.decision)
-              << " gate_stt="
-              << birdie::voice::gate_stt_status_name(
-                     evaluation.gate_stt_status)
-              << " reason=" << evaluation.result.reason
-              << " score=" << evaluation.result.score << '\n';
-        }
+        std::cerr
+            << "[birdie-voice] addressability="
+            << birdie::voice::addressability_decision_name(
+                   evaluation.result.decision)
+            << " gate_stt="
+            << birdie::voice::gate_stt_status_name(
+                   evaluation.gate_stt_status)
+            << " reason=" << evaluation.result.reason
+            << " score=" << evaluation.result.score
+            << " latency_ms=" << evaluation.gate_stt_latency_ms
+            << " applied=" << (applied ? "true" : "false") << '\n';
       });
 
   birdie::voice::ConversationSttWorker conversation_worker(

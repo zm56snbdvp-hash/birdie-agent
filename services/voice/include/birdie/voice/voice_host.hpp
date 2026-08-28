@@ -65,6 +65,10 @@ struct VoiceConfig {
   std::uint32_t pre_roll_ms{1'200};
   std::uint32_t level_interval_ms{34};
   std::uint32_t activation_timeout_ms{2'000};
+  // Gate-STT is intentionally allowed more time than the acoustic candidate
+  // window. Local models can take several seconds on CPU; dropping the
+  // candidate at activation_timeout_ms would race the in-flight result.
+  std::uint32_t gate_stt_timeout_ms{10'000};
   std::uint32_t minimum_speech_ms{120};
   std::uint32_t silence_to_endpoint_ms{450};
   std::uint32_t maximum_utterance_ms{30'000};

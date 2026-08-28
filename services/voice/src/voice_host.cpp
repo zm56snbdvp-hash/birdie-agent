@@ -240,7 +240,14 @@ void VoiceHost::process(AudioFrame frame) {
   }
 
   if (phase_ == VoicePhase::SpeechCandidate) {
-    if (frame.monotonic_ms - candidate_started_ms_ >= config_.activation_timeout_ms) {
+    const bool waiting_for_gate_stt =
+        !gate_stt_activity_id_.empty() && gate_stt_activity_id_ == activity_id_;
+    const auto elapsed_ms = frame.monotonic_ms - candidate_started_ms_;
+    if (waiting_for_gate_stt) {
+      if (elapsed_ms >= config_.gate_stt_timeout_ms) {
+        reject_activation("gate_stt_timeout");
+      }
+    } else if (elapsed_ms >= config_.activation_timeout_ms) {
       reject_activation("activation_timeout");
     } else if (accumulated_silence_ms_ >=
                std::min<std::uint32_t>(250, config_.silence_to_endpoint_ms)) {

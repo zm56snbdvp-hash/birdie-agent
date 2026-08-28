@@ -65,6 +65,7 @@ VoiceConfig test_config() {
   config.pre_roll_ms = 30;
   config.level_interval_ms = 30;
   config.activation_timeout_ms = 100;
+  config.gate_stt_timeout_ms = 180;
   config.minimum_speech_ms = 20;
   config.silence_to_endpoint_ms = 30;
   config.maximum_utterance_ms = 500;
@@ -137,6 +138,96 @@ void test_candidate_snapshot_is_bounded_and_identified() {
           "snapshot must preserve local barge-in context");
   require(!host.gate_stt_request(0).has_value(),
           "one activity must expose at most one PCM snapshot");
+}
+
+void test_candidate_waits_for_inflight_gate_stt_after_speech_ends() {
+  RecordingSink sink;
+  VoiceHost host(test_config(), sink, [](UtteranceAudio) {});
+  host.process(frame(0.2F, 0));
+  host.process(frame(0.2F, 10));
+  host.process(frame(0.2F, 20));
+  require(host.gate_stt_request(0).has_value(),
+          "candidate must submit one Gate-STT request");
+
+  host.process(frame(0.0F, 30));
+  host.process(frame(0.0F, 40));
+  host.process(frame(0.0F, 50));
+  require(host.phase() == VoicePhase::SpeechCandidate,
+          "candidate must remain active while Gate-STT is in flight");
+  require(!has_event(sink, "voice.activation.rejected"),
+          "endpoint silence must not race an in-flight Gate-STT result");
+
+  const AddressabilityResult accepted{
+      AddressabilityDecision::Accept,
+      AddressabilityConfidenceBand::High,
+      0.95,
+      2,
+      "ADDRESSABILITY.EXPLICIT_ACTIVATION",
+  };
+  require(host.resolve_addressability(accepted),
+          "in-flight Gate-STT result must still resolve the candidate");
+  require(host.phase() == VoicePhase::Listening,
+          "accepted Gate-STT result must enter listening");
+}
+
+void test_candidate_waits_past_activation_timeout_for_gate_stt() {
+  RecordingSink sink;
+  VoiceHost host(test_config(), sink, [](UtteranceAudio) {});
+  host.process(frame(0.2F, 0));
+  host.process(frame(0.2F, 10));
+  host.process(frame(0.2F, 20));
+  require(host.gate_stt_request(0).has_value(),
+          "candidate must submit one Gate-STT request");
+
+  host.process(frame(0.0F, 120));
+  require(host.phase() == VoicePhase::SpeechCandidate,
+          "in-flight Gate-STT must outlive the acoustic activation timeout");
+  require(!has_event(sink, "voice.activation.rejected"),
+          "activation timeout must not cancel in-flight Gate-STT");
+
+  const AddressabilityResult accepted{
+      AddressabilityDecision::Accept,
+      AddressabilityConfidenceBand::High,
+      0.95,
+      2,
+      "ADDRESSABILITY.EXPLICIT_ACTIVATION",
+  };
+  require(host.resolve_addressability(accepted),
+          "late Gate-STT result must still resolve the candidate");
+  require(host.phase() == VoicePhase::Listening,
+          "late accepted Gate-STT result must enter listening");
+}
+
+void test_inflight_gate_stt_has_a_bounded_wait() {
+  RecordingSink sink;
+  VoiceHost host(test_config(), sink, [](UtteranceAudio) {});
+  host.process(frame(0.2F, 0));
+  host.process(frame(0.2F, 10));
+  host.process(frame(0.2F, 20));
+  require(host.gate_stt_request(0).has_value(),
+          "candidate must submit one Gate-STT request");
+
+  host.process(frame(0.0F, 200));
+  require(host.phase() == VoicePhase::Quiet,
+          "an in-flight Gate-STT request must eventually time out");
+  require(has_event(sink, "voice.activation.rejected"),
+          "Gate-STT timeout must emit an explicit rejection");
+}
+
+void test_candidate_without_gate_stt_still_ends_on_silence() {
+  RecordingSink sink;
+  VoiceHost host(test_config(), sink, [](UtteranceAudio) {});
+  host.process(frame(0.2F, 0));
+  host.process(frame(0.2F, 10));
+  host.process(frame(0.2F, 20));
+
+  host.process(frame(0.0F, 30));
+  host.process(frame(0.0F, 40));
+  host.process(frame(0.0F, 50));
+  require(host.phase() == VoicePhase::Quiet,
+          "candidate without Gate-STT work must fail closed on silence");
+  require(has_event(sink, "voice.activation.rejected"),
+          "candidate without Gate-STT work must emit an explicit rejection");
 }
 
 void test_abstain_clears_candidate_snapshot() {
@@ -232,6 +323,10 @@ int main() {
     test_pre_roll_is_bounded_and_ordered();
     test_activity_is_not_automatic_activation();
     test_candidate_snapshot_is_bounded_and_identified();
+    test_candidate_waits_for_inflight_gate_stt_after_speech_ends();
+    test_candidate_waits_past_activation_timeout_for_gate_stt();
+    test_inflight_gate_stt_has_a_bounded_wait();
+    test_candidate_without_gate_stt_still_ends_on_silence();
     test_abstain_clears_candidate_snapshot();
     test_accept_preserves_pre_roll_and_endpoints();
     test_output_activity_is_marked_as_barge_in_candidate();
