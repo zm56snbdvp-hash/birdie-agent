@@ -143,7 +143,6 @@ namespace BirdieWorld
 
         private void BuildEnvironment()
         {
-            var ground = CreateMaterial("Ground", new Color(0.12f, 0.30f, 0.18f, 1f), 0.05f, 0.15f);
             var path = CreateMaterial("WarmStone", new Color(0.56f, 0.39f, 0.19f, 1f), 0.05f, 0.35f);
             var wood = CreateMaterial("DarkWood", new Color(0.25f, 0.12f, 0.06f, 1f), 0.05f, 0.25f);
             var roof = CreateMaterial("RoofGreen", new Color(0.045f, 0.17f, 0.12f, 1f), 0.1f, 0.25f);
@@ -156,11 +155,9 @@ namespace BirdieWorld
             var train = CreateMaterial("ExpressBlack", new Color(0.055f, 0.075f, 0.065f, 1f), 0.45f, 0.4f);
             var window = CreateMaterial("TrainWindow", new Color(0.24f, 0.48f, 0.58f, 1f), 0.25f, 0.75f, new Color(0.10f, 0.24f, 0.32f, 1f));
 
-            // Keep the collision-free base below the playable surfaces. Some
-            // Unity WebGL built-in meshes expose a taller cube bound than the
-            // editor primitive, so a lower base prevents it from hiding the
-            // plaza tiles or the player model from the camera.
-            Primitive(PrimitiveType.Cube, "WorldGround", new Vector3(0f, -4.0f, 11f), new Vector3(70f, 0.6f, 78f), ground);
+            // The forecourt surfaces are intentionally open underneath. This
+            // avoids a large base mesh hiding the playable plaza or player on
+            // WebGL variants whose built-in cube bounds differ from the editor.
             Primitive(PrimitiveType.Cube, "MainPath", new Vector3(0f, 0.03f, 12f), new Vector3(9f, 0.12f, 58f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlaza", new Vector3(0f, 0.12f, -1f), new Vector3(17f, 0.16f, 11f), path);
             Primitive(PrimitiveType.Cube, "SpawnPlazaEdge", new Vector3(0f, 0.23f, 4.3f), new Vector3(17f, 0.16f, 0.35f), brass);
