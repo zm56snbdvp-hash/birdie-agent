@@ -22,12 +22,58 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie
         PRODUCT_NAME: Birdie
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Birdie
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/BirdiePhone-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/BirdieCapture.entitlements
+        BIRDIE_APP_GROUP_IDENTIFIER: group.de.birdieandbreakfast.kevin.birdie.capture
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
     dependencies:
       - target: BirdieWatch
+      - target: CaptureCore
+      - target: BirdieShare
+
+  CaptureCore:
+    type: framework
+    platform: iOS
+    sources:
+      - path: CaptureCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.capturecore
+        PRODUCT_NAME: CaptureCore
+        GENERATE_INFOPLIST_FILE: YES
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+
+  BirdieShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: BirdieShare
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.share
+        PRODUCT_NAME: BirdieDrop
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/BirdieShare-Info.plist
+        CODE_SIGN_ENTITLEMENTS: Config/BirdieCapture.entitlements
+        BIRDIE_APP_GROUP_IDENTIFIER: group.de.birdieandbreakfast.kevin.birdie.capture
+        APPLICATION_EXTENSION_API_ONLY: YES
+        SKIP_INSTALL: YES
+    dependencies:
+      - target: CaptureCore
+
+  BirdieCaptureTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/CaptureCoreTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.capturetests
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: CaptureCore
 
   BirdieWatch:
     type: application
@@ -67,5 +113,19 @@ schemes:
         BirdieWatchWidget: all
     run:
       config: Debug
+    test:
+      gatherCoverageData: true
+      targets:
+        - BirdieCaptureTests
     archive:
       config: Release
+
+  BirdieCaptureTests:
+    build:
+      targets:
+        CaptureCore: all
+        BirdieCaptureTests: all
+    test:
+      gatherCoverageData: true
+      targets:
+        - BirdieCaptureTests
