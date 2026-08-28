@@ -31,6 +31,10 @@ authority and call only Windows `ShellExecuteW` with the fixed `open` verb or
 `LockWorkStation`. They are intentionally not Tauri commands and are not yet
 reachable from the WebView or the local core pipe.
 
+The reproducible mock-host smoke test is `npm run pocket-relay:host-smoke`.
+It validates the versioned request, invokes one recording hook, and proves an
+exact `effectId` retry does not invoke the hook twice.
+
 ## Next host step
 
 After the Pocket Relay gateway and Desktop Alpha have a reviewed deployment
