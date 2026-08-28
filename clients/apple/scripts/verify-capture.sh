@@ -24,11 +24,27 @@ cd "$apple_dir"
 xcodegen generate
 verify_config_clean
 
-destination_id="$(xcodebuild \
-  -project Birdie.xcodeproj \
-  -scheme BirdieCaptureTests \
-  -showdestinations \
-  | awk -F 'id:' '/platform:iOS Simulator/ && /name:iPhone/ { split($2, part, ","); gsub(/[[:space:]]/, "", part[1]); print part[1]; exit }')"
+destination_id="$(xcrun simctl list --json devices available | python3 -c '
+import json
+import re
+import sys
+
+devices = json.load(sys.stdin).get("devices", {})
+candidates = []
+for runtime, entries in devices.items():
+    match = re.search(r"\.iOS-(\d+)-(\d+)$", runtime)
+    if not match:
+        continue
+    version = (int(match.group(1)), int(match.group(2)))
+    if version < (18, 0):
+        continue
+    for entry in entries:
+        if entry.get("isAvailable", True) and entry.get("name", "").startswith("iPhone"):
+            candidates.append((version, entry["udid"]))
+if not candidates:
+    raise SystemExit("No available iOS 18+ iPhone simulator")
+print(max(candidates)[1])
+')"
 test -n "$destination_id"
 
 xcodebuild \
