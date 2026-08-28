@@ -552,7 +552,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gcloud firestore databases describe "$BIRDIE_CAPTURE_FIRESTORE_DATABASE" \
+          gcloud firestore databases describe \
+            --database "$BIRDIE_CAPTURE_FIRESTORE_DATABASE" \
             --project "$GCP_PROJECT_ID" --format='value(name)' > /dev/null
           gcloud run services describe "$CLOUD_RUN_SERVICE" \
             --project "$GCP_PROJECT_ID" --region "$GCP_REGION" --format=json \
