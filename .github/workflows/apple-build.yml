@@ -39,11 +39,21 @@ jobs:
             xcrun simctl list devices available --json | python3 -c '
           import json, sys
           data = json.load(sys.stdin)["devices"]
-          candidates = [
+          runtimes = []
+          for runtime, devices in data.items():
+              marker = ".iOS-"
+              if marker not in runtime:
+                  continue
+              try:
+                  version = tuple(int(part) for part in runtime.rsplit(marker, 1)[1].split("-"))
+              except ValueError:
+                  continue
+              if version >= (18, 0):
+                  runtimes.append((version, runtime, devices))
+          latest = max(runtimes, default=None)
+          candidates = [] if latest is None else [
               device
-              for runtime in sorted(data.keys(), reverse=True)
-              if ".iOS-" in runtime
-              for device in data[runtime]
+              for device in latest[2]
               if device.get("isAvailable") and device.get("name", "").startswith("iPhone")
           ]
           preferred_names = ["iPhone 13 mini", "iPhone SE (3rd generation)", "iPhone 16 Pro"]
@@ -52,6 +62,8 @@ jobs:
               None,
           )
           chosen = preferred or (candidates[0] if candidates else None)
+          if chosen:
+              print(f"Using {chosen['name']} on {latest[1]}", file=sys.stderr)
           print(chosen["udid"] if chosen else "")
           '
           )"
