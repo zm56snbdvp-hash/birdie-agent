@@ -13,13 +13,13 @@ The beta is intentionally small:
 5. No Harry-Potter world, houses, wizard school, spells, or borrowed lore.
 6. Character creation is the first durable player-owned object in BirdieWorld.
 7. Visual language: near-black / deep forest green / brass-gold / warm interior light / premium rail travel.
-8. The first journey may reach the exterior forecourt of The Nest; The Nest interior, Coin Shop and the wider world are not playable yet.
+8. The first journey reaches a generated 3-D exterior forecourt of The Nest; the interior and the wider world remain outside this Beta 02 slice.
 
 ## Beta 02 candidate flow
 
-`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt`
+`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt -> 3-D forecourt`
 
-On a first run, both opener choices enter Character Creation. A successful local or account-backed save reaches the ready confirmation before the player can begin the bounded first journey. A returning player with a valid ready profile may resume from `REISE BEGINNEN`; `BIRDIE ERSTELLEN` always reopens the creator. Leni is a human travel companion. At The Nest forecourt the candidate stops; no interior, free-roam world or second route is implied.
+On a first run, both opener choices enter Character Creation. A successful local or account-backed save reaches the ready confirmation before the player can begin the bounded first journey. A returning player with a valid ready profile may resume from `REISE BEGINNEN`; `BIRDIE ERSTELLEN` always reopens the creator. Leni is a human travel companion. At The Nest forecourt the player can enter a small generated 3-D forecourt and walk to the golden Nest marker. The Nest interior, a wider free-roam world and a second route are not implied.
 
 Character profile schema: `birdieworld-character/v1`.
 
@@ -70,7 +70,7 @@ The WebGL build intentionally has Unity compression disabled for this candidate 
 
 ## Art implementation
 
-`BirdieWorldBetaBootstrap` wires the cinematic opener, start menu, character form, authenticated persistence, ready screen and the bounded Beta 02 first journey without committing placeholder fantasy lore. Character Creation includes a lightweight human live-preview that reacts to name, story and signature color without adding downloadable art dependencies. `BirdieWorldFirstJourney` receives a read-only cosmetic snapshot, owns only in-memory presentation state and never writes character, account or economic data. The approved cinematic train artwork should be imported as the background asset layer, followed by a production 3D human avatar prefab that keeps the same preview contract.
+`BirdieWorldBetaBootstrap` wires the cinematic opener, start menu, character form, authenticated persistence, ready screen, bounded Beta 02 first journey and the generated 3-D Nest forecourt without committing placeholder fantasy lore. Character Creation includes a lightweight human live-preview that reacts to name, story and signature color without adding downloadable art dependencies. `BirdieWorldFirstJourney` and `BirdieWorldThreeDWorld` receive read-only cosmetic snapshots, own only in-memory presentation state and never write character, account or economic data. The approved cinematic train artwork remains the background asset layer; the current 3-D forecourt is built from deterministic Unity primitives so it can later be replaced piece-by-piece by production prefabs.
 
 Target opener composition:
 
@@ -98,6 +98,7 @@ Target first-journey composition:
 - read the bounded route map before boarding
 - ride the Birdie Express through the established green/gold Birdie & Breakfast world
 - arrive at The Nest forecourt and stop at the candidate boundary
+- enter the generated 3-D Nest forecourt and walk to the gold arrival marker
 - keyboard and touch controls plus responsive desktop/iPhone layouts
 - session-only journey state: no `PlayerPrefs`, network call, Coin effect or profile mutation
 

@@ -4,9 +4,9 @@ Open this folder as a Unity 6 LTS project.
 
 The WebGL review target follows one bounded path:
 
-`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt`
+`Opener -> creator -> ready -> first journey platform -> meet human Leni -> route map -> Birdie Express ride -> The Nest forecourt -> 3-D forecourt`
 
-On the first run, both opener choices lead through Character Creation and the ready confirmation. A returning player with a valid ready profile may resume through `REISE BEGINNEN`; `BIRDIE ERSTELLEN` still opens the creator. The journey begins on the platform, introduces human Leni, reveals the route map, boards the Birdie Express and stops outside The Nest. The Nest interior and the wider world remain out of scope. The generated scene and WebGL build are available from the Unity menu under `BirdieWorld`.
+On the first run, both opener choices lead through Character Creation and the ready confirmation. A returning player with a valid ready profile may resume through `REISE BEGINNEN`; `BIRDIE ERSTELLEN` still opens the creator. The journey begins on the platform, introduces human Leni, reveals the route map, boards the Birdie Express and stops outside The Nest. The `WELT BETRETEN` action opens a genuinely rendered, generated 3-D Nest forecourt with a walkable Birdie avatar, river bridge, station, side buildings, trees, lamps and gold arrival marker. The Nest interior and the wider world remain out of scope. The generated scene and WebGL build are available from the Unity menu under `BirdieWorld`.
 
 For account sync, the surrounding authenticated shell supplies an in-memory Birdie bearer token after `birdieworld:ready`:
 
@@ -29,7 +29,7 @@ The template derives an in-memory SHA-256 isolation key from the JWT issuer, `su
 
 Character reads and saves use `/birdie-app/v1/character`; local `PlayerPrefs` is only for a signed-out draft. Account-bound state remains in memory until the server confirms it and is never reused across account switches. The client never sends `birdieId`, `characterId`, timestamps or economic state. An authenticated account without a server profile starts from a new blank character and is never seeded automatically from a previous local/account profile.
 
-The creator renders a human live-preview from Unity UI primitives. Name, story and signature-color changes update it immediately, while selected controls receive a visible focus state. This preview has no mascot or economic behavior and can later be replaced by a production 3D human prefab without changing the character API.
+The creator renders a human live-preview from Unity UI primitives. Name, story and signature-color changes update it immediately, while selected controls receive a visible focus state. This preview has no mascot or economic behavior and can later be replaced by a production 3D human prefab without changing the character API. The current forecourt uses deterministic Unity primitives for the same reason: it is a real 3-D runtime surface, but remains replaceable art direction rather than a claim of the final wider world.
 
 The first journey receives only a read-only snapshot of the selected display name, story and signature color. Its stage, movement and responsive UI state stay in memory: it does not use `PlayerPrefs`, call the network, write the character profile or create any Coin effect. Keyboard and touch controls must both complete the same route on desktop and iPhone-sized portrait layouts.
 

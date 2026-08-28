@@ -48,6 +48,7 @@ namespace BirdieWorld
         private readonly Color quiet = new(0.66f, 0.66f, 0.59f, 1f);
 
         private Action onReturnToStart;
+        private Action onEnterWorld;
         private Font font;
         private GameObject journeyRoot;
         private GameObject platformScreen;
@@ -96,11 +97,17 @@ namespace BirdieWorld
 
         public void Build(Transform parent, Font font, Action returnToStart)
         {
+            Build(parent, font, returnToStart, null);
+        }
+
+        public void Build(Transform parent, Font font, Action returnToStart, Action enterWorld)
+        {
             if (journeyRoot != null) return;
             if (parent == null) throw new ArgumentNullException(nameof(parent));
 
             this.font = font != null ? font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             onReturnToStart = returnToStart;
+            onEnterWorld = enterWorld;
             journeyRoot = Panel(parent, "FirstJourney", Vector2.zero, Vector2.one, ink);
             Screen = journeyRoot;
             BuildPlatformScreen();
@@ -335,8 +342,9 @@ namespace BirdieWorld
             Label(card.transform, "DIE ERSTE REISE IST GESCHAFFT.", 19, gold, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.55f), new Vector2(0.90f, 0.64f));
             arrivalName = Label(card.transform, "WILLKOMMEN, DEIN BIRDIE.", 25, ivory, TextAnchor.MiddleCenter, new Vector2(0.10f, 0.40f), new Vector2(0.90f, 0.53f));
             Label(card.transform, "Leni wartet am Tor. Dieser Vorplatz ist das Ende der Beta-02-Reise.", 15, quiet, TextAnchor.MiddleCenter, new Vector2(0.12f, 0.31f), new Vector2(0.88f, 0.40f));
-            MakeButton(card.transform, "REISE NOCH EINMAL", new Vector2(0.09f, 0.12f), new Vector2(0.47f, 0.25f), ResetJourney);
-            MakeButton(card.transform, "ZURÜCK ZUM START", new Vector2(0.53f, 0.12f), new Vector2(0.91f, 0.25f), ReturnToStart);
+            MakeButton(card.transform, "WELT BETRETEN", new Vector2(0.26f, 0.23f), new Vector2(0.74f, 0.31f), () => onEnterWorld?.Invoke());
+            MakeButton(card.transform, "REISE NOCH EINMAL", new Vector2(0.09f, 0.10f), new Vector2(0.47f, 0.20f), ResetJourney);
+            MakeButton(card.transform, "ZURÜCK ZUM START", new Vector2(0.53f, 0.10f), new Vector2(0.91f, 0.20f), ReturnToStart);
         }
 
         private void CaptureReadOnlyProfile(CharacterProfile profile)

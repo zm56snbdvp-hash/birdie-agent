@@ -37,6 +37,7 @@ namespace BirdieWorld
         private BirdieWorldAuthSession authSession;
         private BirdieWorldAvatarPreview avatarPreview;
         private BirdieWorldFirstJourney firstJourney;
+        private BirdieWorldThreeDWorld threeDWorld;
         private readonly Dictionary<string, GameObject> storyChoices = new();
         private readonly Dictionary<string, GameObject> colorChoices = new();
         private CharacterProfile pendingUnboundDraft;
@@ -68,6 +69,7 @@ namespace BirdieWorld
             BuildStartScreen();
             BuildCreatorScreen();
             BuildReadyScreen();
+            BuildThreeDWorld();
             BuildFirstJourney();
             ApplyResponsiveLayout(true);
             Show(startScreen);
@@ -217,8 +219,14 @@ namespace BirdieWorld
         private void BuildFirstJourney()
         {
             firstJourney = gameObject.AddComponent<BirdieWorldFirstJourney>();
-            firstJourney.Build(canvas.transform, font, () => Show(startScreen));
+            firstJourney.Build(canvas.transform, font, () => Show(startScreen), BeginThreeDWorld);
             journeyScreen = firstJourney.Screen;
+        }
+
+        private void BuildThreeDWorld()
+        {
+            threeDWorld = gameObject.AddComponent<BirdieWorldThreeDWorld>();
+            threeDWorld.Build(font, () => Show(journeyScreen));
         }
 
         private void ResumeJourneyOrCreate()
@@ -258,6 +266,32 @@ namespace BirdieWorld
             var readOnlyProfile = CharacterProfile.FromJson(profile.ToJson());
             Show(journeyScreen);
             firstJourney.Enter(readOnlyProfile);
+        }
+
+        private void BeginThreeDWorld()
+        {
+            if (threeDWorld == null) return;
+            if (profileIsAccountScoped && !accountProfileReady)
+            {
+                Show(creatorScreen);
+                if (statusText != null)
+                    statusText.text = "Dein Konto-Birdie wird noch geladen · danach kann die Welt beginnen.";
+                return;
+            }
+
+            if (!HasReadyProfile())
+            {
+                Show(creatorScreen);
+                if (statusText != null)
+                    statusText.text = HasValidProfileName()
+                        ? "Speichere deine aktuelle Auswahl zuerst mit WEITER."
+                        : "Erstelle zuerst dein Birdie, bevor die Welt beginnt.";
+                return;
+            }
+
+            var readOnlyProfile = CharacterProfile.FromJson(profile.ToJson());
+            Show(threeDWorld.Screen);
+            threeDWorld.Enter(readOnlyProfile);
         }
 
         private bool HasValidProfileName()
@@ -638,6 +672,7 @@ namespace BirdieWorld
             if (creatorScreen != null) creatorScreen.SetActive(target == creatorScreen);
             if (readyScreen != null) readyScreen.SetActive(target == readyScreen);
             if (journeyScreen != null) journeyScreen.SetActive(target == journeyScreen);
+            if (threeDWorld != null) threeDWorld.SetVisible(target == threeDWorld.Screen);
         }
     }
 }
