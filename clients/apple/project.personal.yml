@@ -90,6 +90,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.tests
         GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Birdie.app/Birdie"
+        BUNDLE_LOADER: "$(TEST_HOST)"
     dependencies:
       - target: BirdiePhone
 
