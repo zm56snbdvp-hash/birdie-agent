@@ -26,12 +26,12 @@ final class LiveMissionStore: ObservableObject {
 
     init(
         service: any LiveMissionServicing = LiveMissionEnvironment.makeService(),
-        activityCoordinator: any LiveMissionActivityCoordinating = LiveMissionActivityCoordinator(),
+        activityCoordinator: (any LiveMissionActivityCoordinating)? = nil,
         localAuthorizer: any LiveMissionLocalAuthorizing = LiveMissionLocalAuthorizer(),
         commandCoordinator: (any LiveMissionCommandCoordinating)? = nil
     ) {
         self.service = service
-        self.activityCoordinator = activityCoordinator
+        self.activityCoordinator = activityCoordinator ?? LiveMissionActivityCoordinator()
         if let commandCoordinator {
             self.commandCoordinator = commandCoordinator
         } else {
@@ -116,9 +116,10 @@ final class LiveMissionStore: ObservableObject {
 
     func prepare(
         command: LiveMissionCommand,
-        applicationIsActive: Bool = UIApplication.shared.applicationState == .active
+        applicationIsActive: Bool? = nil
     ) {
-        guard applicationIsActive else {
+        let isActive = applicationIsActive ?? (UIApplication.shared.applicationState == .active)
+        guard isActive else {
             message = "Pause und Abbruch müssen in der geöffneten App bestätigt werden."
             return
         }
@@ -151,10 +152,11 @@ final class LiveMissionStore: ObservableObject {
     }
 
     func confirmPendingCommand(
-        applicationIsActive: Bool = UIApplication.shared.applicationState == .active
+        applicationIsActive: Bool? = nil
     ) async {
         guard !isSubmittingCommand else { return }
-        guard applicationIsActive else {
+        let isActive = applicationIsActive ?? (UIApplication.shared.applicationState == .active)
+        guard isActive else {
             message = "Der Befehl wurde nicht ausgeführt. Öffne Birdie und versuche es erneut."
             return
         }
