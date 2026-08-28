@@ -178,7 +178,7 @@ final class ShareCaptureModel: ObservableObject {
     private func loadURL(provider: NSItemProvider) async throws -> CapturePayload {
         let stager = stager
         let itemID = itemID
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, error in
                 do {
                     if let error { throw error }
@@ -215,7 +215,7 @@ final class ShareCaptureModel: ObservableObject {
     }
 
     private func loadText(provider: NSItemProvider) async throws -> CapturePayload {
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, error in
                 do {
                     if let error { throw error }
@@ -257,7 +257,7 @@ final class ShareCaptureModel: ObservableObject {
         let stager = stager
         let itemID = itemID
         let suggestedName = provider.suggestedName
-        try await withCheckedThrowingContinuation { continuation in
+        return try await withCheckedThrowingContinuation { continuation in
             provider.loadFileRepresentation(forTypeIdentifier: typeIdentifier) { url, error in
                 do {
                     if let error { throw error }

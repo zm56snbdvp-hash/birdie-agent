@@ -52,6 +52,10 @@ test("Share Extension and local adapter cannot publish or reuse Watch credential
   assert.doesNotMatch(extensionSource, /URLSession|https?:\/\//);
   assert.doesNotMatch(extensionSource, /UIApplication\.shared/);
   assert.doesNotMatch(extensionSource, /WatchRelay|WatchTokenStore/);
+  assert.equal(
+    shareModel.match(/return try await withCheckedThrowingContinuation/g)?.length,
+    3,
+  );
   assert.doesNotMatch(transport, /URLSession|WatchRelay|WatchTokenStore/);
   assert.match(transport, /birdie\.capture\.v1/);
   assert.match(transport, /localPreviewOnly/);
