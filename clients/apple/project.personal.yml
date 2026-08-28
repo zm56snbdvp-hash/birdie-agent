@@ -127,7 +127,6 @@ targets:
       properties:
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
-          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).BirdieWatchWidget
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: de.birdieandbreakfast.kevin.birdie.watchkitapp.widget
