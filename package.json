@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node server.mjs",
     "smoke": "node scripts/smoke-test.mjs",
+    "smoke:pocket-relay": "node scripts/pocket-relay-mock-smoke.mjs",
+    "mock:pocket-relay": "node services/pocket-relay-host/mock-host-main.mjs",
     "heartbeat:instagram-comment": "node scripts/controlled-instagram-comment-heartbeat.mjs",
     "test": "node --test test/*.test.mjs"
   },
