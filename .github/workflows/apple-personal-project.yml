@@ -22,11 +22,47 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install Node dependencies
+        run: npm ci
+      - name: Run repository tests
+        run: npm test
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate free Personal Team project
         working-directory: clients/apple
         run: xcodegen generate --spec project.personal.yml
+      - name: Run BirdiePhone unit tests
+        working-directory: clients/apple
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="com.apple.CoreSimulator.SimRuntime.iOS-$(xcrun --sdk iphonesimulator --show-sdk-version | tr '.' '-')"
+          simulator_udid="$(
+            xcrun simctl list devices available --json |
+              jq -r --arg runtime "$runtime" '
+                (.devices[$runtime] // [])
+                | map(select(.isAvailable == true and (.name | startswith("iPhone"))))
+                | first
+                | .udid // empty
+              '
+          )"
+          test -n "$simulator_udid"
+          xcrun simctl boot "$simulator_udid" 2>/dev/null || true
+          xcrun simctl bootstatus "$simulator_udid" -b
+          xcodebuild \
+            -project BirdiePersonal.xcodeproj \
+            -scheme BirdiePersonal \
+            -configuration Debug \
+            -destination "platform=iOS Simulator,id=$simulator_udid" \
+            -destination-timeout 120 \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test
       - name: Verify project without signing
         working-directory: clients/apple
         run: |

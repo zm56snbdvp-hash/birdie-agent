@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "calendarTimeZone": "UTC",
+  "now": "2026-08-28T12:00:00.000Z",
+  "query": {
+    "contractVersion": 1,
+    "text": "Wo war das Hotel von gestern?",
+    "limit": 50
+  },
+  "items": [
+    {
+      "schemaVersion": 1,
+      "id": "77777777-7777-4777-8777-777777777777",
+      "kind": "note",
+      "title": "Hotel Speicherstadt",
+      "provenance": {
+        "channel": "birdieDrop",
+        "sourceApplication": "Birdie Drop"
+      },
+      "capturedAt": "2026-08-27T12:00:00.000Z",
+      "tags": [
+        "Reise",
+        "Hotel"
+      ],
+      "note": "Das Hotel war Am Sandtorkai 4 in Hamburg."
+    },
+    {
+      "schemaVersion": 1,
+      "id": "88888888-8888-4888-8888-888888888888",
+      "kind": "note",
+      "title": "Café heute",
+      "provenance": {
+        "channel": "manualSelection",
+        "sourceApplication": "Birdie iPhone"
+      },
+      "capturedAt": "2026-08-28T09:00:00.000Z",
+      "tags": [
+        "Café"
+      ],
+      "note": "Treffpunkt am Marktplatz."
+    },
+    {
+      "schemaVersion": 1,
+      "id": "99999999-9999-4999-8999-999999999999",
+      "kind": "pdf",
+      "title": "Zugticket Berlin",
+      "provenance": {
+        "channel": "manualSelection",
+        "sourceApplication": "Birdie iPhone"
+      },
+      "capturedAt": "2026-08-27T08:00:00.000Z",
+      "tags": [
+        "Reise"
+      ],
+      "extractedText": "ICE 705 nach Berlin Hauptbahnhof.",
+      "attachment": {
+        "originalFilename": "ticket.pdf"
+      }
+    }
+  ],
+  "deletionOperationIdentifier": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  "expected": {
+    "hitIdentifiers": [
+      "77777777-7777-4777-8777-777777777777"
+    ],
+    "matchedTerms": [
+      "hotel"
+    ],
+    "exportIdentifiers": [
+      "77777777-7777-4777-8777-777777777777",
+      "88888888-8888-4888-8888-888888888888",
+      "99999999-9999-4999-8999-999999999999"
+    ],
+    "remainingIdentifiers": [
+      "88888888-8888-4888-8888-888888888888",
+      "99999999-9999-4999-8999-999999999999"
+    ]
+  }
+}

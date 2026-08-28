@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.mjs",
     "smoke": "node scripts/smoke-test.mjs",
+    "smoke:recall": "node scripts/birdie-recall-smoke.mjs",
     "heartbeat:instagram-comment": "node scripts/controlled-instagram-comment-heartbeat.mjs",
     "test": "node --test test/*.test.mjs"
   },
