@@ -65,6 +65,12 @@ export const DEFAULT_STREAM_CONFIG = Object.freeze({
   qrTarget: '',
   qrSha256: '',
   qrScanVerified: false,
+  wallArtTitle: '',
+  wallArtProductImage: '',
+  wallArtProductImageSha256: '',
+  wallArtShopUrl: '',
+  wallArtProductEvidenceStatus: 'UNPROVEN',
+  wallArtShopEvidenceStatus: 'UNPROVEN',
 });
 
 function text(value, fallback, maxLength) {
@@ -102,6 +108,22 @@ export function sanitizeQrImage(value) {
   // references or foreignObject content and is therefore not a stream asset.
   if (!/^\/[A-Za-z0-9/_-]+\.(?:png|webp)$/.test(candidate)) return '';
   return candidate.slice(0, 240);
+}
+
+export function sanitizeWallArtProductImage(value) {
+  const candidate = String(value ?? '').trim();
+  if (!candidate || !candidate.startsWith('/') || candidate.startsWith('//')) return '';
+  if (candidate.slice(1).includes('//')) return '';
+  if (/[\\?#%\u0000-\u001f]/.test(candidate)) return '';
+  if (/(^|\/)\.{1,2}(\/|$)/.test(candidate)) return '';
+  if (!/^\/[A-Za-z0-9/_-]+\.(?:png|webp)$/.test(candidate)) return '';
+  return candidate.slice(0, 240);
+}
+
+export function sanitizeWallArtShopUrl(value) {
+  const candidate = String(value ?? '').trim();
+  if (!candidate || !isCanonicalPublicHttpsUrl(candidate)) return '';
+  return candidate;
 }
 
 export function isLoopbackQrPreview(locationLike, search = '') {
@@ -153,6 +175,26 @@ export function isPlaceholderCta(value) {
 
 export function resolveStreamConfig(raw = {}, search = '') {
   const query = search instanceof URLSearchParams ? search : new URLSearchParams(search);
+  const showcaseMode = query.get('showcase') === 'wall-art' ? 'WALL_ART' : 'DEFAULT';
+  const wallArtQueryOverridesIgnored = [
+    'brand', 'eyebrow', 'headline', 'subline', 'ctaLabel', 'ctaText', 'ctaUrl', 'qr',
+    'wallArtTitle', 'wallArtProductImage', 'wallArtProductImageSha256',
+    'wallArtShopUrl', 'wallArtProductEvidenceStatus', 'wallArtShopEvidenceStatus',
+    'wallArtProductConfigured', 'wallArtShopTargetConfigured', 'wallArtDecision',
+    'conversionDeclaredReady', 'conversionReady', 'price', 'priceText',
+  ].some((field) => query.has(field));
+  const wallArtEvidenceOverridesIgnored = [
+    raw.wallArtProductEvidenceStatus,
+    raw.wallArtShopEvidenceStatus,
+  ].some((status) => status != null && String(status).toUpperCase() !== 'UNPROVEN');
+  const wallArtDecisionOverrideIgnored = raw.wallArtDecision != null
+    && String(raw.wallArtDecision).toUpperCase() !== 'STOP';
+  const wallArtTitle = text(raw.wallArtTitle, '', 72);
+  const wallArtProductImage = sanitizeWallArtProductImage(raw.wallArtProductImage);
+  const wallArtProductImageSha256 = /^[a-f0-9]{64}$/i.test(String(raw.wallArtProductImageSha256 ?? ''))
+    ? String(raw.wallArtProductImageSha256).toLowerCase()
+    : '';
+  const wallArtShopUrl = sanitizeWallArtShopUrl(raw.wallArtShopUrl);
   const ctaStatus = String(raw.ctaStatus ?? 'DRAFT').toUpperCase() === 'READY'
     ? 'READY'
     : 'DRAFT';
@@ -173,7 +215,8 @@ export function resolveStreamConfig(raw = {}, search = '') {
     ? String(raw.qrSha256).toLowerCase()
     : '';
   const qrScanVerified = raw.qrScanVerified === true;
-  const conversionDeclaredReady = ctaStatus === 'READY'
+  const conversionDeclaredReady = showcaseMode !== 'WALL_ART'
+    && ctaStatus === 'READY'
     && ctaUrlCanonical
     && qrTargetCanonical
     && !placeholderCta
@@ -183,10 +226,10 @@ export function resolveStreamConfig(raw = {}, search = '') {
     && qrMatchesCta
     && !conversionOverridesIgnored;
   return Object.freeze({
-    brand: text(query.get('brand') ?? raw.brand, DEFAULT_STREAM_CONFIG.brand, 28),
-    eyebrow: text(query.get('eyebrow') ?? raw.eyebrow, DEFAULT_STREAM_CONFIG.eyebrow, 64),
-    headline: text(query.get('headline') ?? raw.headline, DEFAULT_STREAM_CONFIG.headline, 72),
-    subline: text(query.get('subline') ?? raw.subline, DEFAULT_STREAM_CONFIG.subline, 150),
+    brand: text(showcaseMode === 'WALL_ART' ? raw.brand : query.get('brand') ?? raw.brand, DEFAULT_STREAM_CONFIG.brand, 28),
+    eyebrow: text(showcaseMode === 'WALL_ART' ? raw.eyebrow : query.get('eyebrow') ?? raw.eyebrow, DEFAULT_STREAM_CONFIG.eyebrow, 64),
+    headline: text(showcaseMode === 'WALL_ART' ? raw.headline : query.get('headline') ?? raw.headline, DEFAULT_STREAM_CONFIG.headline, 72),
+    subline: text(showcaseMode === 'WALL_ART' ? raw.subline : query.get('subline') ?? raw.subline, DEFAULT_STREAM_CONFIG.subline, 150),
     ctaLabel: text(ctaStatus === 'READY' ? raw.ctaLabel : query.get('ctaLabel') ?? raw.ctaLabel, DEFAULT_STREAM_CONFIG.ctaLabel, 32),
     ctaText: text(ctaStatus === 'READY' ? raw.ctaText : query.get('ctaText') ?? raw.ctaText, DEFAULT_STREAM_CONFIG.ctaText, 72),
     ctaUrl,
@@ -208,6 +251,18 @@ export function resolveStreamConfig(raw = {}, search = '') {
     qrRenderReady: false,
     qrRenderUrl: '',
     conversionReady: false,
+    showcaseMode,
+    wallArtTitle,
+    wallArtProductImage,
+    wallArtProductImageSha256,
+    wallArtShopUrl,
+    wallArtProductConfigured: Boolean(wallArtTitle && wallArtProductImage && wallArtProductImageSha256),
+    wallArtShopTargetConfigured: Boolean(wallArtShopUrl),
+    wallArtProductEvidenceStatus: 'UNPROVEN',
+    wallArtShopEvidenceStatus: 'UNPROVEN',
+    wallArtDecision: 'STOP',
+    wallArtQueryOverridesIgnored,
+    wallArtEvidenceOverridesIgnored: wallArtEvidenceOverridesIgnored || wallArtDecisionOverrideIgnored,
   });
 }
 

@@ -184,6 +184,27 @@ function validateSourceContract(plan, checks) {
 
 export function validateStreamOperations(plan, rawConfig) {
   const config = resolveStreamConfig(rawConfig);
+  const wallArtConfig = resolveStreamConfig(rawConfig, 'showcase=wall-art');
+  const rawWallArtProductImage = String(rawConfig?.wallArtProductImage ?? '').trim();
+  const rawWallArtProductSha256 = String(rawConfig?.wallArtProductImageSha256 ?? '').trim();
+  const rawWallArtTitle = String(rawConfig?.wallArtTitle ?? '').trim();
+  const rawWallArtShopUrl = String(rawConfig?.wallArtShopUrl ?? '').trim();
+  const wallArtProductMetadataEmpty = !rawWallArtTitle
+    && !rawWallArtProductImage
+    && !rawWallArtProductSha256;
+  const wallArtProductMetadataComplete = Boolean(
+    wallArtConfig.wallArtTitle
+    && wallArtConfig.wallArtProductImage
+    && wallArtConfig.wallArtProductImage === rawWallArtProductImage
+    && wallArtConfig.wallArtProductImageSha256
+    && wallArtConfig.wallArtProductImageSha256 === rawWallArtProductSha256.toLowerCase()
+  );
+  const wallArtShopTargetSafe = !rawWallArtShopUrl || (
+    wallArtConfig.wallArtShopUrl === rawWallArtShopUrl
+    && rawWallArtShopUrl === rawConfig?.ctaUrl
+    && rawWallArtShopUrl === rawConfig?.qrTarget
+  );
+  const wallArtPriceKeys = Object.keys(rawConfig ?? {}).filter((key) => /wall.?art.*price|^price(?:text)?$/i.test(key));
   const checks = [
     check('schema', plan.schemaVersion === 1, 1, plan.schemaVersion),
     check('purpose', plan.purpose === 'offline-demo-recording-only', 'offline-demo-recording-only', plan.purpose),
@@ -210,6 +231,22 @@ export function validateStreamOperations(plan, rawConfig) {
     check('public-config-no-known-secret-patterns', !hasSensitiveValue(rawConfig), true, !hasSensitiveValue(rawConfig)),
     check('cta-canonical-https', isCanonicalHttpsWithoutSecrets(rawConfig?.ctaUrl), 'canonical HTTPS without query, fragment or credentials', rawConfig?.ctaUrl),
     check('qr-target-exact', rawConfig?.qrTarget === rawConfig?.ctaUrl && config.qrMatchesCta, rawConfig?.ctaUrl, rawConfig?.qrTarget),
+    check('wall-art-product-metadata-safe', wallArtProductMetadataEmpty || wallArtProductMetadataComplete, 'all empty or complete local raster metadata', {
+      title: Boolean(rawWallArtTitle),
+      image: rawWallArtProductImage || 'MISSING',
+      sha256: rawWallArtProductSha256 ? 'DECLARED' : 'MISSING',
+    }),
+    check('wall-art-shop-target-safe', wallArtShopTargetSafe, 'empty or canonical target exactly bound to CTA and QR', rawWallArtShopUrl || 'MISSING'),
+    check('wall-art-evidence-locked', wallArtConfig.wallArtProductEvidenceStatus === 'UNPROVEN'
+      && wallArtConfig.wallArtShopEvidenceStatus === 'UNPROVEN'
+      && wallArtConfig.wallArtDecision === 'STOP'
+      && !wallArtConfig.wallArtEvidenceOverridesIgnored,
+    'UNPROVEN/UNPROVEN/STOP without raw READY or GO claims', {
+      product: rawConfig?.wallArtProductEvidenceStatus,
+      shop: rawConfig?.wallArtShopEvidenceStatus,
+      decision: rawConfig?.wallArtDecision ?? 'STOP',
+    }),
+    check('wall-art-no-price-claim', wallArtPriceKeys.length === 0, 'no price until independently evidenced', wallArtPriceKeys),
   ];
   validateSourceContract(plan, checks);
 
@@ -222,6 +259,14 @@ export function validateStreamOperations(plan, rawConfig) {
   if (!config.qrSha256) founderBlockers.push('QR_HASH_MISSING');
   if (!config.qrScanVerified) founderBlockers.push('QR_SCAN_UNVERIFIED');
   if (!config.conversionDeclaredReady) founderBlockers.push('CTA_QR_NOT_DECLARED_READY');
+  if (!wallArtConfig.wallArtProductConfigured) founderBlockers.push('WALL_ART_PRODUCT_ASSET_MISSING');
+  founderBlockers.push('WALL_ART_PRODUCT_EVIDENCE_UNPROVEN');
+  if (!wallArtConfig.wallArtShopTargetConfigured) founderBlockers.push('WALL_ART_SHOP_TARGET_MISSING');
+  founderBlockers.push(
+    'WALL_ART_SHOP_EVIDENCE_UNPROVEN',
+    'WALL_ART_PRICE_UNKNOWN',
+    'WALL_ART_QR_TARGET_UNPROVEN',
+  );
   founderBlockers.push(
     'QR_ASSET_HASH_UNPROVEN',
     'QR_PAYLOAD_RUNTIME_UNPROVEN',
@@ -239,26 +284,78 @@ export function validateStreamOperations(plan, rawConfig) {
   });
 }
 
+function isPngStructureValid(bytes) {
+  if (bytes.length < 45
+    || !bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return false;
+  let offset = 8;
+  let firstChunk = true;
+  let sawHeader = false;
+  let sawImageData = false;
+  let sawEnd = false;
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.subarray(offset + 4, offset + 8).toString('ascii');
+    const nextOffset = offset + 12 + length;
+    if (nextOffset > bytes.length) return false;
+    if (firstChunk && (type !== 'IHDR' || length !== 13)) return false;
+    if (!firstChunk && type === 'IHDR') return false;
+    if (type === 'IHDR') {
+      sawHeader = bytes.readUInt32BE(offset + 8) > 0 && bytes.readUInt32BE(offset + 12) > 0;
+    } else if (type === 'IDAT') {
+      sawImageData = sawImageData || length > 0;
+    } else if (type === 'IEND') {
+      if (length !== 0 || nextOffset !== bytes.length) return false;
+      sawEnd = true;
+      offset = nextOffset;
+      break;
+    }
+    firstChunk = false;
+    offset = nextOffset;
+  }
+  return offset === bytes.length && sawHeader && sawImageData && sawEnd;
+}
+
+function isWebpStructureValid(bytes) {
+  if (bytes.length < 20
+    || bytes.subarray(0, 4).toString('ascii') !== 'RIFF'
+    || bytes.subarray(8, 12).toString('ascii') !== 'WEBP'
+    || bytes.readUInt32LE(4) + 8 !== bytes.length) return false;
+  let offset = 12;
+  let sawImageChunk = false;
+  while (offset + 8 <= bytes.length) {
+    const type = bytes.subarray(offset, offset + 4).toString('ascii');
+    const length = bytes.readUInt32LE(offset + 4);
+    const nextOffset = offset + 8 + length + (length % 2);
+    if (nextOffset > bytes.length) return false;
+    if (['VP8 ', 'VP8L', 'VP8X'].includes(type) && length > 0) sawImageChunk = true;
+    offset = nextOffset;
+  }
+  return offset === bytes.length && sawImageChunk;
+}
+
 function isRasterSignatureValid(extension, bytes) {
-  if (extension === '.png') {
-    return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
-  }
-  if (extension === '.webp') {
-    return bytes.length >= 12
-      && bytes.subarray(0, 4).toString('ascii') === 'RIFF'
-      && bytes.subarray(8, 12).toString('ascii') === 'WEBP';
-  }
+  if (extension === '.png') return isPngStructureValid(bytes);
+  if (extension === '.webp') return isWebpStructureValid(bytes);
   return false;
 }
 
-export async function inspectQrAsset(config, { publicRoot = PUBLIC_ROOT } = {}) {
-  if (!config.qrImage || !config.qrSha256) {
-    return Object.freeze({ status: 'UNPROVEN', actualSha256: '', reason: 'QR asset or declared SHA-256 missing' });
+async function inspectLocalRasterAsset(
+  imagePath,
+  declaredSha256,
+  { publicRoot = PUBLIC_ROOT, label = 'Raster asset' } = {},
+) {
+  if (!imagePath || !declaredSha256) {
+    return Object.freeze({ status: 'UNPROVEN', actualSha256: '', reason: `${label} or declared SHA-256 missing` });
+  }
+  if (typeof imagePath !== 'string'
+    || !/^\/[A-Za-z0-9/_-]+\.(?:png|webp)$/.test(imagePath)
+    || imagePath.includes('//')) {
+    return Object.freeze({ status: 'STOP', actualSha256: '', reason: `${label} path is not a safe local PNG/WebP` });
   }
   const publicRootPath = path.resolve(publicRoot);
-  const assetPath = path.resolve(publicRootPath, config.qrImage.slice(1));
+  const assetPath = path.resolve(publicRootPath, imagePath.slice(1));
   if (!isWithinRoot(assetPath, publicRootPath)) {
-    return Object.freeze({ status: 'STOP', actualSha256: '', reason: 'QR asset escapes public root' });
+    return Object.freeze({ status: 'STOP', actualSha256: '', reason: `${label} escapes public root` });
   }
   try {
     const [realPublicRoot, realAssetPath] = await Promise.all([
@@ -266,23 +363,37 @@ export async function inspectQrAsset(config, { publicRoot = PUBLIC_ROOT } = {}) 
       realpath(assetPath),
     ]);
     if (!isWithinRoot(realAssetPath, realPublicRoot)) {
-      return Object.freeze({ status: 'STOP', actualSha256: '', reason: 'QR asset resolves outside public root' });
+      return Object.freeze({ status: 'STOP', actualSha256: '', reason: `${label} resolves outside public root` });
     }
     const bytes = await readFile(realAssetPath);
     const extension = path.extname(assetPath).toLowerCase();
     const actualSha256 = createHash('sha256').update(bytes).digest('hex');
     const signatureValid = isRasterSignatureValid(extension, bytes);
     return Object.freeze({
-      status: signatureValid && actualSha256 === config.qrSha256 ? 'PASS' : 'STOP',
+      status: signatureValid && actualSha256 === declaredSha256 ? 'PASS' : 'STOP',
       actualSha256,
-      declaredSha256: config.qrSha256,
+      declaredSha256,
       signatureValid,
-      relativePath: config.qrImage,
+      relativePath: imagePath,
       reason: signatureValid ? 'hash compared with local raster bytes' : 'invalid raster signature',
     });
   } catch (error) {
-    return Object.freeze({ status: 'STOP', actualSha256: '', reason: `QR asset unreadable: ${error.code ?? 'ERROR'}` });
+    return Object.freeze({ status: 'STOP', actualSha256: '', reason: `${label} unreadable: ${error.code ?? 'ERROR'}` });
   }
+}
+
+export async function inspectQrAsset(config, { publicRoot = PUBLIC_ROOT } = {}) {
+  return inspectLocalRasterAsset(config.qrImage, config.qrSha256, {
+    publicRoot,
+    label: 'QR asset',
+  });
+}
+
+export async function inspectWallArtProductAsset(config, { publicRoot = PUBLIC_ROOT } = {}) {
+  return inspectLocalRasterAsset(config.wallArtProductImage, config.wallArtProductImageSha256, {
+    publicRoot,
+    label: 'Wall-art product asset',
+  });
 }
 
 export async function inspectStreamReadiness() {
@@ -293,9 +404,15 @@ export async function inspectStreamReadiness() {
   let obsInstalled = true;
   try { await access(OBS_PATH); } catch { obsInstalled = false; }
   const result = validateStreamOperations(plan, rawConfig);
-  const qrAssetEvidence = await inspectQrAsset(resolveStreamConfig(rawConfig));
+  const config = resolveStreamConfig(rawConfig);
+  const wallArtConfig = resolveStreamConfig(rawConfig, 'showcase=wall-art');
+  const [qrAssetEvidence, wallArtProductAssetEvidence] = await Promise.all([
+    inspectQrAsset(config),
+    inspectWallArtProductAsset(wallArtConfig),
+  ]);
   const founderBlockers = result.founderBlockers.filter((blocker) => blocker !== 'QR_ASSET_HASH_UNPROVEN');
   if (qrAssetEvidence.status !== 'PASS') founderBlockers.unshift(`QR_ASSET_${qrAssetEvidence.status}`);
+  if (wallArtProductAssetEvidence.status === 'STOP') founderBlockers.push('WALL_ART_PRODUCT_ASSET_STOP');
   if (!obsInstalled) founderBlockers.push('OBS_NOT_INSTALLED');
   return Object.freeze({
     ...result,
@@ -305,6 +422,22 @@ export async function inspectStreamReadiness() {
     qrPayloadEvidence: Object.freeze({
       status: 'UNPROVEN',
       reason: 'QR payload must be decoded in the local WebView and exactly match the configured CTA target',
+    }),
+    wallArtEvidence: Object.freeze({
+      decision: 'STOP',
+      productAsset: wallArtProductAssetEvidence,
+      shopTarget: Object.freeze({
+        status: 'UNPROVEN',
+        configured: wallArtConfig.wallArtShopTargetConfigured,
+        reason: wallArtConfig.wallArtShopTargetConfigured
+          ? 'Canonical target metadata cannot prove the live page is the exact wall-art product and checkout'
+          : 'No canonical wall-art product/shop target is configured',
+      }),
+      price: Object.freeze({ status: 'UNKNOWN', reason: 'No independently evidenced wall-art price is configured' }),
+      qrTarget: Object.freeze({
+        status: 'UNPROVEN',
+        reason: 'The existing landing-page QR is not evidence for a wall-art product target',
+      }),
     }),
     obsInstalled,
     obsSetupApplied: 'UNPROVEN',

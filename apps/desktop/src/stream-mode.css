@@ -259,6 +259,149 @@ html[data-stream-renderer="static"] .stream-static-core { display: grid; }
   line-height: 1.55;
 }
 
+.stream-wall-art[hidden] {
+  display: none !important;
+}
+
+.stream-wall-art {
+  position: absolute;
+  z-index: 7;
+  top: 18%;
+  right: 6.2%;
+  display: grid;
+  width: 40%;
+  gap: 0.65cqw;
+}
+
+.stream-wall-art-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgb(238 244 218 / 0.62);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: clamp(9px, 0.5cqw, 11px);
+  letter-spacing: 0.18em;
+}
+
+.stream-wall-art-header strong {
+  padding: 0.34cqw 0.52cqw;
+  border: 1px solid rgb(201 121 88 / 0.58);
+  color: #e4a07c;
+}
+
+.stream-wall-art-product {
+  position: relative;
+  display: grid;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border: 1px solid rgb(215 173 85 / 0.34);
+  place-items: center;
+  background:
+    linear-gradient(135deg, rgb(25 166 111 / 0.08), transparent 48%),
+    repeating-linear-gradient(135deg, rgb(238 244 218 / 0.025) 0 1px, transparent 1px 1.4cqw),
+    rgb(2 10 8 / 0.88);
+  box-shadow: inset 0 0 4cqw rgb(0 0 0 / 0.42);
+}
+
+.stream-wall-art-product > span {
+  position: absolute;
+  top: 0.72cqw;
+  left: 0.82cqw;
+  color: rgb(238 244 218 / 0.36);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: clamp(8px, 0.42cqw, 10px);
+  letter-spacing: 0.17em;
+}
+
+.stream-wall-art-product > i {
+  width: 11cqw;
+  aspect-ratio: 4 / 5;
+  border: 0.24cqw solid rgb(215 173 85 / 0.42);
+  outline: 1px dashed rgb(238 244 218 / 0.2);
+  outline-offset: 0.62cqw;
+  background:
+    linear-gradient(45deg, transparent calc(50% - 1px), rgb(238 244 218 / 0.11) 50%, transparent calc(50% + 1px)),
+    linear-gradient(-45deg, transparent calc(50% - 1px), rgb(238 244 218 / 0.11) 50%, transparent calc(50% + 1px));
+}
+
+.stream-wall-art-product > strong,
+.stream-wall-art-product > small {
+  position: absolute;
+  right: 1cqw;
+  bottom: 1.7cqw;
+  left: 1cqw;
+  color: #f7fae9;
+  font-size: clamp(12px, 0.8cqw, 17px);
+  font-weight: 520;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.stream-wall-art-product > small {
+  bottom: 0.72cqw;
+  color: rgb(238 244 218 / 0.46);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: clamp(8px, 0.42cqw, 10px);
+  font-weight: 400;
+  letter-spacing: 0.13em;
+}
+
+.stream-wall-art-evidence {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin: 0;
+  gap: 0.65cqw;
+}
+
+.stream-wall-art-evidence div {
+  display: flex;
+  min-width: 0;
+  padding: 0.54cqw 0.66cqw;
+  border: 1px solid rgb(201 121 88 / 0.28);
+  align-items: center;
+  justify-content: space-between;
+  background: rgb(2 10 8 / 0.72);
+}
+
+.stream-wall-art-evidence dt,
+.stream-wall-art-evidence dd {
+  margin: 0;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: clamp(8px, 0.43cqw, 10px);
+  letter-spacing: 0.1em;
+}
+
+.stream-wall-art-evidence dt { color: rgb(238 244 218 / 0.4); }
+.stream-wall-art-evidence dd { color: #e4a07c; }
+
+html[data-stream-showcase="wall-art"] .stream-telemetry {
+  top: 11.4%;
+  right: 6.2%;
+  display: grid;
+  width: 40%;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+html[data-stream-showcase="wall-art"] .stream-telemetry div {
+  min-height: 2.65cqw;
+  padding: 0.34cqw 0.5cqw;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.18cqw;
+}
+
+html[data-stream-showcase="wall-art"] .stream-telemetry span,
+html[data-stream-showcase="wall-art"] .stream-telemetry strong {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(8px, 0.43cqw, 10px);
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .stream-voice {
   bottom: 22%;
   left: 7.5%;

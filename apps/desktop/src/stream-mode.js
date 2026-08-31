@@ -51,6 +51,7 @@ function createPrivateSaleNonce() {
 export function startStreamMode({ app, buildId }) {
   if (!app) throw new Error('stream root missing');
   const query = new URLSearchParams(window.location.search);
+  const wallArtShowcaseRequested = query.get('showcase') === 'wall-art';
   const qrVerificationPreview = isLoopbackQrPreview(window.location, query);
   const rehearsalRunId = /^[A-Za-z0-9._-]{8,96}$/.test(String(query.get('rehearsalRunId') ?? ''))
     ? query.get('rehearsalRunId')
@@ -87,6 +88,23 @@ export function startStreamMode({ app, buildId }) {
         <p id="stream-subline">Ein lokaler Agent, der auf Sprache reagiert und deinen PC verständlich steuert.</p>
       </section>
 
+      <section id="stream-wall-art" class="stream-wall-art" aria-labelledby="stream-wall-art-title" hidden>
+        <header class="stream-wall-art-header">
+          <span>WALL-ART SHOWCASE</span>
+          <strong>STREAMING OFF</strong>
+        </header>
+        <div class="stream-wall-art-product" role="img" aria-label="16:9 Produktfläche ohne belegtes Produktbild">
+          <span>16:9 PRODUCT SURFACE</span>
+          <i aria-hidden="true"></i>
+          <strong id="stream-wall-art-title">PRODUKTASSET AUSSTEHEND</strong>
+          <small id="stream-wall-art-asset-state">KEIN PRODUKTBILD KONFIGURIERT</small>
+        </div>
+        <dl class="stream-wall-art-evidence" aria-label="Wall-Art Evidence Status">
+          <div><dt>PRODUCT EVIDENCE</dt><dd id="stream-wall-art-product-evidence">UNPROVEN</dd></div>
+          <div><dt>SHOP EVIDENCE</dt><dd id="stream-wall-art-shop-evidence">STOP</dd></div>
+        </dl>
+      </section>
+
       <section class="stream-voice" aria-live="polite">
         <div class="stream-voice-heading"><span>DEMO VOICE REACTION</span><strong id="stream-presence">IDLE</strong></div>
         <div id="stream-wave" class="stream-wave" aria-hidden="true">
@@ -112,14 +130,14 @@ export function startStreamMode({ app, buildId }) {
         <figure class="stream-qr">
           <img id="stream-qr-image" alt="Konfigurierter QR-Code" hidden />
           <div id="stream-qr-fallback" class="stream-qr-fallback" aria-label="QR-Platzhalter, nicht scannbar">
-            <span></span><span></span><span></span><strong>DEMO</strong>
+            <span></span><span></span><span></span><strong id="stream-qr-fallback-label">DEMO</strong>
           </div>
           <figcaption id="stream-qr-verification" hidden>VERIFY ONLY</figcaption>
         </figure>
       </aside>
 
       <footer class="stream-footer">
-        <span>LOCAL-FIRST</span><span id="stream-quality">${requestedProfile.label}</span><span id="stream-loop">LOOP 00 / ${timeline.durationMs / 1_000}S</span>
+        <span id="stream-broadcast-status">LOCAL-FIRST</span><span id="stream-quality">${requestedProfile.label}</span><span id="stream-loop">LOOP 00 / ${timeline.durationMs / 1_000}S</span>
       </footer>
       <output id="stream-evidence" hidden aria-hidden="true"></output>
     </main>
@@ -127,6 +145,7 @@ export function startStreamMode({ app, buildId }) {
 
   const $ = (selector) => app.querySelector(selector);
   const root = document.documentElement;
+  root.dataset.streamShowcase = wallArtShowcaseRequested ? 'wall-art' : 'default';
   const canvas = $('#stream-core');
   const metrics = {
     buildId,
@@ -200,10 +219,29 @@ export function startStreamMode({ app, buildId }) {
     $('#stream-subline').textContent = config.subline;
     $('#stream-cta-label').textContent = config.ctaLabel;
     $('#stream-cta-text').textContent = config.ctaText;
+    const wallArtMode = config.showcaseMode === 'WALL_ART';
+    const wallArtPanel = $('#stream-wall-art');
+    wallArtPanel.hidden = !wallArtMode;
+    root.dataset.streamShowcase = wallArtMode ? 'wall-art' : 'default';
+    $('#stream-broadcast-status').textContent = wallArtMode ? 'STREAMING OFF' : 'LOCAL-FIRST';
+    $('#stream-signal-badge').querySelector('strong').textContent = wallArtMode
+      ? 'LOCAL SHOWCASE'
+      : $('#stream-signal-badge').querySelector('strong').textContent;
+    $('#stream-wall-art-title').textContent = config.wallArtTitle || 'PRODUKTASSET AUSSTEHEND';
+    $('#stream-wall-art-asset-state').textContent = config.wallArtProductConfigured
+      ? 'ASSET KONFIGURIERT · EVIDENCE FEHLT'
+      : 'KEIN PRODUKTBILD KONFIGURIERT';
+    $('#stream-wall-art-product-evidence').textContent = config.wallArtProductEvidenceStatus === 'UNPROVEN'
+      ? 'UNPROVEN · STOP'
+      : 'STOP';
+    $('#stream-wall-art-shop-evidence').textContent = config.wallArtShopEvidenceStatus === 'UNPROVEN'
+      ? 'UNPROVEN · STOP'
+      : 'STOP';
+    $('#stream-qr-fallback-label').textContent = wallArtMode ? 'STOP' : 'DEMO';
     const privateCtaVariant = ['PRODUCT', 'APP_DEMO', 'BIRDIEWORLD_HOTEL'].includes(query.get('variant'))
       ? query.get('variant')
       : 'PRODUCT';
-    const privateCtaEnabled = query.get('ctaTest') === 'private';
+    const privateCtaEnabled = !wallArtMode && query.get('ctaTest') === 'private';
     const ctaLink = $('#stream-cta-url');
     ctaLink.textContent = privateCtaEnabled ? 'LOCAL PRIVATE CTA TEST' : config.ctaDisplayUrl;
     ctaLink.removeAttribute('href');
@@ -212,7 +250,11 @@ export function startStreamMode({ app, buildId }) {
     ctaLink.tabIndex = -1;
     ctaLink.onclick = null;
     root.dataset.streamCtaTest = privateCtaEnabled ? 'private' : 'off';
-    if (privateCtaEnabled) {
+    if (wallArtMode) {
+      $('#stream-cta-label').textContent = 'SHOP-EVIDENZ · STOP';
+      $('#stream-cta-text').textContent = 'Kein belegtes Shop-Ziel konfiguriert';
+      ctaLink.textContent = 'SHOP TARGET UNPROVEN';
+    } else if (privateCtaEnabled) {
       let completed = false;
       try {
         completed = window.localStorage.getItem(PRIVATE_SALE_COMPLETED_KEY) === PRIVATE_SALE_RUN_ID;
@@ -244,16 +286,19 @@ export function startStreamMode({ app, buildId }) {
         };
       }
     }
-    if (!privateCtaEnabled && config.conversionReady) {
+    if (!wallArtMode && !privateCtaEnabled && config.conversionReady) {
       ctaLink.href = config.ctaUrl;
       ctaLink.removeAttribute('aria-disabled');
     }
-    root.dataset.streamConversion = !privateCtaEnabled && config.conversionReady ? 'ready' : 'draft';
+    root.dataset.streamConversion = !wallArtMode && !privateCtaEnabled && config.conversionReady
+      ? 'ready'
+      : 'draft';
 
     const image = $('#stream-qr-image');
     const fallback = $('#stream-qr-fallback');
     const verificationLabel = $('#stream-qr-verification');
-    const renderQr = !privateCtaEnabled
+    const renderQr = !wallArtMode
+      && !privateCtaEnabled
       && config.qrRenderReady
       && Boolean(config.qrRenderUrl)
       && (config.conversionReady || qrVerificationPreview);
@@ -581,7 +626,9 @@ export function startStreamMode({ app, buildId }) {
   }
 
   function startLiveRuntime() {
-    $('#stream-signal-badge').querySelector('strong').textContent = 'LIVE SIGNAL';
+    $('#stream-signal-badge').querySelector('strong').textContent = wallArtShowcaseRequested
+      ? 'LOCAL SHOWCASE'
+      : 'RUNTIME SIGNAL';
     setRuntime('CONNECTING');
     bridge = new RuntimeBridge({
       onPresence(snapshot) { applyPresence(snapshot?.state); },
@@ -620,9 +667,11 @@ export function startStreamMode({ app, buildId }) {
       const response = await fetch('/stream-mode.json', { cache: 'no-store' });
       if (!response.ok) throw new Error('config unavailable');
       const resolvedConfig = resolveStreamConfig(await response.json(), query);
-      const verifiedConfig = await verifyStreamQrAsset(resolvedConfig, {
-        allowLocalPreview: qrVerificationPreview,
-      });
+      const verifiedConfig = resolvedConfig.showcaseMode === 'WALL_ART'
+        ? resolvedConfig
+        : await verifyStreamQrAsset(resolvedConfig, {
+          allowLocalPreview: qrVerificationPreview,
+        });
       if (!disposed) renderConfig(verifiedConfig);
       else if (verifiedConfig.qrRenderUrl) {
         try { URL.revokeObjectURL(verifiedConfig.qrRenderUrl); } catch { /* local blob cleanup only */ }
@@ -653,32 +702,59 @@ export function startStreamMode({ app, buildId }) {
       frameIntervalsMs: [...metrics.frameIntervalsMs],
       config: {
         brand: currentConfig.brand,
-        ctaLabel: currentConfig.ctaLabel,
-        ctaDisplayUrl: currentConfig.ctaDisplayUrl,
-        qrConfigured: query.get('ctaTest') !== 'private' && Boolean(currentConfig.qrImage),
-        qrMatchesCta: currentConfig.qrMatchesCta,
-        qrScanVerified: currentConfig.qrScanVerified,
-        qrAssetHashVerified: currentConfig.qrAssetHashVerified,
-        qrPayloadVerified: currentConfig.qrPayloadVerified,
-        qrPayloadStatus: currentConfig.qrPayloadStatus,
-        qrRenderReady: currentConfig.qrRenderReady,
+        ctaLabel: currentConfig.showcaseMode === 'WALL_ART'
+          ? 'SHOP EVIDENCE'
+          : currentConfig.ctaLabel,
+        ctaDisplayUrl: currentConfig.showcaseMode === 'WALL_ART'
+          ? ''
+          : currentConfig.ctaDisplayUrl,
+        qrConfigured: currentConfig.showcaseMode !== 'WALL_ART'
+          && query.get('ctaTest') !== 'private'
+          && Boolean(currentConfig.qrImage),
+        qrMatchesCta: currentConfig.showcaseMode !== 'WALL_ART' && currentConfig.qrMatchesCta,
+        qrScanVerified: currentConfig.showcaseMode !== 'WALL_ART' && currentConfig.qrScanVerified,
+        qrAssetHashVerified: currentConfig.showcaseMode !== 'WALL_ART'
+          && currentConfig.qrAssetHashVerified,
+        qrPayloadVerified: currentConfig.showcaseMode !== 'WALL_ART'
+          && currentConfig.qrPayloadVerified,
+        qrPayloadStatus: currentConfig.showcaseMode === 'WALL_ART'
+          ? 'NOT_CHECKED'
+          : currentConfig.qrPayloadStatus,
+        qrRenderReady: currentConfig.showcaseMode !== 'WALL_ART' && currentConfig.qrRenderReady,
         qrVerificationPreview: query.get('ctaTest') !== 'private'
           && qrVerificationPreview
           && currentConfig.qrRenderReady
           && !currentConfig.conversionReady
           && Boolean(currentConfig.qrRenderUrl),
-        qrSha256: currentConfig.qrSha256,
-        actualQrSha256: currentConfig.actualQrSha256,
-        ctaStatus: currentConfig.ctaStatus,
-        placeholderCta: currentConfig.placeholderCta,
-        ctaUrlCanonical: currentConfig.ctaUrlCanonical,
-        qrTargetCanonical: currentConfig.qrTargetCanonical,
+        qrSha256: currentConfig.showcaseMode === 'WALL_ART' ? '' : currentConfig.qrSha256,
+        actualQrSha256: currentConfig.showcaseMode === 'WALL_ART'
+          ? ''
+          : currentConfig.actualQrSha256,
+        ctaStatus: currentConfig.showcaseMode === 'WALL_ART' ? 'DRAFT' : currentConfig.ctaStatus,
+        placeholderCta: currentConfig.showcaseMode === 'WALL_ART'
+          ? true
+          : currentConfig.placeholderCta,
+        ctaUrlCanonical: currentConfig.showcaseMode !== 'WALL_ART'
+          && currentConfig.ctaUrlCanonical,
+        qrTargetCanonical: currentConfig.showcaseMode !== 'WALL_ART'
+          && currentConfig.qrTargetCanonical,
         conversionOverridesIgnored: currentConfig.conversionOverridesIgnored,
         conversionDeclaredReady: currentConfig.conversionDeclaredReady,
-        conversionReady: query.get('ctaTest') !== 'private' && currentConfig.conversionReady,
-        privateCtaAuthorization: query.get('ctaTest') === 'private'
+        conversionReady: currentConfig.showcaseMode !== 'WALL_ART'
+          && query.get('ctaTest') !== 'private'
+          && currentConfig.conversionReady,
+        privateCtaAuthorization: currentConfig.showcaseMode !== 'WALL_ART'
+          && query.get('ctaTest') === 'private'
           ? PRIVATE_SALE_AUTHORIZATION_STATUS
           : 'NOT_APPLICABLE',
+        showcaseMode: currentConfig.showcaseMode,
+        wallArtProductConfigured: currentConfig.wallArtProductConfigured,
+        wallArtShopTargetConfigured: currentConfig.wallArtShopTargetConfigured,
+        wallArtProductEvidenceStatus: currentConfig.wallArtProductEvidenceStatus,
+        wallArtShopEvidenceStatus: currentConfig.wallArtShopEvidenceStatus,
+        wallArtDecision: currentConfig.wallArtDecision,
+        wallArtQueryOverridesIgnored: currentConfig.wallArtQueryOverridesIgnored,
+        wallArtEvidenceOverridesIgnored: currentConfig.wallArtEvidenceOverridesIgnored,
       },
     };
     return Object.freeze({ ...snapshot, evidence: evaluateStreamEvidence(snapshot) });
@@ -773,8 +849,10 @@ export function startStreamMode({ app, buildId }) {
   const demoMode = query.get('demo') === 'loop' || !tauriAvailable;
   if (demoMode) {
     const demoFixture = resolveStreamDemoFixture(query);
-    $('#stream-signal-badge').querySelector('strong').textContent = demoFixture?.badge
-      ?? (timeline.id === 'LOOP' ? 'DEMO LOOP' : `DEMO ${timeline.id.replace('_', ' ')}`);
+    $('#stream-signal-badge').querySelector('strong').textContent = wallArtShowcaseRequested
+      ? 'LOCAL SHOWCASE'
+      : demoFixture?.badge
+        ?? (timeline.id === 'LOOP' ? 'DEMO LOOP' : `DEMO ${timeline.id.replace('_', ' ')}`);
     setRuntime('DEMO');
     setMicrophone('DEMO INPUT');
     if (demoFixture) {

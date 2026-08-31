@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import {
+  DEFAULT_STREAM_CONFIG,
   STREAM_CLIP_30_PHASES,
   STREAM_CLIP_60_PHASES,
   STREAM_DEMO_DURATION_MS,
@@ -18,6 +19,8 @@ import {
   resolveStreamTimeline,
   sanitizeCtaUrl,
   sanitizeQrImage,
+  sanitizeWallArtProductImage,
+  sanitizeWallArtShopUrl,
   streamDemoFrame,
 } from '../src/stream-mode-config.js';
 import {
@@ -112,6 +115,72 @@ test('CTA configuration is bounded and cannot put credentials or query secrets o
   assert.equal(isPlaceholderCta('https://localhost/pilot'), true);
   assert.equal(isCanonicalPublicHttpsUrl('https://birdieandbreakfast.de/pilot'), true);
   assert.equal(isCanonicalPublicHttpsUrl('https://birdieandbreakfast.de/pilot?source=stream'), false);
+});
+
+test('wall-art showcase is opt-in and remains STOP without product and shop evidence', () => {
+  assert.equal(sanitizeWallArtProductImage('https://cdn.example.org/art.png'), '');
+  assert.equal(sanitizeWallArtProductImage('//cdn.example.org/art.png'), '');
+  assert.equal(sanitizeWallArtProductImage('/assets/../private.png'), '');
+  assert.equal(sanitizeWallArtProductImage('/assets/%2e%2e/private.png'), '');
+  assert.equal(sanitizeWallArtProductImage('/assets//wall-art.png'), '');
+  assert.equal(sanitizeWallArtProductImage('/assets/wall-art.svg'), '');
+  assert.equal(sanitizeWallArtProductImage('/assets/wall-art.png'), '/assets/wall-art.png');
+  assert.equal(sanitizeWallArtShopUrl('https://user:secret@example.com/private'), '');
+  assert.equal(sanitizeWallArtShopUrl('https://birdieandbreakfast.de/pilot?source=stream'), '');
+  assert.equal(sanitizeWallArtShopUrl('https://birdieandbreakfast.de/pilot'), 'https://birdieandbreakfast.de/pilot');
+
+  const raw = {
+    ctaUrl: 'https://birdieandbreakfast.de/pilot',
+    ctaStatus: 'READY',
+    qrImage: '/assets/birdie-pilot.png',
+    qrTarget: 'https://birdieandbreakfast.de/pilot',
+    qrSha256: 'a'.repeat(64),
+    qrScanVerified: true,
+    wallArtTitle: '  Local\nWall Art  ',
+    wallArtProductImage: '/assets/wall-art.png',
+    wallArtProductImageSha256: 'b'.repeat(64),
+    wallArtShopUrl: 'https://birdieandbreakfast.de/pilot',
+    wallArtProductEvidenceStatus: 'READY',
+    wallArtShopEvidenceStatus: 'READY',
+    wallArtDecision: 'GO',
+  };
+  const defaultConfig = resolveStreamConfig(raw);
+  assert.equal(defaultConfig.showcaseMode, 'DEFAULT');
+  assert.equal(defaultConfig.conversionDeclaredReady, true);
+
+  const showcase = resolveStreamConfig(
+    raw,
+    'showcase=wall-art&brand=FAKE&headline=Nur+49+EUR&subline=Jetzt+kaufen&wallArtProductImage=%2Fassets%2Freplacement.png&wallArtShopUrl=https%3A%2F%2Fattacker.example%2F&wallArtProductEvidenceStatus=READY&wallArtDecision=GO&conversionReady=true&priceText=49',
+  );
+  assert.equal(showcase.showcaseMode, 'WALL_ART');
+  assert.equal(showcase.brand, DEFAULT_STREAM_CONFIG.brand);
+  assert.equal(showcase.headline, DEFAULT_STREAM_CONFIG.headline);
+  assert.equal(showcase.subline, DEFAULT_STREAM_CONFIG.subline);
+  assert.equal(showcase.wallArtTitle, 'Local Wall Art');
+  assert.equal(showcase.wallArtProductImage, '/assets/wall-art.png');
+  assert.equal(showcase.wallArtProductImageSha256, 'b'.repeat(64));
+  assert.equal(showcase.wallArtShopUrl, 'https://birdieandbreakfast.de/pilot');
+  assert.equal(showcase.wallArtProductConfigured, true);
+  assert.equal(showcase.wallArtShopTargetConfigured, true);
+  assert.equal(showcase.wallArtProductEvidenceStatus, 'UNPROVEN');
+  assert.equal(showcase.wallArtShopEvidenceStatus, 'UNPROVEN');
+  assert.equal(showcase.wallArtDecision, 'STOP');
+  assert.equal(showcase.wallArtQueryOverridesIgnored, true);
+  assert.equal(showcase.wallArtEvidenceOverridesIgnored, true);
+  assert.equal(showcase.conversionDeclaredReady, false);
+  assert.equal(showcase.conversionReady, false);
+  assert.equal('price' in showcase, false);
+  assert.equal('priceText' in showcase, false);
+
+  const publicDraft = resolveStreamConfig({
+    wallArtProductImage: 'https://remote.example/art.png',
+    wallArtShopUrl: 'https://user:secret@example.com/private?token=hidden',
+  }, 'showcase=wall-art');
+  assert.equal(publicDraft.wallArtProductImage, '');
+  assert.equal(publicDraft.wallArtShopUrl, '');
+  assert.equal(publicDraft.wallArtProductConfigured, false);
+  assert.equal(publicDraft.wallArtShopTargetConfigured, false);
+  assert.equal(publicDraft.wallArtDecision, 'STOP');
 });
 
 test('QR becomes conversion-ready only after canonical config and actual asset hash agree', async () => {
@@ -585,10 +654,17 @@ test('stream mode is optional and preserves the default headless contract', asyn
   assert.match(mainSource, /requestedMode === 'stream'/);
   assert.match(mainSource, /else startHeadless\(\)/);
   assert.match(css, /aspect-ratio:\s*16\s*\/\s*9/);
+  assert.match(css, /\.stream-wall-art-product[\s\S]*?aspect-ratio:\s*16\s*\/\s*9/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /data-stream-renderer="static"/);
   assert.match(streamSource, /scheduleStaticFallback\(code\)/);
   assert.match(streamSource, /isLoopbackQrPreview\(window\.location, query\)/);
+  assert.match(streamSource, /query\.get\('showcase'\) === 'wall-art'/);
+  assert.match(streamSource, /STREAMING OFF/);
+  assert.match(streamSource, /RUNTIME SIGNAL/);
+  assert.doesNotMatch(streamSource, /LIVE SIGNAL/);
+  assert.match(streamSource, /SHOP TARGET UNPROVEN/);
+  assert.match(css, /data-stream-showcase="wall-art"\] \.stream-telemetry[\s\S]*?grid-template-columns:\s*repeat\(5,/);
   assert.match(streamSource, /config\.conversionReady \|\| qrVerificationPreview/);
   assert.match(streamSource, /const verificationOnly = renderQr && !config\.conversionReady/);
   assert.match(streamSource, /!privateCtaEnabled[\s\S]{0,120}config\.qrRenderReady[\s\S]{0,120}qrVerificationPreview/);
@@ -607,4 +683,9 @@ test('stream mode is optional and preserves the default headless contract', asyn
   assert.match(viteConfig, /process\.env\.BIRDIE_DESKTOP_BUILD_ID/);
   assert.match(viteConfig, /hmr:\s*\{\s*overlay:\s*false\s*\}/);
   assert.equal(Object.keys(config).some((key) => /secret|token|password/i.test(key)), false);
+  assert.equal(config.wallArtProductImage, '');
+  assert.equal(config.wallArtShopUrl, '');
+  assert.equal(config.wallArtProductEvidenceStatus, 'UNPROVEN');
+  assert.equal(config.wallArtShopEvidenceStatus, 'UNPROVEN');
+  assert.equal(Object.keys(config).some((key) => /price/i.test(key)), false);
 });

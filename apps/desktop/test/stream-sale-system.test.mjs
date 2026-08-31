@@ -304,6 +304,7 @@ test('locked private CTA keeps a valid synthetic funnel separate from trusted na
   const storage = memoryStorage();
   assert.equal(stagePrivateSaleHandoff(storage, handoff, { authorizationStatus: 'GO' }).status, 'STOP');
   const navigationProof = validatePrivateSaleHandoff(handoff, { nonce, nowEpochMs: 1_010 });
+  assert.deepEqual(Object.getOwnPropertySymbols(navigationProof), []);
   const events = [
     ...navigationProof.events,
     ...['LEAD', 'SALE'].map((type, index) => createPrivateSaleEvent({
@@ -331,6 +332,34 @@ test('locked private CTA keeps a valid synthetic funnel separate from trusted na
   assert.equal(evidence.checks.externalActionCount, 0);
   assert.equal(evidence.checks.realMoneyMoved, 'NOT_APPLICABLE');
   assert.equal(evidence.events.at(-1).amountTestCents, 4_900);
+
+  const forgedProof = Object.freeze({
+    ...navigationProof,
+    [Symbol('birdie.privateSale.trustedHandoffProof')]: true,
+  });
+  const forgedEvidence = createPrivateSaleEvidence({
+    events,
+    variant: 'PRODUCT',
+    runId: PRIVATE_SALE_RUN_ID,
+    navigationProof: forgedProof,
+  });
+  assert.equal(forgedEvidence.sourceProof.status, 'STOP');
+  assert.equal(forgedEvidence.decisions.privateCtaEndToEnd, 'STOP');
+
+  const originalWeakSetHas = WeakSet.prototype.has;
+  try {
+    WeakSet.prototype.has = () => true;
+    const prototypePatchedEvidence = createPrivateSaleEvidence({
+      events,
+      variant: 'PRODUCT',
+      runId: PRIVATE_SALE_RUN_ID,
+      navigationProof,
+    });
+    assert.equal(prototypePatchedEvidence.sourceProof.status, 'STOP');
+    assert.equal(prototypePatchedEvidence.decisions.privateCtaEndToEnd, 'STOP');
+  } finally {
+    WeakSet.prototype.has = originalWeakSetHas;
+  }
 
 });
 

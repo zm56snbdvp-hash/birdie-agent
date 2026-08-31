@@ -1,0 +1,2 @@
+# JSON fixtures and evidence are bound to byte-level SHA-256 contracts.
+*.json text eol=lf

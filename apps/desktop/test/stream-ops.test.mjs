@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   inspectQrAsset,
   inspectStreamReadiness,
+  inspectWallArtProductAsset,
   validateStreamOperations,
 } from '../../../scripts/check-birdie-stream-readiness.mjs';
 import { resolveStreamConfig } from '../src/stream-mode-config.js';
@@ -179,6 +180,12 @@ test('OBS plan is a privacy-safe, offline-only 1080p30 contract', async () => {
     'CTA_STATUS_DRAFT',
     'QR_SCAN_UNVERIFIED',
     'CTA_QR_NOT_DECLARED_READY',
+    'WALL_ART_PRODUCT_ASSET_MISSING',
+    'WALL_ART_PRODUCT_EVIDENCE_UNPROVEN',
+    'WALL_ART_SHOP_TARGET_MISSING',
+    'WALL_ART_SHOP_EVIDENCE_UNPROVEN',
+    'WALL_ART_PRICE_UNKNOWN',
+    'WALL_ART_QR_TARGET_UNPROVEN',
     'QR_ASSET_HASH_UNPROVEN',
     'QR_PAYLOAD_RUNTIME_UNPROVEN',
     'OBS_SETUP_UNPROVEN',
@@ -346,6 +353,88 @@ test('QR evidence rejects a symlink or junction that resolves outside the public
   }
 });
 
+test('wall-art readiness accepts only local hashed raster bytes and never implies shop evidence', async () => {
+  const [plan, config] = await fixtures();
+  const current = validateStreamOperations(plan, config);
+  assert.equal(current.repositoryPlanStatus, 'PASS');
+  assert.ok(current.founderBlockers.includes('WALL_ART_PRODUCT_ASSET_MISSING'));
+  assert.ok(current.founderBlockers.includes('WALL_ART_SHOP_TARGET_MISSING'));
+  assert.ok(current.founderBlockers.includes('WALL_ART_PRICE_UNKNOWN'));
+  assert.ok(current.founderBlockers.includes('WALL_ART_QR_TARGET_UNPROVEN'));
+
+  const missing = await inspectWallArtProductAsset(resolveStreamConfig({
+    wallArtTitle: 'BirdieWorld Wall Art',
+    wallArtProductImage: '/assets/does-not-exist.png',
+    wallArtProductImageSha256: 'a'.repeat(64),
+  }, 'showcase=wall-art'));
+  assert.equal(missing.status, 'STOP');
+  assert.match(missing.reason, /unreadable/);
+
+  const temporaryRoot = await mkdtemp(path.join(tmpdir(), 'birdie-stream-wall-art-'));
+  const publicRoot = path.join(temporaryRoot, 'public');
+  const assetDirectory = path.join(publicRoot, 'assets');
+  const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  try {
+    await mkdir(assetDirectory, { recursive: true });
+    await writeFile(path.join(assetDirectory, 'wall-art.png'), bytes);
+    await writeFile(path.join(assetDirectory, 'truncated.png'), bytes.subarray(0, 8));
+    const resolved = resolveStreamConfig({
+      wallArtTitle: 'BirdieWorld Wall Art',
+      wallArtProductImage: '/assets/wall-art.png',
+      wallArtProductImageSha256: sha256,
+      wallArtShopUrl: config.ctaUrl,
+      ctaUrl: config.ctaUrl,
+      qrTarget: config.qrTarget,
+    }, 'showcase=wall-art');
+    const productAsset = await inspectWallArtProductAsset(resolved, { publicRoot });
+    assert.equal(productAsset.status, 'PASS');
+    assert.equal(productAsset.actualSha256, sha256);
+
+    const truncatedBytes = bytes.subarray(0, 8);
+    const truncated = await inspectWallArtProductAsset(resolveStreamConfig({
+      wallArtTitle: 'Truncated fixture',
+      wallArtProductImage: '/assets/truncated.png',
+      wallArtProductImageSha256: createHash('sha256').update(truncatedBytes).digest('hex'),
+    }, 'showcase=wall-art'), { publicRoot });
+    assert.equal(truncated.status, 'STOP');
+    assert.equal(truncated.signatureValid, false);
+
+    const configured = validateStreamOperations(plan, {
+      ...config,
+      wallArtTitle: 'BirdieWorld Wall Art',
+      wallArtProductImage: '/assets/wall-art.png',
+      wallArtProductImageSha256: sha256,
+      wallArtShopUrl: config.ctaUrl,
+    });
+    assert.equal(configured.repositoryPlanStatus, 'PASS');
+    assert.equal(configured.founderGo, 'STOP');
+    assert.ok(configured.founderBlockers.includes('WALL_ART_PRODUCT_EVIDENCE_UNPROVEN'));
+    assert.ok(configured.founderBlockers.includes('WALL_ART_SHOP_EVIDENCE_UNPROVEN'));
+  } finally {
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+});
+
+test('wall-art preflight rejects unsafe targets, partial metadata, price, and READY claims', async () => {
+  const [plan, config] = await fixtures();
+  const mutations = [
+    { expected: 'wall-art-product-metadata-safe', value: { ...config, wallArtTitle: 'Partial only' } },
+    { expected: 'wall-art-product-metadata-safe', value: { ...config, wallArtTitle: 'Remote', wallArtProductImage: 'https://cdn.example/art.png', wallArtProductImageSha256: 'a'.repeat(64) } },
+    { expected: 'wall-art-shop-target-safe', value: { ...config, wallArtShopUrl: 'https://user:secret@example.org/product' } },
+    { expected: 'wall-art-shop-target-safe', value: { ...config, wallArtShopUrl: `${config.ctaUrl}?source=stream` } },
+    { expected: 'wall-art-evidence-locked', value: { ...config, wallArtProductEvidenceStatus: 'READY' } },
+    { expected: 'wall-art-evidence-locked', value: { ...config, wallArtDecision: 'GO' } },
+    { expected: 'wall-art-no-price-claim', value: { ...config, wallArtPriceText: '49 EUR' } },
+  ];
+  for (const mutation of mutations) {
+    const result = validateStreamOperations(plan, mutation.value);
+    assert.equal(result.repositoryPlanStatus, 'STOP');
+    assert.equal(result.checks.find((entry) => entry.id === mutation.expected).status, 'STOP');
+    assert.equal(result.founderGo, 'STOP');
+  }
+});
+
 test('operational readiness verifies local QR bytes but remains STOP while payload, scan, OBS, and soak are unproven', async () => {
   const result = await inspectStreamReadiness();
   assert.equal(result.repositoryPlanStatus, 'PASS');
@@ -357,4 +446,9 @@ test('operational readiness verifies local QR bytes but remains STOP while paylo
   assert.equal(result.qrAssetEvidence.actualSha256, result.qrAssetEvidence.declaredSha256);
   assert.equal(result.qrPayloadEvidence.status, 'UNPROVEN');
   assert.ok(result.founderBlockers.includes('QR_PAYLOAD_RUNTIME_UNPROVEN'));
+  assert.equal(result.wallArtEvidence.decision, 'STOP');
+  assert.equal(result.wallArtEvidence.productAsset.status, 'UNPROVEN');
+  assert.equal(result.wallArtEvidence.shopTarget.status, 'UNPROVEN');
+  assert.equal(result.wallArtEvidence.price.status, 'UNKNOWN');
+  assert.equal(result.wallArtEvidence.qrTarget.status, 'UNPROVEN');
 });

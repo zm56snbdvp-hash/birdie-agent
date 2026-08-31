@@ -12,7 +12,9 @@ export const PRIVATE_SALE_GATE_PROVENANCE = Object.freeze({
   comparisonFingerprintSha256: 'f9f2871040cad633320cd08a00d7fc2824638186dafe8b421615892fc9461662',
 });
 
-const TRUSTED_HANDOFF_PROOF = Symbol('birdie.privateSale.trustedHandoffProof');
+const TRUSTED_HANDOFF_PROOFS = new WeakSet();
+const markTrustedHandoffProof = WeakSet.prototype.add.bind(TRUSTED_HANDOFF_PROOFS);
+const isTrustedHandoffProof = WeakSet.prototype.has.bind(TRUSTED_HANDOFF_PROOFS);
 const SAFE_NONCE = /^[A-Za-z0-9_-]{16,128}$/;
 const PRIVATE_EVENT_FIELDS = new Set([
   'eventId', 'sequenceId', 'occurredAtMs', 'type', 'sessionId', 'variantId', 'offerId',
@@ -72,7 +74,6 @@ function redactPrivateSaleEvent(event = {}) {
 
 function stopProof(reasonId) {
   return Object.freeze({
-    [TRUSTED_HANDOFF_PROOF]: false,
     status: 'STOP',
     reasonId,
     source: 'UNKNOWN',
@@ -211,8 +212,7 @@ function validatePrivateSaleHandoffInternal(raw, {
     && exactGateProvenance(handoff?.gateProvenance)
     && exactEvents;
   if (!valid) return stopProof('HANDOFF_UNTRUSTED_OR_STALE');
-  return Object.freeze({
-    [TRUSTED_HANDOFF_PROOF]: trusted,
+  const proof = {
     status: 'PASS',
     reasonId: null,
     source: 'STREAM_CTA',
@@ -222,7 +222,9 @@ function validatePrivateSaleHandoffInternal(raw, {
     expiresAtEpochMs: handoff.createdAtEpochMs + PRIVATE_SALE_HANDOFF_MAX_AGE_MS,
     events: Object.freeze(events.map((event) => Object.freeze({ ...event }))),
     gateProvenance: PRIVATE_SALE_GATE_PROVENANCE,
-  });
+  };
+  if (trusted) markTrustedHandoffProof(proof);
+  return Object.freeze(proof);
 }
 
 export function validatePrivateSaleHandoff(raw, options = {}) {
@@ -282,7 +284,8 @@ export function createPrivateSaleEvidence({
   const exactPath = JSON.stringify(events.map((event) => event.type)) === JSON.stringify(completeTypes);
   const handoffEventsBound = JSON.stringify(navigationProof?.events ?? [])
     === JSON.stringify(events.slice(0, 2));
-  const sourceVerified = navigationProof?.[TRUSTED_HANDOFF_PROOF] === true
+  const sourceVerified = navigationProof != null
+    && isTrustedHandoffProof(navigationProof)
     && navigationProof?.status === 'PASS'
     && navigationProof?.source === 'STREAM_CTA'
     && navigationProof?.runId === runId
