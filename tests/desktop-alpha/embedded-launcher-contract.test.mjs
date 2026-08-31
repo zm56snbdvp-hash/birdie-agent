@@ -104,3 +104,104 @@ test('Windows CI parses the hardware launcher and verifies embedded build identi
   assert.match(workflow, /JS_SNAPSHOT source=js/);
   assert.doesNotMatch(workflow, /DOM_STATE source=js state=IDLE/);
 });
+
+test('release bundle pins and stages every offline runtime dependency', async () => {
+  const [tauriSource, packageSource, lockSource, preparer, workflow] =
+    await Promise.all([
+      source('apps/desktop/src-tauri/tauri.conf.json'),
+      source('apps/desktop/package.json'),
+      source('apps/desktop/package-lock.json'),
+      source('scripts/prepare-birdie-desktop-bundle.ps1'),
+      source('.github/workflows/birdie-desktop-alpha.yml'),
+    ]);
+  const tauri = JSON.parse(tauriSource);
+  const desktopPackage = JSON.parse(packageSource);
+  const lock = JSON.parse(lockSource);
+
+  assert.equal(tauri.build.beforeBuildCommand, 'npm run build:bundle');
+  assert.equal(
+    desktopPackage.scripts['build:bundle'],
+    'powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-birdie-desktop-bundle.ps1 && vite build',
+  );
+  assert.equal(desktopPackage.dependencies.jsqr, '1.4.0');
+  assert.equal(lock.packages[''].dependencies.jsqr, '1.4.0');
+  assert.equal(lock.packages['node_modules/jsqr'].version, '1.4.0');
+
+  assert.deepEqual(tauri.bundle.resources, {
+    '../../../services/core': 'services/core',
+    '../../../packages/protocol': 'packages/protocol',
+    '../../../build/runtime/node.exe': 'build/runtime/node.exe',
+    '../../../build/runtime/LICENSE.node.txt': 'build/runtime/LICENSE.node.txt',
+    '../../../build/voice/Release/birdie-voice-host.exe':
+      'build/voice/Release/birdie-voice-host.exe',
+    '../../../models/whisper/ggml-base.bin': 'models/whisper/ggml-base.bin',
+  });
+
+  assert.match(preparer, /\$nodeVersion = '22\.23\.2'/);
+  assert.match(
+    preparer,
+    /1177b4137ba5adaa56354ae40f1080c7450e8ae09cecb47da459d1c52ac99f97/,
+  );
+  assert.match(
+    preparer,
+    /0d0f5e39f9f3d9587bc19f73eab3c2c9c4903fd02d6dbf9c853dd81b3d95fad4/,
+  );
+  assert.match(
+    preparer,
+    /8cc9bb466b19fc7e7cc99d03e9df1132021fda8b01eea2624c58bb372dbef576/,
+  );
+  assert.match(
+    preparer,
+    /978113305b2ead22249b881deafa131dc8884911/,
+  );
+  assert.match(
+    preparer,
+    /465707469ff3a37a2b9b8d8f89f2f99de7299dac/,
+  );
+  assert.match(preparer, /https:\/\/nodejs\.org\/dist\/v\$nodeVersion/);
+  assert.match(preparer, /Security\.Cryptography\.SHA256/);
+  assert.doesNotMatch(
+    preparer,
+    /Get-FileHash/,
+    'bundle preparation must not depend on host PowerShell module autoloading',
+  );
+
+  assert.match(workflow, /npm ci --prefix apps\/desktop/);
+  assert.match(workflow, /prepare-birdie-desktop-bundle\.ps1 -RunVoiceTests/);
+  assert.match(workflow, /npm --prefix apps\/desktop run tauri -- build/);
+  assert.match(workflow, /test-birdie-desktop-bundle-runtime\.ps1/);
+  const bundlePrepare = workflow.indexOf('prepare-birdie-desktop-bundle.ps1 -RunVoiceTests');
+  const firstCargo = Math.min(
+    workflow.indexOf('cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml'),
+    workflow.indexOf('cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml'),
+  );
+  assert.ok(bundlePrepare >= 0 && bundlePrepare < firstCargo, 'bundle resources must exist before Cargo evaluates tauri-build');
+  assert.equal(
+    workflow.match(/prepare-birdie-desktop-bundle\.ps1 -RunVoiceTests/g)?.length,
+    1,
+    'CI must pre-stage and test resources once before Cargo; Tauri intentionally revalidates through build:bundle',
+  );
+});
+
+test('installed bundle smoke is fail-closed, PATH-isolated and path-scoped', async () => {
+  const smoke = await source('scripts/test-birdie-desktop-bundle-runtime.ps1');
+
+  assert.match(smoke, /BIRDIE_MANAGE_VOICE.*'0'/);
+  assert.match(smoke, /build[\\/]runtime[\\/]node\.exe/);
+  assert.match(smoke, /LICENSE\.node\.txt/);
+  assert.match(smoke, /birdie-voice-host\.exe/);
+  assert.match(smoke, /ggml-base\.bin/);
+  assert.match(smoke, /PIPE_CONNECTED/);
+  assert.match(smoke, /SUPERVISOR_SPAWN_OK/);
+  assert.match(smoke, /Get-Process node/);
+  assert.match(smoke, /GetFullPath\(\$nodeExe\)/);
+  assert.match(smoke, /System32/);
+  assert.doesNotMatch(
+    smoke,
+    /Stop-Process\s+-Name/,
+    'cleanup must never kill unrelated processes by a shared executable name',
+  );
+  assert.match(smoke, /StartsWith\(\$Prefix/);
+  assert.match(smoke, /Stop-OwnedProcesses \$installPrefix/);
+  assert.match(smoke, /BirdieBundleSmoke-/);
+});

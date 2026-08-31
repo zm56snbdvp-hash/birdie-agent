@@ -122,6 +122,26 @@ export function clamp01(value) {
   return Math.max(0, Math.min(1, Number(value) || 0));
 }
 
+export function scheduleRenderFrame(lastFrameAt, now, frameRate) {
+  const safeLast = Math.max(0, Number(lastFrameAt) || 0);
+  const safeNow = Math.max(safeLast, Number(now) || safeLast);
+  const safeRate = Math.max(1, Number(frameRate) || 1);
+  const intervalMs = 1_000 / safeRate;
+  const elapsedMs = safeNow - safeLast;
+  if (elapsedMs < intervalMs - 0.5) {
+    return Object.freeze({ shouldRender: false, lastFrameAt: safeLast, deltaSeconds: 0 });
+  }
+  const scheduledAt = elapsedMs < intervalMs
+    ? safeNow
+    : safeNow - (elapsedMs % intervalMs);
+  const scheduledIntervalMs = scheduledAt - safeLast;
+  return Object.freeze({
+    shouldRender: true,
+    lastFrameAt: scheduledAt,
+    deltaSeconds: Math.min(0.05, Math.max(0.001, scheduledIntervalMs / 1_000)),
+  });
+}
+
 export function hasVisualProfile(state) {
   return Object.hasOwn(VISUAL_PROFILES, state);
 }

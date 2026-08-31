@@ -1,0 +1,532 @@
+{
+  "schemaVersion": 1,
+  "id": "birdie-stream-sale-shows-v1",
+  "scope": "LOCAL_SYNTHETIC_DRAFT_ONLY",
+  "durationMs": 900000,
+  "policy": {
+    "publicTransmission": false,
+    "externalAction": "DENY",
+    "ctaStatus": "DRAFT",
+    "offerStatus": "DRAFT",
+    "commercialTerms": "NOT_DEFINED",
+    "paymentAction": "NONE",
+    "microphone": "NOT_TESTED",
+    "voiceMeaning": "SYNTHETIC_VISUAL_STATE_ONLY"
+  },
+  "allowedScenes": [
+    "00_START",
+    "01_STREAM",
+    "02_STREAM_BACKUP",
+    "03_CLIP_30",
+    "04_CLIP_60",
+    "09_BRB",
+    "10_END",
+    "99_SAFE"
+  ],
+  "variants": [
+    {
+      "id": "PRODUCT",
+      "title": "Birdie als sichtbarer Produktbegleiter",
+      "durationMs": 900000,
+      "hook": {
+        "segmentId": "product-hook",
+        "copy": "Ein Wunsch wird in Birdie zu einem sichtbaren, nachvollziehbaren Arbeitszustand.",
+        "claimBoundary": "Die Vorführung ist eine lokale synthetische UI-Fixture; sie belegt weder Mikrofon noch PC-Aktion oder Verkauf."
+      },
+      "segments": [
+        {
+          "id": "product-hook",
+          "role": "HOOK",
+          "startMs": 0,
+          "endMs": 60000,
+          "durationMs": 60000,
+          "primaryScene": "00_START",
+          "objective": "Den Produktnutzen in einem Satz zeigen und die lokale synthetische Grenze nennen.",
+          "syntheticVoiceCueId": "product-voice-01",
+          "ctaOffer": {
+            "ctaId": "product-cta-hook",
+            "offerId": "product-offer-orientation",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Produktidee ansehen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "product-fallback"
+        },
+        {
+          "id": "product-segment-1",
+          "role": "SEGMENT_1",
+          "startMs": 60000,
+          "endMs": 240000,
+          "durationMs": 180000,
+          "primaryScene": "01_STREAM",
+          "objective": "Die sieben verständlichen Birdie-Zustände als sichtbare Produktführung erklären.",
+          "syntheticVoiceCueId": "product-voice-02",
+          "ctaOffer": {
+            "ctaId": "product-cta-state-story",
+            "offerId": "product-offer-state-walkthrough",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Zustandsführung vormerken",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "product-fallback"
+        },
+        {
+          "id": "product-segment-2",
+          "role": "SEGMENT_2",
+          "startMs": 240000,
+          "endMs": 480000,
+          "durationMs": 240000,
+          "primaryScene": "01_STREAM",
+          "objective": "Den Weg von Absicht über Arbeit bis zum synthetischen SUCCESS zeigen.",
+          "syntheticVoiceCueId": "product-voice-03",
+          "ctaOffer": {
+            "ctaId": "product-cta-workflow",
+            "offerId": "product-offer-private-review",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Privaten Produkt-Review planen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "product-fallback"
+        },
+        {
+          "id": "product-segment-3",
+          "role": "SEGMENT_3",
+          "startMs": 480000,
+          "endMs": 720000,
+          "durationMs": 240000,
+          "primaryScene": "01_STREAM",
+          "objective": "Evidence, Datenschutz und den beaufsichtigten SAFE-Pfad als Produkteigenschaft einordnen.",
+          "syntheticVoiceCueId": "product-voice-04",
+          "ctaOffer": {
+            "ctaId": "product-cta-safety",
+            "offerId": "product-offer-safety-briefing",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Safety-Briefing vormerken",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "product-fallback"
+        },
+        {
+          "id": "product-cta",
+          "role": "CTA",
+          "startMs": 720000,
+          "endMs": 840000,
+          "durationMs": 120000,
+          "primaryScene": "01_STREAM",
+          "objective": "Ein lokales Draft-Angebot sichtbar machen, ohne Navigation, Formular, Nachricht oder Kauf.",
+          "syntheticVoiceCueId": "product-voice-05",
+          "ctaOffer": {
+            "ctaId": "product-cta-primary",
+            "offerId": "product-offer-supervised-preview",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Beaufsichtigte Produktvorschau anfragen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "product-fallback"
+        },
+        {
+          "id": "product-close",
+          "role": "CLOSE",
+          "startMs": 840000,
+          "endMs": 900000,
+          "durationMs": 60000,
+          "primaryScene": "10_END",
+          "objective": "Den Nutzen zusammenfassen und alle Außenaktionen geschlossen halten.",
+          "syntheticVoiceCueId": "product-voice-06",
+          "ctaOffer": {
+            "ctaId": "product-cta-close",
+            "offerId": "product-offer-recap",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Vorschau beendet",
+            "intent": "NO_CONVERSION_CLAIM"
+          },
+          "fallbackId": "product-fallback"
+        }
+      ],
+      "sceneCues": [
+        { "id": "product-scene-01", "atMs": 0, "scene": "00_START" },
+        { "id": "product-scene-02", "atMs": 10000, "scene": "01_STREAM" },
+        { "id": "product-scene-03", "atMs": 480000, "scene": "09_BRB" },
+        { "id": "product-scene-04", "atMs": 490000, "scene": "01_STREAM" },
+        { "id": "product-scene-05", "atMs": 650000, "scene": "02_STREAM_BACKUP" },
+        { "id": "product-scene-06", "atMs": 670000, "scene": "01_STREAM" },
+        { "id": "product-scene-07", "atMs": 840000, "scene": "10_END" }
+      ],
+      "voiceCues": [
+        { "id": "product-voice-01", "atMs": 5000, "fixture": "voice:synthetic-ui-loop", "state": "IDLE", "copy": "Lokale Produktidee, keine reale Voice-Eingabe." },
+        { "id": "product-voice-02", "atMs": 75000, "fixture": "voice:synthetic-ui-loop", "state": "LISTENING", "copy": "Synthetische Reaktion: Birdie zeigt, dass es zuhören würde." },
+        { "id": "product-voice-03", "atMs": 265000, "fixture": "voice:synthetic-ui-loop", "state": "WORKING", "copy": "Der sichtbare Arbeitszustand ist die Produktgeschichte; keine PC-Aktion wird behauptet." },
+        { "id": "product-voice-04", "atMs": 510000, "fixture": "voice:synthetic-ui-loop", "state": "THINKING", "copy": "Evidence und Sicherheit bleiben Teil der sichtbaren Erfahrung." },
+        { "id": "product-voice-05", "atMs": 745000, "fixture": "voice:synthetic-ui-loop", "state": "SPEAKING", "copy": "Das Angebot ist Draft und löst keine Außenaktion aus." },
+        { "id": "product-voice-06", "atMs": 850000, "fixture": "voice:synthetic-ui-loop", "state": "SUCCESS", "copy": "Die lokale Show endet ohne Conversion- oder Erfolgsbehauptung." }
+      ],
+      "clips": [
+        { "id": "product-clip-01", "startMs": 15000, "endMs": 45000, "scene": "01_STREAM", "hook": "Ein Wunsch wird sichtbar.", "ctaId": "product-cta-hook" },
+        { "id": "product-clip-02", "startMs": 95000, "endMs": 140000, "scene": "01_STREAM", "hook": "Sieben Zustände statt Black Box.", "ctaId": "product-cta-state-story" },
+        { "id": "product-clip-03", "startMs": 275000, "endMs": 320000, "scene": "01_STREAM", "hook": "Vom Wunsch zum sichtbaren Arbeitsstand.", "ctaId": "product-cta-workflow" },
+        { "id": "product-clip-04", "startMs": 535000, "endMs": 580000, "scene": "01_STREAM", "hook": "Safety ist Teil des Produkts.", "ctaId": "product-cta-safety" },
+        { "id": "product-clip-05", "startMs": 735000, "endMs": 780000, "scene": "01_STREAM", "hook": "Eine ehrliche Draft-Einladung.", "ctaId": "product-cta-primary" }
+      ],
+      "failClosedFallback": {
+        "id": "product-fallback",
+        "triggers": [
+          "UNEXPECTED_SCENE",
+          "PRIVACY_RISK",
+          "ACTIVE_AUDIO_SOURCE",
+          "STATE_ORDER_ERROR",
+          "FRAME_OR_PERFORMANCE_UNKNOWN",
+          "CTA_OR_OFFER_NOT_DRAFT"
+        ],
+        "actions": [
+          "SWITCH_VIA_FOCUSED_OBS_UI_TO_99_SAFE",
+          "STOP_LOCAL_TAKE",
+          "RECORD_REASON_AND_UNKNOWNS",
+          "KEEP_EXTERNAL_ACTION_COUNT_ZERO"
+        ],
+        "resume": "FORBIDDEN_IN_SAME_TAKE"
+      }
+    },
+    {
+      "id": "APP_DEMO",
+      "title": "Birdie App-Demo ohne Black Box",
+      "durationMs": 900000,
+      "hook": {
+        "segmentId": "app-demo-hook",
+        "copy": "Birdie zeigt bei jedem Schritt, was die App gerade versteht, plant und darstellt.",
+        "claimBoundary": "Die Vorführung nutzt ausschließlich lokale synthetische Zustände; Mikrofon, STT, Runtime-Verbindung und PC-Steuerung bleiben unbewiesen."
+      },
+      "segments": [
+        {
+          "id": "app-demo-hook",
+          "role": "HOOK",
+          "startMs": 0,
+          "endMs": 60000,
+          "durationMs": 60000,
+          "primaryScene": "00_START",
+          "objective": "Die App als verständliche Oberfläche positionieren und die Testgrenze nennen.",
+          "syntheticVoiceCueId": "app-demo-voice-01",
+          "ctaOffer": {
+            "ctaId": "app-demo-cta-hook",
+            "offerId": "app-demo-offer-orientation",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · App-Prinzip ansehen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "app-demo-fallback"
+        },
+        {
+          "id": "app-demo-segment-1",
+          "role": "SEGMENT_1",
+          "startMs": 60000,
+          "endMs": 240000,
+          "durationMs": 180000,
+          "primaryScene": "01_STREAM",
+          "objective": "Listening, Thinking und Working als synthetische visuelle Zustände demonstrieren.",
+          "syntheticVoiceCueId": "app-demo-voice-02",
+          "ctaOffer": {
+            "ctaId": "app-demo-cta-states",
+            "offerId": "app-demo-offer-state-tour",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · State-Tour vormerken",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "app-demo-fallback"
+        },
+        {
+          "id": "app-demo-segment-2",
+          "role": "SEGMENT_2",
+          "startMs": 240000,
+          "endMs": 480000,
+          "durationMs": 240000,
+          "primaryScene": "01_STREAM",
+          "objective": "Die UI-Reaktionsfolge, Statuslesbarkeit und den synthetischen SUCCESS erklären.",
+          "syntheticVoiceCueId": "app-demo-voice-03",
+          "ctaOffer": {
+            "ctaId": "app-demo-cta-guided-demo",
+            "offerId": "app-demo-offer-supervised-demo",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Beaufsichtigte App-Demo planen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "app-demo-fallback"
+        },
+        {
+          "id": "app-demo-segment-3",
+          "role": "SEGMENT_3",
+          "startMs": 480000,
+          "endMs": 720000,
+          "durationMs": 240000,
+          "primaryScene": "01_STREAM",
+          "objective": "Low-End-Backup, Error-State und SAFE-Pfad kontrolliert zeigen.",
+          "syntheticVoiceCueId": "app-demo-voice-04",
+          "ctaOffer": {
+            "ctaId": "app-demo-cta-safety",
+            "offerId": "app-demo-offer-readiness-review",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Readiness-Review vormerken",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "app-demo-fallback"
+        },
+        {
+          "id": "app-demo-cta",
+          "role": "CTA",
+          "startMs": 720000,
+          "endMs": 840000,
+          "durationMs": 120000,
+          "primaryScene": "01_STREAM",
+          "objective": "Eine private beaufsichtigte App-Demo als Draft anbieten, ohne Kontakt- oder Buchungsaktion.",
+          "syntheticVoiceCueId": "app-demo-voice-05",
+          "ctaOffer": {
+            "ctaId": "app-demo-cta-primary",
+            "offerId": "app-demo-offer-private-session",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Private App-Session anfragen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "app-demo-fallback"
+        },
+        {
+          "id": "app-demo-close",
+          "role": "CLOSE",
+          "startMs": 840000,
+          "endMs": 900000,
+          "durationMs": 60000,
+          "primaryScene": "10_END",
+          "objective": "Die Demo-Grenzen zusammenfassen und ohne externe Aktion schließen.",
+          "syntheticVoiceCueId": "app-demo-voice-06",
+          "ctaOffer": {
+            "ctaId": "app-demo-cta-close",
+            "offerId": "app-demo-offer-recap",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · App-Demo beendet",
+            "intent": "NO_CONVERSION_CLAIM"
+          },
+          "fallbackId": "app-demo-fallback"
+        }
+      ],
+      "sceneCues": [
+        { "id": "app-demo-scene-01", "atMs": 0, "scene": "00_START" },
+        { "id": "app-demo-scene-02", "atMs": 10000, "scene": "01_STREAM" },
+        { "id": "app-demo-scene-03", "atMs": 480000, "scene": "09_BRB" },
+        { "id": "app-demo-scene-04", "atMs": 490000, "scene": "01_STREAM" },
+        { "id": "app-demo-scene-05", "atMs": 585000, "scene": "02_STREAM_BACKUP" },
+        { "id": "app-demo-scene-06", "atMs": 650000, "scene": "01_STREAM" },
+        { "id": "app-demo-scene-07", "atMs": 840000, "scene": "10_END" }
+      ],
+      "voiceCues": [
+        { "id": "app-demo-voice-01", "atMs": 5000, "fixture": "voice:synthetic-ui-loop", "state": "IDLE", "copy": "Lokale App-Fixture, kein Mikrofon- oder Runtime-Nachweis." },
+        { "id": "app-demo-voice-02", "atMs": 75000, "fixture": "voice:synthetic-ui-loop", "state": "LISTENING", "copy": "Die visuelle Reaktion ist deterministisch und nicht durch echte Sprache ausgelöst." },
+        { "id": "app-demo-voice-03", "atMs": 265000, "fixture": "voice:synthetic-ui-loop", "state": "WORKING", "copy": "Die App macht den Arbeitsstand lesbar; sie führt in diesem Take nichts am PC aus." },
+        { "id": "app-demo-voice-04", "atMs": 510000, "fixture": "voice:synthetic-ui-loop", "state": "THINKING", "copy": "Ein synthetischer Fehler würde zum kontrollierten lokalen Fallback führen." },
+        { "id": "app-demo-voice-05", "atMs": 745000, "fixture": "voice:synthetic-ui-loop", "state": "SPEAKING", "copy": "Die private Demo bleibt Draft und löst keine Anfrage aus." },
+        { "id": "app-demo-voice-06", "atMs": 850000, "fixture": "voice:synthetic-ui-loop", "state": "SUCCESS", "copy": "Der UI-Ablauf endet; Runtime- und Voice-Stabilität bleiben UNKNOWN." }
+      ],
+      "clips": [
+        { "id": "app-demo-clip-01", "startMs": 15000, "endMs": 45000, "scene": "01_STREAM", "hook": "Eine App, die ihren Zustand zeigt.", "ctaId": "app-demo-cta-hook" },
+        { "id": "app-demo-clip-02", "startMs": 95000, "endMs": 140000, "scene": "01_STREAM", "hook": "Listening ohne Voice-Behauptung.", "ctaId": "app-demo-cta-states" },
+        { "id": "app-demo-clip-03", "startMs": 275000, "endMs": 320000, "scene": "01_STREAM", "hook": "Thinking und Working werden lesbar.", "ctaId": "app-demo-cta-guided-demo" },
+        { "id": "app-demo-clip-04", "startMs": 585000, "endMs": 630000, "scene": "02_STREAM_BACKUP", "hook": "Fallback statt schwarzem Bild.", "ctaId": "app-demo-cta-safety" },
+        { "id": "app-demo-clip-05", "startMs": 735000, "endMs": 780000, "scene": "01_STREAM", "hook": "Private App-Demo, ehrlich als Draft.", "ctaId": "app-demo-cta-primary" }
+      ],
+      "failClosedFallback": {
+        "id": "app-demo-fallback",
+        "triggers": [
+          "UNEXPECTED_SCENE",
+          "PRIVACY_RISK",
+          "ACTIVE_AUDIO_SOURCE",
+          "STATE_ORDER_ERROR",
+          "RUNTIME_OR_VOICE_CLAIM_WITHOUT_EVIDENCE",
+          "CTA_OR_OFFER_NOT_DRAFT"
+        ],
+        "actions": [
+          "SWITCH_VIA_FOCUSED_OBS_UI_TO_99_SAFE",
+          "STOP_LOCAL_TAKE",
+          "RECORD_REASON_AND_UNKNOWNS",
+          "KEEP_EXTERNAL_ACTION_COUNT_ZERO"
+        ],
+        "resume": "FORBIDDEN_IN_SAME_TAKE"
+      }
+    },
+    {
+      "id": "BIRDIEWORLD_HOTEL",
+      "title": "BirdieWorld Hotel als lokale Konzeptreise",
+      "durationMs": 900000,
+      "hook": {
+        "segmentId": "birdieworld-hotel-hook",
+        "copy": "Eine ruhige Ankunft, ein sichtbarer Wunsch und Birdie als lokaler Begleiter durch eine Hotelidee.",
+        "claimBoundary": "Die Reise ist eine synthetische Konzept-Fixture; es gibt weder reale Unterkunft, Verfügbarkeit, Reservierung noch Zahlungszusage."
+      },
+      "segments": [
+        {
+          "id": "birdieworld-hotel-hook",
+          "role": "HOOK",
+          "startMs": 0,
+          "endMs": 60000,
+          "durationMs": 60000,
+          "primaryScene": "00_START",
+          "objective": "Die lokale Hotel-Konzeptreise eröffnen und jede reale Buchungsbehauptung ausschließen.",
+          "syntheticVoiceCueId": "birdieworld-hotel-voice-01",
+          "ctaOffer": {
+            "ctaId": "birdieworld-hotel-cta-hook",
+            "offerId": "birdieworld-hotel-offer-concept",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Hotel-Konzept ansehen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "birdieworld-hotel-fallback"
+        },
+        {
+          "id": "birdieworld-hotel-segment-1",
+          "role": "SEGMENT_1",
+          "startMs": 60000,
+          "endMs": 240000,
+          "durationMs": 180000,
+          "primaryScene": "01_STREAM",
+          "objective": "Ankunft und Wunschaufnahme als synthetische Birdie-Zustände erzählen.",
+          "syntheticVoiceCueId": "birdieworld-hotel-voice-02",
+          "ctaOffer": {
+            "ctaId": "birdieworld-hotel-cta-arrival",
+            "offerId": "birdieworld-hotel-offer-arrival-story",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Ankunftsreise vormerken",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "birdieworld-hotel-fallback"
+        },
+        {
+          "id": "birdieworld-hotel-segment-2",
+          "role": "SEGMENT_2",
+          "startMs": 240000,
+          "endMs": 480000,
+          "durationMs": 240000,
+          "primaryScene": "01_STREAM",
+          "objective": "Eine personalisierte Tagesidee zeigen, ohne reale Daten oder Leistungsversprechen.",
+          "syntheticVoiceCueId": "birdieworld-hotel-voice-03",
+          "ctaOffer": {
+            "ctaId": "birdieworld-hotel-cta-day-story",
+            "offerId": "birdieworld-hotel-offer-concept-review",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Konzeptreise prüfen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "birdieworld-hotel-fallback"
+        },
+        {
+          "id": "birdieworld-hotel-segment-3",
+          "role": "SEGMENT_3",
+          "startMs": 480000,
+          "endMs": 720000,
+          "durationMs": 240000,
+          "primaryScene": "01_STREAM",
+          "objective": "Privatsphäre, Safety und Offline-Fallback der Konzeptreise sichtbar machen.",
+          "syntheticVoiceCueId": "birdieworld-hotel-voice-04",
+          "ctaOffer": {
+            "ctaId": "birdieworld-hotel-cta-safety",
+            "offerId": "birdieworld-hotel-offer-founder-review",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Founder-Konzeptreview vormerken",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "birdieworld-hotel-fallback"
+        },
+        {
+          "id": "birdieworld-hotel-cta",
+          "role": "CTA",
+          "startMs": 720000,
+          "endMs": 840000,
+          "durationMs": 120000,
+          "primaryScene": "01_STREAM",
+          "objective": "Interesse an einem privaten Konzeptreview als Draft darstellen, ohne Buchung oder Kontaktaufnahme.",
+          "syntheticVoiceCueId": "birdieworld-hotel-voice-05",
+          "ctaOffer": {
+            "ctaId": "birdieworld-hotel-cta-primary",
+            "offerId": "birdieworld-hotel-offer-private-concept-session",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Private Konzeptsession anfragen",
+            "intent": "LOCAL_INTEREST_SIGNAL_ONLY"
+          },
+          "fallbackId": "birdieworld-hotel-fallback"
+        },
+        {
+          "id": "birdieworld-hotel-close",
+          "role": "CLOSE",
+          "startMs": 840000,
+          "endMs": 900000,
+          "durationMs": 60000,
+          "primaryScene": "10_END",
+          "objective": "Die Konzeptreise beenden und Buchung, Verkauf sowie Außenkontakt geschlossen halten.",
+          "syntheticVoiceCueId": "birdieworld-hotel-voice-06",
+          "ctaOffer": {
+            "ctaId": "birdieworld-hotel-cta-close",
+            "offerId": "birdieworld-hotel-offer-recap",
+            "status": "DRAFT",
+            "action": "NO_EXTERNAL_ACTION",
+            "displayCopy": "DRAFT · Konzeptreise beendet",
+            "intent": "NO_CONVERSION_CLAIM"
+          },
+          "fallbackId": "birdieworld-hotel-fallback"
+        }
+      ],
+      "sceneCues": [
+        { "id": "birdieworld-hotel-scene-01", "atMs": 0, "scene": "00_START" },
+        { "id": "birdieworld-hotel-scene-02", "atMs": 10000, "scene": "01_STREAM" },
+        { "id": "birdieworld-hotel-scene-03", "atMs": 480000, "scene": "09_BRB" },
+        { "id": "birdieworld-hotel-scene-04", "atMs": 490000, "scene": "01_STREAM" },
+        { "id": "birdieworld-hotel-scene-05", "atMs": 600000, "scene": "02_STREAM_BACKUP" },
+        { "id": "birdieworld-hotel-scene-06", "atMs": 650000, "scene": "01_STREAM" },
+        { "id": "birdieworld-hotel-scene-07", "atMs": 840000, "scene": "10_END" }
+      ],
+      "voiceCues": [
+        { "id": "birdieworld-hotel-voice-01", "atMs": 5000, "fixture": "voice:synthetic-ui-loop", "state": "IDLE", "copy": "Lokale Konzeptreise; keine reale Unterkunft oder Buchung." },
+        { "id": "birdieworld-hotel-voice-02", "atMs": 75000, "fixture": "voice:synthetic-ui-loop", "state": "LISTENING", "copy": "Birdie visualisiert einen fiktiven Wunsch; kein Mikrofon hört zu." },
+        { "id": "birdieworld-hotel-voice-03", "atMs": 265000, "fixture": "voice:synthetic-ui-loop", "state": "WORKING", "copy": "Die Tagesidee entsteht synthetisch und nutzt keine Gästedaten." },
+        { "id": "birdieworld-hotel-voice-04", "atMs": 510000, "fixture": "voice:synthetic-ui-loop", "state": "THINKING", "copy": "Datenschutz und Fallback bleiben sichtbar; keine echte Hoteloperation läuft." },
+        { "id": "birdieworld-hotel-voice-05", "atMs": 745000, "fixture": "voice:synthetic-ui-loop", "state": "SPEAKING", "copy": "Die Konzeptsession ist Draft und erzeugt keine Reservierung oder Nachricht." },
+        { "id": "birdieworld-hotel-voice-06", "atMs": 850000, "fixture": "voice:synthetic-ui-loop", "state": "SUCCESS", "copy": "Die lokale Geschichte endet ohne Verfügbarkeits- oder Verkaufszusage." }
+      ],
+      "clips": [
+        { "id": "birdieworld-hotel-clip-01", "startMs": 15000, "endMs": 45000, "scene": "01_STREAM", "hook": "Eine ruhige digitale Ankunft.", "ctaId": "birdieworld-hotel-cta-hook" },
+        { "id": "birdieworld-hotel-clip-02", "startMs": 95000, "endMs": 140000, "scene": "01_STREAM", "hook": "Ein Wunsch wird zur sichtbaren Konzeptreise.", "ctaId": "birdieworld-hotel-cta-arrival" },
+        { "id": "birdieworld-hotel-clip-03", "startMs": 275000, "endMs": 320000, "scene": "01_STREAM", "hook": "Ein fiktiver Tag, ohne Gästedaten.", "ctaId": "birdieworld-hotel-cta-day-story" },
+        { "id": "birdieworld-hotel-clip-04", "startMs": 535000, "endMs": 580000, "scene": "01_STREAM", "hook": "Privatsphäre vor Hotelmagie.", "ctaId": "birdieworld-hotel-cta-safety" },
+        { "id": "birdieworld-hotel-clip-05", "startMs": 735000, "endMs": 780000, "scene": "01_STREAM", "hook": "Konzeptinteresse ohne Buchungsdruck.", "ctaId": "birdieworld-hotel-cta-primary" }
+      ],
+      "failClosedFallback": {
+        "id": "birdieworld-hotel-fallback",
+        "triggers": [
+          "UNEXPECTED_SCENE",
+          "PRIVACY_RISK",
+          "ACTIVE_AUDIO_SOURCE",
+          "REAL_GUEST_OR_PROPERTY_DATA_VISIBLE",
+          "BOOKING_AVAILABILITY_OR_PAYMENT_CLAIM",
+          "CTA_OR_OFFER_NOT_DRAFT"
+        ],
+        "actions": [
+          "SWITCH_VIA_FOCUSED_OBS_UI_TO_99_SAFE",
+          "STOP_LOCAL_TAKE",
+          "RECORD_REASON_AND_UNKNOWNS",
+          "KEEP_EXTERNAL_ACTION_COUNT_ZERO"
+        ],
+        "resume": "FORBIDDEN_IN_SAME_TAKE"
+      }
+    }
+  ]
+}

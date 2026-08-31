@@ -64,6 +64,15 @@ struct VoiceConfig {
   std::uint32_t frame_ms{10};
   std::uint32_t pre_roll_ms{1'200};
   std::uint32_t level_interval_ms{34};
+  // A 320 ms prefix is too short for reliable local Whisper decoding and can
+  // split "Birdie" from the command that follows it. Keep one useful speech
+  // prefix locally before issuing the one-shot addressability decode.
+  std::uint32_t gate_stt_minimum_candidate_ms{800};
+  // A naturally paused wake word can end before the timed prefix is full.
+  // Decode that complete short prefix once its speech and trailing silence are
+  // both substantial enough, before the generic candidate rejection fires.
+  std::uint32_t gate_stt_minimum_speech_ms{320};
+  std::uint32_t gate_stt_endpoint_silence_ms{100};
   std::uint32_t activation_timeout_ms{2'000};
   // Gate-STT is intentionally allowed more time than the acoustic candidate
   // window. Local models can take several seconds on CPU; dropping the
@@ -150,8 +159,9 @@ class VoiceHost {
   // Returns at most one PCM snapshot per activity. The minimum-age check is
   // performed before copying the circular pre-roll, keeping the WASAPI callback
   // free from repeated large allocations while a decoder is in flight.
+  [[nodiscard]] std::optional<GateSttRequest> gate_stt_request();
   [[nodiscard]] std::optional<GateSttRequest> gate_stt_request(
-      std::uint64_t minimum_candidate_ms = 320);
+      std::uint64_t minimum_candidate_ms);
   [[nodiscard]] VoicePhase phase() const noexcept;
   [[nodiscard]] bool muted() const noexcept;
   [[nodiscard]] bool output_active() const noexcept;

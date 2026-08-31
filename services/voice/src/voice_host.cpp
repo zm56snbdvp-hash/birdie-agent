@@ -188,8 +188,18 @@ VoiceHost::VoiceHost(VoiceConfig config, IEventSink& sink,
       on_utterance_(std::move(on_utterance)),
       pre_roll_(config_.sample_rate, config_.pre_roll_ms) {
   if (config_.start_window_frames == 0 || config_.start_required_frames == 0 ||
-      config_.start_required_frames > config_.start_window_frames) {
-    throw std::invalid_argument("invalid VAD start window configuration");
+      config_.start_required_frames > config_.start_window_frames ||
+      config_.gate_stt_minimum_candidate_ms == 0 ||
+      config_.gate_stt_minimum_speech_ms == 0 ||
+      config_.gate_stt_endpoint_silence_ms == 0 ||
+      config_.gate_stt_minimum_candidate_ms >=
+          config_.activation_timeout_ms ||
+      config_.gate_stt_minimum_candidate_ms >= config_.gate_stt_timeout_ms ||
+      config_.gate_stt_minimum_speech_ms >
+          config_.gate_stt_minimum_candidate_ms ||
+      config_.gate_stt_endpoint_silence_ms >=
+          std::min<std::uint32_t>(250, config_.silence_to_endpoint_ms)) {
+    throw std::invalid_argument("invalid Birdie VoiceConfig");
   }
 }
 
@@ -240,6 +250,19 @@ void VoiceHost::process(AudioFrame frame) {
   }
 
   if (phase_ == VoicePhase::SpeechCandidate) {
+    const auto maximum_candidate_samples = static_cast<std::size_t>(
+        (static_cast<std::uint64_t>(config_.sample_rate) *
+         config_.maximum_utterance_ms) /
+        1'000);
+    if (utterance_samples_.size() < maximum_candidate_samples) {
+      const auto remaining =
+          maximum_candidate_samples - utterance_samples_.size();
+      const auto appended = std::min(remaining, frame.samples.size());
+      utterance_samples_.insert(
+          utterance_samples_.end(), frame.samples.begin(),
+          frame.samples.begin() + static_cast<std::ptrdiff_t>(appended));
+    }
+
     const bool waiting_for_gate_stt =
         !gate_stt_activity_id_.empty() && gate_stt_activity_id_ == activity_id_;
     const auto elapsed_ms = frame.monotonic_ms - candidate_started_ms_;
@@ -276,7 +299,9 @@ bool VoiceHost::accept_activation(const ActivationMode mode,
   utterance_id_ = "utt-" + std::to_string(++id_sequence_);
   turn_id_ = "turn-" + utterance_id_;
   utterance_started_ms_ = candidate_started_ms_;
-  utterance_samples_ = pre_roll_.snapshot();
+  if (utterance_samples_.empty()) {
+    utterance_samples_ = pre_roll_.snapshot();
+  }
   accumulated_silence_ms_ = 0;
 
   emit("voice.activation.accepted", last_frame_ms_,
@@ -355,6 +380,8 @@ void VoiceHost::begin_candidate(const std::uint64_t monotonic_ms,
   accumulated_speech_ms_ = static_cast<std::uint32_t>(
       config_.start_required_frames * config_.frame_ms);
   accumulated_silence_ms_ = 0;
+  std::fill(utterance_samples_.begin(), utterance_samples_.end(), 0.0F);
+  utterance_samples_ = pre_roll_.snapshot();
   emit("voice.activity.started", monotonic_ms,
        {{"activity_id", activity_id_},
         {"confidence", std::clamp(confidence, 0.0, 1.0)},

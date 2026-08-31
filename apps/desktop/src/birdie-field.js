@@ -6,6 +6,7 @@ import {
   deriveAudioReaction,
   getVisualProfile,
   hasVisualProfile,
+  scheduleRenderFrame,
 } from './birdie-visual-state.js';
 
 const TAU = Math.PI * 2;
@@ -641,7 +642,18 @@ function makeParticles(uniforms) {
 }
 
 export class BirdieField {
-  constructor(canvas, { onReady, onContextState } = {}) {
+  constructor(
+    canvas,
+    {
+      onReady,
+      onContextState,
+      onFrame,
+      pixelRatioCap = Number.POSITIVE_INFINITY,
+      renderScale = 1,
+      antialias = true,
+      powerPreference = 'high-performance',
+    } = {},
+  ) {
     if (!(canvas instanceof HTMLCanvasElement)) {
       throw new TypeError('BirdieField requires a canvas element');
     }
@@ -649,6 +661,9 @@ export class BirdieField {
     this.canvas = canvas;
     this.onReady = onReady;
     this.onContextState = onContextState;
+    this.onFrame = onFrame;
+    this.pixelRatioCap = Math.max(1, Number(pixelRatioCap) || 1);
+    this.renderScale = Math.max(0.5, Math.min(1, Number(renderScale) || 1));
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
       ?.matches ?? false;
     this.presenceState = 'OFFLINE';
@@ -669,14 +684,16 @@ export class BirdieField {
     this.firstFrameReported = false;
     this.readyReported = false;
     this.cssFrame = 0;
+    this.renderedFrameCount = 0;
+    this.lastRenderedAt = 0;
     this.coreHorizontalFit = 1;
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
       alpha: true,
-      antialias: true,
+      antialias,
       premultipliedAlpha: true,
-      powerPreference: 'high-performance',
+      powerPreference,
     });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.autoClear = false;
@@ -800,15 +817,22 @@ export class BirdieField {
     this.outputUpdatedAt = performance.now();
   }
 
+  setReducedMotion(value) {
+    this.reducedMotion = Boolean(value);
+    this.uniforms.uReducedMotion.value = this.reducedMotion ? 1 : 0;
+    if (this.running) this.resize();
+  }
+
   resize() {
     const bounds = this.canvas.getBoundingClientRect();
     const viewport = computeViewport(
       bounds.width || window.innerWidth,
       bounds.height || window.innerHeight,
-      window.devicePixelRatio,
+      Math.min(window.devicePixelRatio, this.pixelRatioCap),
       this.reducedMotion,
     );
-    this.renderer.setPixelRatio(viewport.pixelRatio);
+    const renderPixelRatio = viewport.pixelRatio * this.renderScale;
+    this.renderer.setPixelRatio(renderPixelRatio);
     this.renderer.setSize(viewport.width, viewport.height, false);
     this.camera.left = -viewport.cameraHalfWidth;
     this.camera.right = viewport.cameraHalfWidth;
@@ -821,7 +845,7 @@ export class BirdieField {
 
     if (!this.readyReported) {
       this.readyReported = true;
-      this.onReady?.(viewport);
+      this.onReady?.({ ...viewport, pixelRatio: renderPixelRatio });
     }
     return viewport;
   }
@@ -845,15 +869,16 @@ export class BirdieField {
   frame(now) {
     this.frameRequest = 0;
     if (!this.running || document.hidden) return;
-    const quietState =
-      this.presenceState === 'IDLE' || this.presenceState === 'OFFLINE';
-    const frameRate = this.reducedMotion ? 30 : quietState ? 40 : 60;
-    if (now - this.lastFrameAt < 1000 / frameRate) {
+    // Match the declared OBS output. Rendering above 30 fps adds GPU pressure
+    // without creating extra frames in the recorded program.
+    const frameRate = 30;
+    const schedule = scheduleRenderFrame(this.lastFrameAt, now, frameRate);
+    if (!schedule.shouldRender) {
       this.frameRequest = requestAnimationFrame((next) => this.frame(next));
       return;
     }
-    const deltaSeconds = Math.min(0.05, Math.max(0.001, (now - this.lastFrameAt) / 1000));
-    this.lastFrameAt = now;
+    const deltaSeconds = schedule.deltaSeconds;
+    this.lastFrameAt = schedule.lastFrameAt;
 
     if (now - this.inputUpdatedAt > 160) {
       this.inputTarget = 0;
@@ -953,6 +978,14 @@ export class BirdieField {
       this.renderer.render(this.backgroundScene, this.backgroundCamera);
       this.renderer.clearDepth();
       this.renderer.render(this.scene, this.camera);
+      const intervalMs = this.lastRenderedAt > 0 ? now - this.lastRenderedAt : 0;
+      this.lastRenderedAt = now;
+      this.renderedFrameCount += 1;
+      this.onFrame?.({
+        at: now,
+        frameCount: this.renderedFrameCount,
+        intervalMs,
+      });
       if (!this.firstFrameReported && !this.shaderFailed) {
         this.firstFrameReported = true;
         this.onContextState?.(

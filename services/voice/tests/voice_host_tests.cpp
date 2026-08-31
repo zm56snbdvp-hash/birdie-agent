@@ -64,6 +64,9 @@ VoiceConfig test_config() {
   config.frame_ms = 10;
   config.pre_roll_ms = 30;
   config.level_interval_ms = 30;
+  config.gate_stt_minimum_candidate_ms = 20;
+  config.gate_stt_minimum_speech_ms = 20;
+  config.gate_stt_endpoint_silence_ms = 10;
   config.activation_timeout_ms = 100;
   config.gate_stt_timeout_ms = 180;
   config.minimum_speech_ms = 20;
@@ -168,6 +171,91 @@ void test_candidate_waits_for_inflight_gate_stt_after_speech_ends() {
           "in-flight Gate-STT result must still resolve the candidate");
   require(host.phase() == VoicePhase::Listening,
           "accepted Gate-STT result must enter listening");
+}
+
+void test_inflight_gate_stt_preserves_the_complete_candidate() {
+  RecordingSink sink;
+  std::vector<UtteranceAudio> utterances;
+  VoiceHost host(test_config(), sink, [&](UtteranceAudio utterance) {
+    utterances.push_back(std::move(utterance));
+  });
+  host.process(frame(0.11F, 0));
+  host.process(frame(0.12F, 10));
+  host.process(frame(0.13F, 20));
+  require(host.gate_stt_request(0).has_value(),
+          "candidate must submit one Gate-STT request");
+
+  host.process(frame(0.14F, 30));
+  host.process(frame(0.15F, 40));
+  host.process(frame(0.16F, 50));
+  const AddressabilityResult accepted{
+      AddressabilityDecision::Accept,
+      AddressabilityConfidenceBand::High,
+      0.95,
+      2,
+      "ADDRESSABILITY.EXPLICIT_ACTIVATION",
+  };
+  require(host.resolve_addressability(accepted),
+          "late Gate-STT result must accept the active candidate");
+
+  host.process(frame(0.0F, 60));
+  host.process(frame(0.0F, 70));
+  host.process(frame(0.0F, 80));
+  require(utterances.size() == 1,
+          "accepted candidate must finalize exactly one utterance");
+  require(utterances.front().duration_ms >= 90,
+          "audio spoken while Gate-STT is in flight must reach full STT");
+  const auto& samples = utterances.front().samples;
+  require(samples.size() >= 90,
+          "complete candidate must retain every marked test frame");
+  require(std::fabs(samples[0] - 0.11F) < 0.0001F &&
+              std::fabs(samples[10] - 0.12F) < 0.0001F &&
+              std::fabs(samples[20] - 0.13F) < 0.0001F &&
+              std::fabs(samples[30] - 0.14F) < 0.0001F &&
+              std::fabs(samples[40] - 0.15F) < 0.0001F &&
+              std::fabs(samples[50] - 0.16F) < 0.0001F,
+          "candidate audio order must survive an in-flight Gate-STT decode");
+}
+
+void test_default_gate_stt_waits_for_a_whisper_sized_prefix() {
+  RecordingSink sink;
+  VoiceHost host(VoiceConfig{}, sink, [](UtteranceAudio) {});
+  std::uint64_t at = 10;
+  for (int index = 0; index < 3; ++index, at += 10) {
+    host.process(frame(0.10F, at, 16'000));
+  }
+
+  for (int index = 0; index < 50; ++index, at += 10) {
+    host.process(frame(0.10F, at, 16'000));
+  }
+  require(!host.gate_stt_request().has_value(),
+          "Gate-STT must not decode a clipped 500 ms speech prefix");
+
+  for (int index = 0; index < 31; ++index, at += 10) {
+    host.process(frame(0.10F, at, 16'000));
+  }
+  require(host.gate_stt_request().has_value(),
+          "Gate-STT must become due after an 800 ms speech prefix");
+}
+
+void test_default_gate_stt_accepts_an_endpointed_wake_word_prefix() {
+  RecordingSink sink;
+  VoiceHost host(VoiceConfig{}, sink, [](UtteranceAudio) {});
+  std::uint64_t at = 10;
+  for (int index = 0; index < 3; ++index, at += 10) {
+    host.process(frame(0.10F, at, 16'000));
+  }
+  for (int index = 0; index < 40; ++index, at += 10) {
+    host.process(frame(0.10F, at, 16'000));
+  }
+  require(!host.gate_stt_request().has_value(),
+          "an unfinished short prefix must not decode early");
+
+  for (int index = 0; index < 12; ++index, at += 10) {
+    host.process(frame(0.0F, at, 16'000));
+  }
+  require(host.gate_stt_request().has_value(),
+          "a complete paused wake word must decode before rejection");
 }
 
 void test_candidate_waits_past_activation_timeout_for_gate_stt() {
@@ -324,6 +412,9 @@ int main() {
     test_activity_is_not_automatic_activation();
     test_candidate_snapshot_is_bounded_and_identified();
     test_candidate_waits_for_inflight_gate_stt_after_speech_ends();
+    test_inflight_gate_stt_preserves_the_complete_candidate();
+    test_default_gate_stt_waits_for_a_whisper_sized_prefix();
+    test_default_gate_stt_accepts_an_endpointed_wake_word_prefix();
     test_candidate_waits_past_activation_timeout_for_gate_stt();
     test_inflight_gate_stt_has_a_bounded_wait();
     test_candidate_without_gate_stt_still_ends_on_silence();

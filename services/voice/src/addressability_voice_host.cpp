@@ -74,6 +74,25 @@ void VoiceHost::handle_input_unavailable(std::string reason) {
   last_level_event_ms_ = 0;
 }
 
+std::optional<GateSttRequest> VoiceHost::gate_stt_request() {
+  if (muted_ || phase_ != VoicePhase::SpeechCandidate ||
+      activity_id_.empty() || gate_stt_activity_id_ == activity_id_ ||
+      last_frame_ms_ < candidate_started_ms_) {
+    return std::nullopt;
+  }
+
+  const auto elapsed_ms = last_frame_ms_ - candidate_started_ms_;
+  const bool complete_timed_prefix =
+      elapsed_ms >= config_.gate_stt_minimum_candidate_ms;
+  const bool complete_endpointed_prefix =
+      accumulated_speech_ms_ >= config_.gate_stt_minimum_speech_ms &&
+      accumulated_silence_ms_ >= config_.gate_stt_endpoint_silence_ms;
+  if (!complete_timed_prefix && !complete_endpointed_prefix) {
+    return std::nullopt;
+  }
+  return gate_stt_request(0);
+}
+
 std::optional<GateSttRequest> VoiceHost::gate_stt_request(
     const std::uint64_t minimum_candidate_ms) {
   if (muted_ || phase_ != VoicePhase::SpeechCandidate ||

@@ -1,3 +1,10 @@
+import {
+  FreshnessState,
+  RuntimeLifecycle,
+  TransportState,
+  projectRuntimeUiState,
+} from './runtime-state-contract.js';
+
 const UNKNOWN = 'UNKNOWN';
 const UNAVAILABLE = 'UNAVAILABLE';
 
@@ -18,13 +25,41 @@ function epochMs(value) {
 
 function presenceFrom(snapshot) { return snapshot?.presenceState ?? snapshot?.presence?.state; }
 
+function transportFrom(ipcState) {
+  const normalized = status(ipcState);
+  if (normalized === 'CONNECTED') return TransportState.CONNECTED;
+  if (normalized === 'CONNECTING') return TransportState.CONNECTING;
+  if (['OFFLINE', 'DISCONNECTED', 'DEGRADED'].includes(normalized)) {
+    return TransportState.DISCONNECTED;
+  }
+  return TransportState.UNKNOWN;
+}
+
 export function projectSystemState(state, nowMs, staleAfterMs) {
   const lastCoreMessageAt = epochMs(state.lastCoreMessageAt);
-  const disconnected = new Set(['OFFLINE', 'DISCONNECTED', 'DEGRADED']);
-  const stale = disconnected.has(state.ipcState)
-    ? true
-    : lastCoreMessageAt === null ? null : nowMs - lastCoreMessageAt > staleAfterMs;
-  return Object.freeze({ ...state, lastCoreMessageAt, stale });
+  const transportState = transportFrom(state.ipcState);
+  const freshnessState = transportState === TransportState.DISCONNECTED
+    ? FreshnessState.STALE
+    : lastCoreMessageAt === null
+      ? FreshnessState.UNKNOWN
+      : nowMs - lastCoreMessageAt > staleAfterMs
+        ? FreshnessState.STALE
+        : FreshnessState.FRESH;
+  const ui = projectRuntimeUiState({
+    lifecycle: state.runtimeLifecycle,
+    transportState,
+    freshnessState,
+    presenceState: state.presenceState,
+  });
+  return Object.freeze({
+    ...state,
+    lastCoreMessageAt,
+    transportState,
+    freshnessState,
+    uiState: ui.status,
+    uiReason: ui.reason,
+    stale: freshnessState === FreshnessState.STALE,
+  });
 }
 
 export class SystemModel {
@@ -34,12 +69,13 @@ export class SystemModel {
     this.staleAfterMs = staleAfterMs;
     this.listeners = new Set();
     this.state = {
+      runtimeLifecycle: RuntimeLifecycle.STARTING,
       coreStatus: UNKNOWN,
       voiceStatus: UNKNOWN,
       microphoneState: UNAVAILABLE,
       presenceState: UNKNOWN,
       brainState: UNAVAILABLE,
-      ipcState: UNKNOWN,
+      ipcState: TransportState.CONNECTING,
       connectionId: null,
       lastCoreMessageAt: null,
       mode: 'AMBIENT',
@@ -65,7 +101,11 @@ export class SystemModel {
   updateNativeSnapshot(snapshot = {}) {
     const hasConnectionId = Object.hasOwn(snapshot, 'connectionId');
     const hasLastCoreMessageAt = Object.hasOwn(snapshot, 'lastCoreMessageAt');
+    const inferredLifecycle = snapshot.runtimeLifecycle
+      ?? snapshot.lifecycle
+      ?? (status(snapshot.coreStatus) === 'READY' ? RuntimeLifecycle.READY : null);
     this.#merge({
+      runtimeLifecycle: status(inferredLifecycle, this.state.runtimeLifecycle),
       coreStatus: status(snapshot.coreStatus, this.state.coreStatus),
       voiceStatus: status(snapshot.voiceStatus, this.state.voiceStatus),
       microphoneState: status(snapshot.microphoneState, this.state.microphoneState),
@@ -88,6 +128,7 @@ export class SystemModel {
 
   updateRuntimeSnapshot(snapshot = {}) {
     this.#merge({
+      runtimeLifecycle: status(snapshot.lifecycle, this.state.runtimeLifecycle),
       microphoneState: status(snapshot.microphoneState, this.state.microphoneState),
       presenceState: status(presenceFrom(snapshot), this.state.presenceState),
       brainState: status(snapshot.brainState, this.state.brainState),
@@ -97,7 +138,18 @@ export class SystemModel {
   updateRuntimeStatus(runtimeStatus) {
     const normalized = status(runtimeStatus);
     if (normalized === 'CONNECTING') this.#merge({ ipcState: 'CONNECTING' });
-    else if (normalized === 'OFFLINE') this.#merge({ ipcState: 'OFFLINE', connectionId: null });
+    else if (normalized === 'OFFLINE') {
+      this.#merge({
+        runtimeLifecycle: RuntimeLifecycle.DEGRADED,
+        ipcState: 'OFFLINE',
+        connectionId: null,
+      });
+    } else if (normalized === 'READY') {
+      this.#merge({
+        runtimeLifecycle: RuntimeLifecycle.READY,
+        ipcState: 'CONNECTED',
+      });
+    }
   }
 
   updateComponent(component = {}) {

@@ -5,12 +5,15 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "stream": "vite --host 127.0.0.1 --port 1421 --strictPort",
     "build": "vite build",
+    "build:bundle": "powershell -NoProfile -ExecutionPolicy Bypass -File ../../scripts/prepare-birdie-desktop-bundle.ps1 && vite build",
     "test": "node --test test/*.test.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",
+    "jsqr": "1.4.0",
     "three": "^0.179.0"
   },
   "devDependencies": {

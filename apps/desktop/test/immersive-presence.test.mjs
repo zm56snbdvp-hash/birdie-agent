@@ -12,6 +12,7 @@ import {
   deriveAudioReaction,
   getVisualProfile,
   hasVisualProfile,
+  scheduleRenderFrame,
 } from '../src/birdie-visual-state.js';
 
 const canonicalStates = [
@@ -97,6 +98,35 @@ test('viewport math is aspect-correct and caps rendering cost', () => {
     cameraHalfWidth: 2.5,
     coreHorizontalFit: 1,
   });
+});
+
+test('frame scheduler carries refresh remainder instead of collapsing 40/60 fps to 30', () => {
+  function simulate(frameRate) {
+    let lastFrameAt = 0;
+    let rendered = 0;
+    const deltas = [];
+    for (let tick = 1; tick <= 60; tick += 1) {
+      const frame = scheduleRenderFrame(lastFrameAt, tick * (1_000 / 60), frameRate);
+      if (frame.shouldRender) {
+        rendered += 1;
+        lastFrameAt = frame.lastFrameAt;
+        deltas.push(frame.deltaSeconds);
+      }
+    }
+    return { rendered, deltas };
+  }
+
+  assert.ok(simulate(40).rendered >= 39);
+  assert.ok(simulate(60).rendered >= 59);
+  assert.ok(simulate(30).rendered >= 29);
+  for (const delta of simulate(40).deltas) {
+    assert.ok(Math.abs(delta - 1 / 40) < 1e-9, `scheduled delta was ${delta}`);
+  }
+
+  const recovered = scheduleRenderFrame(25, 225, 40);
+  assert.equal(recovered.shouldRender, true);
+  assert.equal(recovered.lastFrameAt, 225);
+  assert.equal(recovered.deltaSeconds, 0.05, 'long scheduled gaps are safely capped');
 });
 
 test('audio reactivity is clamped and directionally gated by presence state', () => {

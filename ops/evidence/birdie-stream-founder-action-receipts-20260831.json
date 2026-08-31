@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "ledgerId": "birdie-stream-founder-action-receipts-20260831",
+  "recordedAtUtc": "2026-08-31T00:11:14.8676162Z",
+  "currency": "EUR",
+  "totalSpend": 0,
+  "actions": [
+    {
+      "sequence": 1,
+      "action": "READ_PUBLIC_BIRDIE_LANDING_PAGE",
+      "scope": "READ_ONLY_HTTPS",
+      "result": "PASS_PUBLIC_PAGE_REACHABLE",
+      "mutation": "NONE",
+      "dataTransmitted": "STANDARD_PAGE_REQUEST_ONLY",
+      "spend": 0,
+      "rollback": "NOT_APPLICABLE",
+      "actionTimestamp": "NOT_RECORDED_AT_ACTION_TIME"
+    },
+    {
+      "sequence": 2,
+      "action": "FETCH_PINNED_QRCODE_CLI_1_5_4",
+      "scope": "NPM_ONE_SHOT_GENERATOR",
+      "result": "PASS",
+      "mutation": "LOCAL_NPM_CACHE_AND_LOCAL_QR_FILE_ONLY",
+      "spend": 0,
+      "rollback": "DELETE_LOCAL_GENERATED_FILE_IF_REJECTED",
+      "actionTimestamp": "NOT_RECORDED_AT_ACTION_TIME"
+    },
+    {
+      "sequence": 3,
+      "action": "GENERATE_LOCAL_QR_ASSET",
+      "scope": "LOCAL_FILE",
+      "result": "PASS_AFTER_ONE_MISSING_DIRECTORY_FAILURE",
+      "artifact": "apps/desktop/public/assets/birdie-stream-cta.png",
+      "artifactSha256": "c482e0de1e1928c5fa23712bc0373527be963b57fda33070118e97cd911fc228",
+      "spend": 0,
+      "rollback": "REMOVE_ONLY_THIS_TASK_OWNED_ASSET_AND_REVERT_CONFIG",
+      "actionTimestamp": "NOT_RECORDED_AT_ACTION_TIME"
+    },
+    {
+      "sequence": 4,
+      "action": "INSTALL_PINNED_JSQR_1_4_0_LOCALLY",
+      "scope": "APPS_DESKTOP_DEPENDENCY",
+      "result": "PASS_1_PACKAGE_0_VULNERABILITIES",
+      "mutation": "PACKAGE_JSON_AND_LOCAL_NODE_MODULES",
+      "lockfileDecision": "NO_NEW_APP_LOCKFILE_BECAUSE_APPS_DESKTOP_HAD_NONE_AND_ROOT_LOCKFILE_IS_NOT_A_WORKSPACE_LOCK",
+      "spend": 0,
+      "rollback": "REVERT_PACKAGE_JSON_AND_REINSTALL_APPS_DESKTOP_DEPENDENCIES",
+      "actionTimestamp": "NOT_RECORDED_AT_ACTION_TIME"
+    },
+    {
+      "sequence": 5,
+      "action": "OPEN_EXISTING_OBS_AND_RUN_LOCAL_PREFLIGHT",
+      "scope": "LOCAL_WINDOWS_UI",
+      "result": "NO_GO_WRONG_PROFILE_COLLECTION_FPS_AND_AUDIO",
+      "mutation": "ACTIVE_SCENE_CHANGED_TO_99_SAFE_ONLY",
+      "externalOutput": "NONE",
+      "spend": 0,
+      "rollback": "SELECT_PREVIOUS_SCENE_10_END_IF_USER_WORKFLOW_REQUIRES_IT",
+      "actionTimestamp": "NOT_RECORDED_AT_ACTION_TIME"
+    }
+  ],
+  "prohibitedOrDeferredActions": {
+    "publicStream": "NOT_STARTED",
+    "privateOrUnlistedStream": "NOT_STARTED",
+    "upload": "NONE",
+    "post": "NONE",
+    "message": "NONE",
+    "purchase": "NONE",
+    "deploymentByThisWorkstream": "NONE",
+    "gitPushByThisWorkstream": "NONE",
+    "forcePush": "NONE",
+    "secretAccess": "NONE"
+  },
+  "budget": {
+    "authorizedProjectLimit": 75,
+    "authorizedTotalLimit": 1000,
+    "spent": 0,
+    "remainingProjectLimit": 75,
+    "remainingTotalLimit": 1000
+  }
+}

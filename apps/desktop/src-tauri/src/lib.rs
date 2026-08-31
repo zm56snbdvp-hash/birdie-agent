@@ -26,7 +26,7 @@ use std::{
 };
 use surface::{DesktopMode, ModuleId, SurfaceSnapshot, SurfaceState};
 use tauri::{
-    menu::{Menu, MenuItem},
+    menu::{CheckMenuItem, Menu, MenuItem},
     tray::TrayIconBuilder,
     Emitter, Manager, State,
 };
@@ -73,6 +73,7 @@ struct RuntimeSnapshot {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct SystemSnapshot {
+    runtime_lifecycle: String,
     core_status: String,
     voice_status: String,
     microphone_state: String,
@@ -291,6 +292,7 @@ fn runtime_get_system_snapshot(
         _ => voice_process_status,
     };
     SystemSnapshot {
+        runtime_lifecycle: snapshot.lifecycle.clone(),
         core_status,
         voice_status,
         microphone_state: snapshot.microphone_state,
@@ -305,11 +307,7 @@ fn runtime_get_system_snapshot(
     }
 }
 
-#[tauri::command]
-fn runtime_set_microphone_enabled(
-    state: State<'_, RuntimeState>,
-    enabled: bool,
-) -> Result<(), String> {
+fn set_runtime_microphone_enabled(state: &RuntimeState, enabled: bool) -> Result<(), String> {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| format!("SYSTEM.CLOCK_ERROR:{error}"))?
@@ -338,6 +336,76 @@ fn runtime_set_microphone_enabled(
         ),
     }
     result
+}
+
+fn stored_microphone_enabled(store: &LocalStore) -> bool {
+    // A missing store uses LocalStore's backward-compatible default. A corrupt
+    // or unreadable store cannot prove consent, so startup remains fail-closed.
+    store.microphone_enabled().unwrap_or(false)
+}
+
+fn apply_microphone_preference(
+    store: &LocalStore,
+    runtime: &RuntimeState,
+    supervisor: &ProcessSupervisor,
+    enabled: bool,
+) -> Result<(), String> {
+    if enabled {
+        let activation = if supervisor.manages_voice() {
+            // The explicit tray action authorizes the managed worker to launch
+            // with --mic. Sending the runtime command before Voice reconnects
+            // would introduce an ordering race, so managed activation starts it
+            // directly and persists only after the transition succeeds.
+            supervisor.set_voice_enabled(true)
+        } else {
+            set_runtime_microphone_enabled(runtime, true)
+        };
+        activation?;
+
+        if let Err(error) = store.save_microphone_enabled(true) {
+            // Do not leave capture enabled when its consent cannot survive a
+            // restart. Both paths are best-effort rollbacks to the safe state.
+            if supervisor.manages_voice() {
+                let _ = supervisor.set_voice_enabled(false);
+            }
+            let _ = set_runtime_microphone_enabled(runtime, false);
+            return Err(format!("MICROPHONE.PREFERENCE_SAVE_FAILED:{error}"));
+        }
+        return Ok(());
+    }
+
+    // Persist Off before touching the process so even an interruption between
+    // these operations prevents the next startup from spawning Voice with --mic.
+    let persistence = store
+        .save_microphone_enabled(false)
+        .map(|_| ())
+        .map_err(|error| format!("MICROPHONE.PREFERENCE_SAVE_FAILED:{error}"));
+    let process_disable = if supervisor.manages_voice() {
+        // Stop capture before a potentially blocking pipe round-trip. The
+        // runtime command then preserves the existing Core-facing mute path;
+        // its failure is safe because the managed process is already gated.
+        let result = supervisor.set_voice_enabled(false);
+        let _ = set_runtime_microphone_enabled(runtime, false);
+        result
+    } else {
+        set_runtime_microphone_enabled(runtime, false)
+    };
+
+    match (persistence, process_disable) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(error), Ok(())) | (Ok(()), Err(error)) => Err(error),
+        (Err(persistence_error), Err(disable_error)) => {
+            Err(format!("{persistence_error};{disable_error}"))
+        }
+    }
+}
+
+#[tauri::command]
+fn runtime_set_microphone_enabled(
+    state: State<'_, RuntimeState>,
+    enabled: bool,
+) -> Result<(), String> {
+    set_runtime_microphone_enabled(state.inner(), enabled)
 }
 
 #[tauri::command]
@@ -1328,16 +1396,56 @@ pub fn run() {
                 .path()
                 .app_local_data_dir()?
                 .join("function-layer-v1.json");
-            let _ = app.manage(LocalStore::open(local_data_path));
+            let local_store = LocalStore::open(local_data_path);
+            let microphone_enabled = stored_microphone_enabled(&local_store);
+            let _ = app.manage(local_store);
 
-            let supervisor = ProcessSupervisor::start(app.handle().clone());
+            let supervisor = ProcessSupervisor::start(app.handle().clone(), microphone_enabled);
             let _ = app.manage(supervisor);
             start_core_ipc(app.handle().clone());
+            let microphone = CheckMenuItem::with_id(
+                app,
+                "microphone",
+                "Mikrofon verwenden",
+                true,
+                microphone_enabled,
+                None::<&str>,
+            )?;
+            let microphone_control = microphone.clone();
             let quit = MenuItem::with_id(app, "quit", "Birdie beenden", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&quit])?;
+            let menu = Menu::with_items(app, &[&microphone, &quit])?;
             TrayIconBuilder::new()
                 .menu(&menu)
-                .on_menu_event(|app, event| match event.id.as_ref() {
+                .tooltip("Birdie – Mikrofoneinstellung im Menü")
+                .on_menu_event(move |app, event| match event.id.as_ref() {
+                    "microphone" => {
+                        let requested = microphone_control.is_checked().unwrap_or(false);
+                        let supervisor = app.state::<ProcessSupervisor>();
+                        let runtime = app.state::<RuntimeState>();
+                        let store = app.state::<LocalStore>();
+                        let result = apply_microphone_preference(
+                            store.inner(),
+                            runtime.inner(),
+                            supervisor.inner(),
+                            requested,
+                        );
+                        if let Err(error) = result {
+                            // A failed privacy-off request stays visibly off and
+                            // the supervisor flag stays disabled. Enabling errors
+                            // also fail closed to the unchecked preference.
+                            let _ = microphone_control.set_checked(false);
+                            app.state::<RuntimeState>().diagnostic.append(
+                                "ERROR",
+                                format!(
+                                    "stage=tray.microphone requested={requested} error={error}"
+                                ),
+                            );
+                        } else {
+                            app.state::<RuntimeState>()
+                                .diagnostic
+                                .append("TRAY_MICROPHONE", format!("enabled={requested}"));
+                        }
+                    }
                     "quit" => {
                         app.state::<ProcessSupervisor>().shutdown();
                         app.exit(0);
@@ -1354,6 +1462,25 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stored_microphone_preference_drives_fail_closed_startup_state() {
+        let path = std::env::temp_dir().join(format!(
+            "birdie-startup-microphone-{}-{}.json",
+            std::process::id(),
+            now_ms()
+        ));
+        let store = LocalStore::open(path.clone());
+        assert!(stored_microphone_enabled(&store));
+        store
+            .save_microphone_enabled(false)
+            .expect("explicit Off should persist");
+        assert!(!stored_microphone_enabled(&LocalStore::open(path.clone())));
+
+        std::fs::write(&path, b"corrupt").expect("test store should be writable");
+        assert!(!stored_microphone_enabled(&LocalStore::open(path.clone())));
+        let _ = std::fs::remove_file(path);
+    }
 
     fn ready_snapshot(core_revision: u64, bridge_revision: u64) -> RuntimeSnapshot {
         RuntimeSnapshot {
@@ -1402,6 +1529,30 @@ mod tests {
         assert_eq!(encoded["brainState"], "READY");
         assert_eq!(encoded["bridgeRevision"], 0);
         assert!(encoded.get("microphone_state").is_none());
+    }
+
+    #[test]
+    fn system_snapshot_serializes_runtime_transport_and_capability_separately() {
+        let snapshot = SystemSnapshot {
+            runtime_lifecycle: "DEGRADED".into(),
+            core_status: "RUNNING_NO_IPC".into(),
+            voice_status: "UNAVAILABLE".into(),
+            microphone_state: "UNAVAILABLE".into(),
+            presence_state: "OFFLINE".into(),
+            brain_state: "READY".into(),
+            ipc_state: "DISCONNECTED".into(),
+            connection_id: None,
+            last_core_message_at: Some(42),
+            mode: DesktopMode::Ambient,
+            active_module: None,
+            global_shortcut_status: "REGISTERED".into(),
+        };
+
+        let encoded = serde_json::to_value(snapshot).expect("system snapshot must serialize");
+        assert_eq!(encoded["runtimeLifecycle"], "DEGRADED");
+        assert_eq!(encoded["ipcState"], "DISCONNECTED");
+        assert_eq!(encoded["presenceState"], "OFFLINE");
+        assert_eq!(encoded["microphoneState"], "UNAVAILABLE");
     }
 
     #[test]

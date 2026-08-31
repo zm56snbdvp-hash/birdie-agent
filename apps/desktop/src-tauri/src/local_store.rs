@@ -15,6 +15,10 @@ const MAX_FOCUS_DURATION_MS: u64 = 24 * 60 * 60 * 1_000;
 const MAX_CAPTURE_TEXT_CHARS: usize = 4_000;
 const MAX_CAPTURE_ENTRIES: usize = 500;
 
+fn default_microphone_enabled() -> bool {
+    true
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct FocusState {
@@ -91,6 +95,8 @@ struct PersistedData {
     schema_version: u32,
     focus: FocusState,
     captures: Vec<CaptureEntry>,
+    #[serde(default = "default_microphone_enabled")]
+    microphone_enabled: bool,
 }
 
 impl Default for PersistedData {
@@ -99,6 +105,7 @@ impl Default for PersistedData {
             schema_version: STORE_SCHEMA_VERSION,
             focus: FocusState::default(),
             captures: Vec::new(),
+            microphone_enabled: default_microphone_enabled(),
         }
     }
 }
@@ -160,6 +167,22 @@ impl LocalStore {
         write_atomic(&self.path, &next)?;
         state.data = next;
         Ok(focus)
+    }
+
+    pub fn microphone_enabled(&self) -> Result<bool, String> {
+        let state = self.state.lock().map_err(|_| "LOCAL.STORE.LOCK_POISONED")?;
+        ensure_healthy(&state)?;
+        Ok(state.data.microphone_enabled)
+    }
+
+    pub fn save_microphone_enabled(&self, enabled: bool) -> Result<bool, String> {
+        let mut state = self.state.lock().map_err(|_| "LOCAL.STORE.LOCK_POISONED")?;
+        ensure_healthy(&state)?;
+        let mut next = state.data.clone();
+        next.microphone_enabled = enabled;
+        write_atomic(&self.path, &next)?;
+        state.data = next;
+        Ok(enabled)
     }
 
     pub fn captures(&self) -> Result<Vec<CaptureEntry>, String> {
@@ -340,6 +363,7 @@ mod tests {
         let path = test_path("roundtrip");
         let store = LocalStore::open(path.clone());
         assert_eq!(store.path(), path.as_path());
+        assert!(store.microphone_enabled().unwrap());
         let focus = FocusState {
             schema_version: 1,
             task: "Ship Function Layer".into(),
@@ -354,11 +378,28 @@ mod tests {
         let capture = store
             .add_capture("Only local".into())
             .expect("capture persists");
+        assert!(!store.save_microphone_enabled(false).unwrap());
         let reopened = LocalStore::open(path.clone());
         assert_eq!(reopened.focus().unwrap(), focus);
         assert_eq!(reopened.captures().unwrap(), vec![capture.clone()]);
+        assert!(!reopened.microphone_enabled().unwrap());
         assert!(reopened.delete_capture(&capture.id).unwrap());
         assert!(reopened.captures().unwrap().is_empty());
+        let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn legacy_store_without_microphone_preference_defaults_to_enabled() {
+        let path = test_path("legacy-microphone-default");
+        let mut data = serde_json::to_value(PersistedData::default()).unwrap();
+        data.as_object_mut().unwrap().remove("microphoneEnabled");
+        fs::write(&path, serde_json::to_vec(&data).unwrap()).unwrap();
+
+        let store = LocalStore::open(path.clone());
+        assert!(store.microphone_enabled().unwrap());
+        assert!(!store.save_microphone_enabled(false).unwrap());
+        assert!(!LocalStore::open(path.clone()).microphone_enabled().unwrap());
+
         let _ = fs::remove_file(path);
     }
 
@@ -368,6 +409,10 @@ mod tests {
         fs::write(&path, b"not-json").unwrap();
         let store = LocalStore::open(path.clone());
         assert_eq!(store.focus().unwrap_err(), "LOCAL.STORE.CORRUPT");
+        assert_eq!(
+            store.microphone_enabled().unwrap_err(),
+            "LOCAL.STORE.CORRUPT"
+        );
         assert_eq!(
             store.add_capture("must not overwrite".into()).unwrap_err(),
             "LOCAL.STORE.CORRUPT",

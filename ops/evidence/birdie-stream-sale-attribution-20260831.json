@@ -1,0 +1,256 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "stream-sale-birdie-stream-attribution-v1",
+  "scope": "LOCAL_SYNTHETIC_ATTRIBUTION",
+  "externalActions": "LOCKED",
+  "comparisonFingerprintSha256": "f9f2871040cad633320cd08a00d7fc2824638186dafe8b421615892fc9461662",
+  "sourceDigests": {
+    "attributionFixtures": "c0f507e2f659b9bf2153067601f862b09082d5e7fac3f2480213b37695978129",
+    "saleShowVariants": "0b6d269455e793aeeab479235c7925e9891ae4d238e6532e24d4eca3d66baa64"
+  },
+  "manifestValidation": {
+    "status": "PASS",
+    "checks": [
+      {
+        "id": "schema",
+        "status": "PASS"
+      },
+      {
+        "id": "scope",
+        "status": "PASS"
+      },
+      {
+        "id": "external-actions",
+        "status": "PASS"
+      },
+      {
+        "id": "event-types",
+        "status": "PASS"
+      },
+      {
+        "id": "consent-states",
+        "status": "PASS"
+      },
+      {
+        "id": "allowlists",
+        "status": "PASS"
+      },
+      {
+        "id": "windows",
+        "status": "PASS"
+      },
+      {
+        "id": "fingerprint",
+        "status": "PASS"
+      }
+    ]
+  },
+  "corpora": {
+    "baseline": {
+      "status": "PASS",
+      "firstViolation": null,
+      "metrics": {
+        "eventCount": 9,
+        "sessionCount": 3,
+        "counts": {
+          "VIEW": 3,
+          "CTA": 3,
+          "LEAD": 2,
+          "SALE": 1
+        },
+        "ratesBps": {
+          "ctaPerView": 10000,
+          "leadPerCta": 6667,
+          "salePerLead": 5000,
+          "salePerView": 3333
+        },
+        "amountTestCents": 4900
+      }
+    },
+    "current": {
+      "status": "PASS",
+      "firstViolation": null,
+      "metrics": {
+        "eventCount": 10,
+        "sessionCount": 3,
+        "counts": {
+          "VIEW": 3,
+          "CTA": 3,
+          "LEAD": 2,
+          "SALE": 2
+        },
+        "ratesBps": {
+          "ctaPerView": 10000,
+          "leadPerCta": 6667,
+          "salePerLead": 10000,
+          "salePerView": 6667
+        },
+        "amountTestCents": 9800
+      }
+    }
+  },
+  "negativeFixtures": [
+    {
+      "id": "duplicate-event",
+      "expectedFirstViolation": "EVENT_DUPLICATE",
+      "observedFirstViolation": "EVENT_DUPLICATE",
+      "status": "PASS"
+    },
+    {
+      "id": "sequence-out-of-order",
+      "expectedFirstViolation": "SEQUENCE_OUT_OF_ORDER",
+      "observedFirstViolation": "SEQUENCE_OUT_OF_ORDER",
+      "status": "PASS"
+    },
+    {
+      "id": "event-time-out-of-order",
+      "expectedFirstViolation": "EVENT_TIME_OUT_OF_ORDER",
+      "observedFirstViolation": "EVENT_TIME_OUT_OF_ORDER",
+      "status": "PASS"
+    },
+    {
+      "id": "missing-consent",
+      "expectedFirstViolation": "LEAD_CONSENT_MISSING",
+      "observedFirstViolation": "LEAD_CONSENT_MISSING",
+      "status": "PASS"
+    },
+    {
+      "id": "session-attribution-drift",
+      "expectedFirstViolation": "SESSION_ATTRIBUTION_DRIFT",
+      "observedFirstViolation": "SESSION_ATTRIBUTION_DRIFT",
+      "status": "PASS"
+    },
+    {
+      "id": "sale-without-lead",
+      "expectedFirstViolation": "FUNNEL_STAGE_SKIPPED",
+      "observedFirstViolation": "FUNNEL_STAGE_SKIPPED",
+      "status": "PASS"
+    },
+    {
+      "id": "stale-window",
+      "expectedFirstViolation": "ATTRIBUTION_WINDOW_EXPIRED",
+      "observedFirstViolation": "ATTRIBUTION_WINDOW_EXPIRED",
+      "status": "PASS"
+    },
+    {
+      "id": "pii-field",
+      "expectedFirstViolation": "EVENT_FIELD_NOT_ALLOWED",
+      "observedFirstViolation": "EVENT_FIELD_NOT_ALLOWED",
+      "status": "PASS"
+    },
+    {
+      "id": "external-event",
+      "expectedFirstViolation": "EVENT_EXTERNAL_OR_NON_SYNTHETIC",
+      "observedFirstViolation": "EVENT_EXTERNAL_OR_NON_SYNTHETIC",
+      "status": "PASS"
+    }
+  ],
+  "regression": {
+    "verdict": "PASS",
+    "compatibility": "PASS",
+    "gates": [
+      {
+        "id": "cta-per-view",
+        "status": "PASS",
+        "current": 10000,
+        "baseline": 10000,
+        "deltaBps": 0,
+        "allowanceBps": 500
+      },
+      {
+        "id": "lead-per-cta",
+        "status": "PASS",
+        "current": 6667,
+        "baseline": 6667,
+        "deltaBps": 0,
+        "allowanceBps": 500
+      },
+      {
+        "id": "sale-per-lead",
+        "status": "PASS",
+        "current": 10000,
+        "baseline": 5000,
+        "deltaBps": 5000,
+        "allowanceBps": 500
+      },
+      {
+        "id": "sale-per-view",
+        "status": "PASS",
+        "current": 6667,
+        "baseline": 3333,
+        "deltaBps": 3334,
+        "allowanceBps": 250
+      }
+    ],
+    "current": {
+      "eventCount": 10,
+      "sessionCount": 3,
+      "counts": {
+        "VIEW": 3,
+        "CTA": 3,
+        "LEAD": 2,
+        "SALE": 2
+      },
+      "ratesBps": {
+        "ctaPerView": 10000,
+        "leadPerCta": 6667,
+        "salePerLead": 10000,
+        "salePerView": 6667
+      },
+      "amountTestCents": 9800
+    },
+    "baseline": {
+      "eventCount": 9,
+      "sessionCount": 3,
+      "counts": {
+        "VIEW": 3,
+        "CTA": 3,
+        "LEAD": 2,
+        "SALE": 1
+      },
+      "ratesBps": {
+        "ctaPerView": 10000,
+        "leadPerCta": 6667,
+        "salePerLead": 5000,
+        "salePerView": 3333
+      },
+      "amountTestCents": 4900
+    }
+  },
+  "showContracts": {
+    "variants": "PASS",
+    "attributionMapping": "PASS"
+  },
+  "decisions": {
+    "localSyntheticAttribution": "PASS",
+    "syntheticBaselineRegression": "PASS",
+    "realViewToSaleAttribution": "UNKNOWN",
+    "supervisedPrivateTest": "STOP",
+    "publicStream": "STOP",
+    "publication": "LOCKED"
+  },
+  "unknowns": [
+    "REAL_VIEW_EVENTS",
+    "REAL_CTA_INTERACTIONS",
+    "REAL_CONSENTED_LEADS",
+    "REAL_SALES",
+    "REAL_MONEY",
+    "REAL_NETWORK_ATTRIBUTION",
+    "PRODUCTION_CTA_DESTINATION"
+  ],
+  "redaction": {
+    "applied": true,
+    "excludes": [
+      "PII",
+      "names",
+      "email",
+      "phone",
+      "IP",
+      "URLs",
+      "credentials",
+      "payment data",
+      "free-form text"
+    ]
+  },
+  "canonicalSha256": "4697275d097d472957d9b08ed42b5468d069a5999c998d3be64650456a0a4cd3"
+}

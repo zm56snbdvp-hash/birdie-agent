@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "id": "birdie-stream-attribution-v1",
+  "scope": "LOCAL_SYNTHETIC_ATTRIBUTION",
+  "externalActions": "LOCKED",
+  "eventSchema": {
+    "requiredFields": [
+      "eventId",
+      "sequenceId",
+      "occurredAtMs",
+      "type",
+      "sessionId",
+      "variantId",
+      "offerId",
+      "campaignId",
+      "segmentId",
+      "synthetic",
+      "externalAction",
+      "consentState",
+      "amountTestCents"
+    ],
+    "additionalFields": "DENY",
+    "identifierFormat": "SAFE_OPAQUE_ID",
+    "clock": "LOCAL_MONOTONIC_FIXTURE_MS",
+    "moneyMeaning": "SYNTHETIC_TEST_VALUE_ONLY",
+    "pii": "DENY"
+  },
+  "policy": {
+    "viewToCtaMaxMs": 120000,
+    "ctaToLeadMaxMs": 300000,
+    "leadToSaleMaxMs": 300000
+  },
+  "allowed": {
+    "eventTypes": ["VIEW", "CTA", "LEAD", "SALE"],
+    "variantIds": ["PRODUCT", "APP_DEMO", "BIRDIEWORLD_HOTEL"],
+    "offerIds": [
+      "product-offer-orientation",
+      "product-offer-state-walkthrough",
+      "product-offer-private-review",
+      "product-offer-safety-briefing",
+      "product-offer-supervised-preview",
+      "product-offer-recap",
+      "app-demo-offer-orientation",
+      "app-demo-offer-state-tour",
+      "app-demo-offer-supervised-demo",
+      "app-demo-offer-readiness-review",
+      "app-demo-offer-private-session",
+      "app-demo-offer-recap",
+      "birdieworld-hotel-offer-concept",
+      "birdieworld-hotel-offer-arrival-story",
+      "birdieworld-hotel-offer-concept-review",
+      "birdieworld-hotel-offer-founder-review",
+      "birdieworld-hotel-offer-private-concept-session",
+      "birdieworld-hotel-offer-recap"
+    ],
+    "campaignIds": ["campaign-product", "campaign-app-demo", "campaign-birdieworld-hotel"],
+    "segmentIds": [
+      "product-hook",
+      "product-segment-1",
+      "product-segment-2",
+      "product-segment-3",
+      "product-cta",
+      "product-close",
+      "app-demo-hook",
+      "app-demo-segment-1",
+      "app-demo-segment-2",
+      "app-demo-segment-3",
+      "app-demo-cta",
+      "app-demo-close",
+      "birdieworld-hotel-hook",
+      "birdieworld-hotel-segment-1",
+      "birdieworld-hotel-segment-2",
+      "birdieworld-hotel-segment-3",
+      "birdieworld-hotel-cta",
+      "birdieworld-hotel-close"
+    ],
+    "consentStates": ["NOT_APPLICABLE", "GRANTED"]
+  },
+  "attributionMapping": {
+    "PRODUCT": {
+      "campaignId": "campaign-product",
+      "primarySegmentId": "product-cta",
+      "primaryOfferId": "product-offer-supervised-preview"
+    },
+    "APP_DEMO": {
+      "campaignId": "campaign-app-demo",
+      "primarySegmentId": "app-demo-cta",
+      "primaryOfferId": "app-demo-offer-private-session"
+    },
+    "BIRDIEWORLD_HOTEL": {
+      "campaignId": "campaign-birdieworld-hotel",
+      "primarySegmentId": "birdieworld-hotel-cta",
+      "primaryOfferId": "birdieworld-hotel-offer-private-concept-session"
+    }
+  },
+  "comparisonFingerprintSha256": "f9f2871040cad633320cd08a00d7fc2824638186dafe8b421615892fc9461662",
+  "corpora": {
+    "baseline": {
+      "id": "synthetic-baseline-v1",
+      "events": [
+        { "eventId": "b-product-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "b-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "b-product-cta", "sequenceId": 2, "occurredAtMs": 10000, "type": "CTA", "sessionId": "b-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "b-product-lead", "sequenceId": 3, "occurredAtMs": 20000, "type": "LEAD", "sessionId": "b-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 0 },
+        { "eventId": "b-product-sale", "sequenceId": 4, "occurredAtMs": 30000, "type": "SALE", "sessionId": "b-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 4900 },
+        { "eventId": "b-app-view", "sequenceId": 5, "occurredAtMs": 100000, "type": "VIEW", "sessionId": "b-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "b-app-cta", "sequenceId": 6, "occurredAtMs": 110000, "type": "CTA", "sessionId": "b-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "b-app-lead", "sequenceId": 7, "occurredAtMs": 120000, "type": "LEAD", "sessionId": "b-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 0 },
+        { "eventId": "b-hotel-view", "sequenceId": 8, "occurredAtMs": 200000, "type": "VIEW", "sessionId": "b-hotel", "variantId": "BIRDIEWORLD_HOTEL", "offerId": "birdieworld-hotel-offer-private-concept-session", "campaignId": "campaign-birdieworld-hotel", "segmentId": "birdieworld-hotel-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "b-hotel-cta", "sequenceId": 9, "occurredAtMs": 210000, "type": "CTA", "sessionId": "b-hotel", "variantId": "BIRDIEWORLD_HOTEL", "offerId": "birdieworld-hotel-offer-private-concept-session", "campaignId": "campaign-birdieworld-hotel", "segmentId": "birdieworld-hotel-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    "current": {
+      "id": "synthetic-current-v1",
+      "events": [
+        { "eventId": "c-product-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "c-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "c-product-cta", "sequenceId": 2, "occurredAtMs": 10000, "type": "CTA", "sessionId": "c-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "c-product-lead", "sequenceId": 3, "occurredAtMs": 20000, "type": "LEAD", "sessionId": "c-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 0 },
+        { "eventId": "c-product-sale", "sequenceId": 4, "occurredAtMs": 30000, "type": "SALE", "sessionId": "c-product", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 4900 },
+        { "eventId": "c-app-view", "sequenceId": 5, "occurredAtMs": 100000, "type": "VIEW", "sessionId": "c-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "c-app-cta", "sequenceId": 6, "occurredAtMs": 110000, "type": "CTA", "sessionId": "c-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "c-app-lead", "sequenceId": 7, "occurredAtMs": 120000, "type": "LEAD", "sessionId": "c-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 0 },
+        { "eventId": "c-app-sale", "sequenceId": 8, "occurredAtMs": 130000, "type": "SALE", "sessionId": "c-app", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 4900 },
+        { "eventId": "c-hotel-view", "sequenceId": 9, "occurredAtMs": 200000, "type": "VIEW", "sessionId": "c-hotel", "variantId": "BIRDIEWORLD_HOTEL", "offerId": "birdieworld-hotel-offer-private-concept-session", "campaignId": "campaign-birdieworld-hotel", "segmentId": "birdieworld-hotel-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "c-hotel-cta", "sequenceId": 10, "occurredAtMs": 210000, "type": "CTA", "sessionId": "c-hotel", "variantId": "BIRDIEWORLD_HOTEL", "offerId": "birdieworld-hotel-offer-private-concept-session", "campaignId": "campaign-birdieworld-hotel", "segmentId": "birdieworld-hotel-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    }
+  },
+  "negativeFixtures": [
+    {
+      "id": "duplicate-event",
+      "expectedFirstViolation": "EVENT_DUPLICATE",
+      "events": [
+        { "eventId": "n-dup", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-dup-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-dup", "sequenceId": 2, "occurredAtMs": 10, "type": "CTA", "sessionId": "n-dup-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    {
+      "id": "sequence-out-of-order",
+      "expectedFirstViolation": "SEQUENCE_OUT_OF_ORDER",
+      "events": [
+        { "eventId": "n-seq-view", "sequenceId": 2, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-seq-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-seq-cta", "sequenceId": 1, "occurredAtMs": 10, "type": "CTA", "sessionId": "n-seq-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    {
+      "id": "event-time-out-of-order",
+      "expectedFirstViolation": "EVENT_TIME_OUT_OF_ORDER",
+      "events": [
+        { "eventId": "n-time-view", "sequenceId": 1, "occurredAtMs": 50, "type": "VIEW", "sessionId": "n-time-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-time-cta", "sequenceId": 2, "occurredAtMs": 40, "type": "CTA", "sessionId": "n-time-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    {
+      "id": "missing-consent",
+      "expectedFirstViolation": "LEAD_CONSENT_MISSING",
+      "events": [
+        { "eventId": "n-consent-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-consent-session", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-consent-cta", "sequenceId": 2, "occurredAtMs": 10, "type": "CTA", "sessionId": "n-consent-session", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-consent-lead", "sequenceId": 3, "occurredAtMs": 20, "type": "LEAD", "sessionId": "n-consent-session", "variantId": "APP_DEMO", "offerId": "app-demo-offer-private-session", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    {
+      "id": "session-attribution-drift",
+      "expectedFirstViolation": "SESSION_ATTRIBUTION_DRIFT",
+      "events": [
+        { "eventId": "n-drift-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-drift-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-drift-cta", "sequenceId": 2, "occurredAtMs": 10, "type": "CTA", "sessionId": "n-drift-session", "variantId": "APP_DEMO", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-app-demo", "segmentId": "app-demo-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    {
+      "id": "sale-without-lead",
+      "expectedFirstViolation": "FUNNEL_STAGE_SKIPPED",
+      "events": [
+        { "eventId": "n-skip-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-skip-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-skip-cta", "sequenceId": 2, "occurredAtMs": 10, "type": "CTA", "sessionId": "n-skip-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-skip-sale", "sequenceId": 3, "occurredAtMs": 20, "type": "SALE", "sessionId": "n-skip-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "GRANTED", "amountTestCents": 4900 }
+      ]
+    },
+    {
+      "id": "stale-window",
+      "expectedFirstViolation": "ATTRIBUTION_WINDOW_EXPIRED",
+      "events": [
+        { "eventId": "n-stale-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-stale-session", "variantId": "BIRDIEWORLD_HOTEL", "offerId": "birdieworld-hotel-offer-private-concept-session", "campaignId": "campaign-birdieworld-hotel", "segmentId": "birdieworld-hotel-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 },
+        { "eventId": "n-stale-cta", "sequenceId": 2, "occurredAtMs": 120001, "type": "CTA", "sessionId": "n-stale-session", "variantId": "BIRDIEWORLD_HOTEL", "offerId": "birdieworld-hotel-offer-private-concept-session", "campaignId": "campaign-birdieworld-hotel", "segmentId": "birdieworld-hotel-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    },
+    {
+      "id": "pii-field",
+      "expectedFirstViolation": "EVENT_FIELD_NOT_ALLOWED",
+      "events": [
+        { "eventId": "n-pii-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-pii-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "LOCKED", "consentState": "NOT_APPLICABLE", "amountTestCents": 0, "email": "DENIED_FIXTURE_FIELD" }
+      ]
+    },
+    {
+      "id": "external-event",
+      "expectedFirstViolation": "EVENT_EXTERNAL_OR_NON_SYNTHETIC",
+      "events": [
+        { "eventId": "n-external-view", "sequenceId": 1, "occurredAtMs": 0, "type": "VIEW", "sessionId": "n-external-session", "variantId": "PRODUCT", "offerId": "product-offer-supervised-preview", "campaignId": "campaign-product", "segmentId": "product-cta", "synthetic": true, "externalAction": "SENT", "consentState": "NOT_APPLICABLE", "amountTestCents": 0 }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,161 @@
+{
+  "schemaVersion": 4,
+  "evidenceId": "private-sale-founder-private-20260831-001-ledger",
+  "recordScope": "HISTORICAL_RUN_REVIEW_ONLY",
+  "runId": "founder-private-20260831-001",
+  "scope": "ONE_SUPERVISED_PRIVATE_LOCAL_CTA_RUN",
+  "founderAuthorization": "GO_CONSUMED",
+  "runCounter": "1/1",
+  "reviewStatus": "STOP",
+  "relatedAuthorizationReceipt": {
+    "relativePath": "ops/evidence/birdie-stream-cta-only-authorization-20260831.json",
+    "scope": "CTA_ONLY_LOCAL_BROWSER_E2E",
+    "includedInThisHistoricalLedger": false
+  },
+  "variant": "PRODUCT",
+  "buildId": "9fff8c26e8ae-stream-dirty",
+  "externalActions": "LOCKED",
+  "artifacts": [
+    {
+      "id": "private-run-json",
+      "relativePath": "ops/evidence/birdie-stream-private-cta-e2e-20260831.json",
+      "bytes": 4103,
+      "sha256": "d2fd27aab90038c3bd012f19826a5d67376078d78624013c46eaa8bad7ec1254"
+    },
+    {
+      "id": "stream-cta-start",
+      "relativePath": "ops/evidence/birdie-stream-private-cta-e2e-20260831-start-1280x720.png",
+      "bytes": 85999,
+      "sha256": "e8ed16dec04f65c71a0eb1adb70f6dfbba801db0fa365f0b45cca0281e5ca97c"
+    },
+    {
+      "id": "cta-reached",
+      "relativePath": "ops/evidence/birdie-stream-private-cta-e2e-20260831-cta-1280x720.png",
+      "bytes": 49059,
+      "sha256": "4a7bb39be0ae65d26e8c20d7065e4c84555185f4f11b69a3d9a63e24c0f516c6"
+    },
+    {
+      "id": "private-run-complete",
+      "relativePath": "ops/evidence/birdie-stream-private-cta-e2e-20260831-complete-1280x720.png",
+      "bytes": 50483,
+      "sha256": "bf7e0a7aa0a0172dcb4bffdc2725b08ecfa7d62adbfebd71533fb9ff905a25c3"
+    }
+  ],
+  "timeline": [
+    { "type": "VIEW", "sequenceId": 1, "occurredAtMs": 1, "status": "PASS" },
+    { "type": "CTA", "sequenceId": 2, "occurredAtMs": 3, "status": "PASS" },
+    { "type": "LEAD", "sequenceId": 3, "occurredAtMs": 123056, "status": "PASS" },
+    { "type": "SALE", "sequenceId": 4, "occurredAtMs": 131056, "status": "PASS" }
+  ],
+  "checks": {
+    "browserWitnessedDomCtaClick": "ATTESTED_NO_INPUT_TRACE",
+    "sameOriginNavigation": "ATTESTED_NO_HAR",
+    "consentBeforeSyntheticLead": "PASS",
+    "exactFunnelOrder": "PASS",
+    "syntheticTestValueOnly": "PASS",
+    "applicationEnforcedNavigationProvenanceAtExecution": "STOP",
+    "oneShotReplayProtectionAtExecution": "STOP",
+    "executedBuildBinding": "STOP",
+    "postRunContractFixUnitTests": "ATTESTED_PASS_INCOMPLETE_BUILD_BINDING",
+    "postRunContractFixBrowserE2E": "NOT_EXECUTED_SEE_SEPARATE_AUTHORIZATION_RECEIPT",
+    "externalActionCount": 0,
+    "realMoneyMoved": "NOT_APPLICABLE",
+    "browserWarningsOrErrors": 0,
+    "viewport": "1280x720",
+    "layoutOverflow": false,
+    "pageObservedExternalResources": 0,
+    "networkHar": "UNKNOWN"
+  },
+  "postRunTestEvidence": {
+    "classification": "HISTORICAL_ATTESTED_SUMMARY_ONLY",
+    "command": "node --test apps/desktop/test/stream-sale-system.test.mjs apps/desktop/test/stream-mode.test.mjs apps/desktop/test/stream-launch-console.test.mjs apps/desktop/test/stream-rehearsal-evidence.test.mjs apps/desktop/test/stream-ops.test.mjs",
+    "tests": 100,
+    "passed": 100,
+    "failed": 0,
+    "exitCode": 0,
+    "capturedAtUtc": null,
+    "capturedAtReason": "NOT_RECORDED_AT_TEST_TIME",
+    "gitHeadAtTestTime": "NOT_CAPTURED",
+    "worktreeAtTestTime": "DIRTY_REPORTED",
+    "sourceFileDigests": "NOT_CAPTURED",
+    "testFileDigests": "NOT_CAPTURED",
+    "buildBinding": "INCOMPLETE",
+    "acceptanceEffect": "CANNOT_SATISFY_CURRENT_BUILD_BROWSER_OBS_OR_LIVE_GATE",
+    "browserE2E": "NOT_EXECUTED"
+  },
+  "gateProvenance": {
+    "executedBuild": "UNBOUND",
+    "postRunContract": {
+      "showManifestSha256": "0b6d269455e793aeeab479235c7925e9891ae4d238e6532e24d4eca3d66baa64",
+      "attributionManifestSha256": "c0f507e2f659b9bf2153067601f862b09082d5e7fac3f2480213b37695978129",
+      "comparisonFingerprintSha256": "f9f2871040cad633320cd08a00d7fc2824638186dafe8b421615892fc9461662"
+    },
+    "postRunE2E": "NOT_EXECUTED_SEE_SEPARATE_AUTHORIZATION_RECEIPT"
+  },
+  "sameRunFixes": [
+    {
+      "id": "PRIVATE_ROUTE_VISIBILITY_INHERITANCE",
+      "observed": "DOM loaded but inherited headless visibility:hidden",
+      "fix": "private-sale mode explicitly sets visibility:visible",
+      "leadOrSaleEventsBeforeFix": 0,
+      "status": "PASS_AFTER_HMR"
+    },
+    {
+      "id": "PRIVATE_ROUTE_POINTER_EVENTS_INHERITANCE",
+      "observed": "consent remained unchecked because #app inherited pointer-events:none",
+      "fix": "private-sale mode explicitly enables pointer events on the app root",
+      "leadOrSaleEventsBeforeFix": 0,
+      "status": "PASS_AFTER_HMR"
+    }
+  ],
+  "postRunAuditFixes": [
+    "SHORT_LIVED_RANDOM_CTA_HANDOFF",
+    "CONSUME_AND_DELETE_HANDOFF",
+    "PERSISTENT_COMPLETION_LOCK",
+    "CURRENT_RUN_CONSUMED_WITH_HOLD",
+    "GATE_PROVENANCE_DIGEST_BINDING",
+    "PRIVATE_QR_SUPPRESSION",
+    "QR_HASH_AND_DECODED_PAYLOAD_MATCH",
+    "STOP_EVIDENCE_REDACTION"
+  ],
+  "decisions": {
+    "legacyRunnerOutput": "PASS",
+    "privateLocalCtaEndToEnd": "STOP",
+    "realLead": "NOT_APPLICABLE",
+    "realSale": "NOT_APPLICABLE",
+    "publicAudio": "UNKNOWN",
+    "publicObsVideo": "UNKNOWN",
+    "publicPrivacyTake": "UNKNOWN",
+    "publicCtaDestination": "STOP",
+    "publicStream": "STOP",
+    "publication": "LOCKED",
+    "newPrivateRun": "OUT_OF_SCOPE_SEE_SEPARATE_AUTHORIZATION_RECEIPT"
+  },
+  "spend": {
+    "decision": "NO_SPEND",
+    "provider": "LOCAL_WORKSPACE",
+    "grossEur": 0,
+    "purpose": "local private CTA E2E",
+    "contract": "NONE",
+    "subscription": "NONE",
+    "autopay": false,
+    "streamCreativeCapRemainingEur": 75
+  },
+  "rollback": {
+    "observedAtRunEnd": {
+      "browserTabClosed": true,
+      "viteStopped": true,
+      "port1421Free": true
+    },
+    "finalLocalProbe": {
+      "observedAtUtc": "2026-08-30T23:01:32Z",
+      "port1421Listeners": 0,
+      "taskAppProcessCount": 0,
+      "method": "Get-NetTCPConnection plus Win32_Process allowlist",
+      "status": "PASS"
+    },
+    "externalStateCreated": false,
+    "purchaseCreated": false,
+    "publicTransmissionStarted": false
+  }
+}

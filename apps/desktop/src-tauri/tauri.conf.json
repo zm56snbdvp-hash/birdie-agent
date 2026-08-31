@@ -5,7 +5,7 @@
   "identifier": "com.birdieandbreakfast.birdie.desktop",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build:bundle",
     "devUrl": "http://127.0.0.1:1420",
     "frontendDist": "../dist"
   },
@@ -34,6 +34,8 @@
     "resources": {
       "../../../services/core": "services/core",
       "../../../packages/protocol": "packages/protocol",
+      "../../../build/runtime/node.exe": "build/runtime/node.exe",
+      "../../../build/runtime/LICENSE.node.txt": "build/runtime/LICENSE.node.txt",
       "../../../build/voice/Release/birdie-voice-host.exe": "build/voice/Release/birdie-voice-host.exe",
       "../../../models/whisper/ggml-base.bin": "models/whisper/ggml-base.bin"
     }

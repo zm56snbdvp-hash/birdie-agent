@@ -7,6 +7,10 @@ on:
       - 'apps/desktop/**'
       - 'packages/protocol/**'
       - 'services/core/**'
+      - 'services/voice/**'
+      - 'scripts/prepare-birdie-desktop-bundle.ps1'
+      - 'scripts/test-birdie-desktop-bundle-runtime.ps1'
+      - 'scripts/setup-birdie-whisper-cpp.ps1'
       - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
       - 'scripts/run-birdie-desktop-embedded.ps1'
       - 'tests/desktop-alpha/**'
@@ -16,6 +20,10 @@ on:
       - 'apps/desktop/**'
       - 'packages/protocol/**'
       - 'services/core/**'
+      - 'services/voice/**'
+      - 'scripts/prepare-birdie-desktop-bundle.ps1'
+      - 'scripts/test-birdie-desktop-bundle-runtime.ps1'
+      - 'scripts/setup-birdie-whisper-cpp.ps1'
       - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
       - 'scripts/run-birdie-desktop-embedded.ps1'
       - 'tests/desktop-alpha/**'
@@ -49,7 +57,7 @@ jobs:
 
   windows-desktop-build:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     env:
       BIRDIE_DESKTOP_BUILD_ID: ci-${{ github.sha }}
     steps:
@@ -65,7 +73,9 @@ jobs:
           $errors = $null
           foreach ($script in @(
             'scripts/repair-and-run-birdie-desktop-alpha.ps1',
-            'scripts/run-birdie-desktop-embedded.ps1'
+            'scripts/run-birdie-desktop-embedded.ps1',
+            'scripts/prepare-birdie-desktop-bundle.ps1',
+            'scripts/test-birdie-desktop-bundle-runtime.ps1'
           )) {
             $tokens = $null
             $errors = $null
@@ -87,7 +97,7 @@ jobs:
             throw 'Managed Tauri config must set beforeDevCommand to null.'
           }
       - name: Install desktop dependencies
-        run: npm install --prefix apps/desktop --include=optional --no-audit --no-fund
+        run: npm ci --prefix apps/desktop --include=optional --no-audit --no-fund
       - name: Test Desktop RuntimeBridge
         run: npm test --prefix apps/desktop
       - name: Build Presence frontend
@@ -100,6 +110,9 @@ jobs:
           if (-not $match) {
             throw 'Built frontend does not contain BIRDIE_DESKTOP_BUILD_ID.'
           }
+      - name: Build and test clean-checkout bundle resources before Cargo
+        shell: pwsh
+        run: .\scripts\prepare-birdie-desktop-bundle.ps1 -RunVoiceTests | Out-Host
       - name: Test Tauri host library
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib
       - name: Build Tauri desktop executable
@@ -266,3 +279,32 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             throw 'The Tauri build mutated source files and can cause an infinite dev rebuild loop.'
           }
+      - name: Build clean-checkout NSIS installer
+        run: npm --prefix apps/desktop run tauri -- build
+      - name: Verify installer payload build
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'build/runtime/node.exe' -PathType Leaf)) {
+            throw 'Packaged Node runtime was not staged.'
+          }
+          if (-not (Test-Path 'build/runtime/LICENSE.node.txt' -PathType Leaf)) {
+            throw 'Packaged Node license was not staged.'
+          }
+          if (-not (Test-Path 'build/voice/Release/birdie-voice-host.exe' -PathType Leaf)) {
+            throw 'Packaged Voice host was not built.'
+          }
+          if (-not (Test-Path 'models/whisper/ggml-base.bin' -PathType Leaf)) {
+            throw 'Verified Whisper model was not provisioned.'
+          }
+          $installer = Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File
+          if (@($installer).Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $(@($installer).Count)."
+          }
+      - name: Smoke installed bundle without system Node or microphone hardware
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File)
+          if ($installer.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installer.Count)."
+          }
+          .\scripts\test-birdie-desktop-bundle-runtime.ps1 -InstallerPath $installer[0].FullName | Format-List | Out-Host

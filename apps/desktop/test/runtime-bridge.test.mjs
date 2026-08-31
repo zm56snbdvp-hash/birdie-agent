@@ -252,6 +252,111 @@ test('reconnect accepts lower Core revision in a newer bridge revision', async (
   state.bridge.dispose();
 });
 
+test('dispose during listener registration prevents late listeners and polling from reviving', async () => {
+  let resolveListener;
+  let listenerCalls = 0;
+  let unlistenCalls = 0;
+  let intervalCalls = 0;
+  const bridge = new RuntimeBridge(
+    {},
+    {
+      invokeFn: async () => snapshot({ bridgeRevision: 1 }),
+      listenFn: async () => {
+        listenerCalls += 1;
+        return new Promise((resolve) => {
+          resolveListener = () => resolve(() => { unlistenCalls += 1; });
+        });
+      },
+      setIntervalFn: () => {
+        intervalCalls += 1;
+        return 1;
+      },
+      clearIntervalFn: () => {},
+      persistDiagnostics: false,
+    },
+  );
+
+  const connecting = bridge.connect();
+  while (!resolveListener) await new Promise((resolve) => setTimeout(resolve, 0));
+  bridge.dispose();
+  resolveListener();
+  await connecting;
+
+  assert.equal(listenerCalls, 1);
+  assert.equal(unlistenCalls, 1);
+  assert.equal(intervalCalls, 0);
+});
+
+test('dispose suppresses a stale listener-registration rejection', async () => {
+  let rejectListener;
+  let intervalCalls = 0;
+  const errors = [];
+  const bridge = new RuntimeBridge(
+    { onError: (entry) => errors.push(entry) },
+    {
+      invokeFn: async () => snapshot({ bridgeRevision: 1 }),
+      listenFn: async () => new Promise((resolve, reject) => {
+        rejectListener = reject;
+      }),
+      setIntervalFn: () => {
+        intervalCalls += 1;
+        return 1;
+      },
+      clearIntervalFn: () => {},
+      persistDiagnostics: false,
+    },
+  );
+
+  const connecting = bridge.connect();
+  while (!rejectListener) await new Promise((resolve) => setTimeout(resolve, 0));
+  bridge.dispose();
+  rejectListener(new Error('late registration failure'));
+  await assert.doesNotReject(connecting);
+
+  assert.equal(errors.length, 0);
+  assert.equal(intervalCalls, 0);
+});
+
+test('CONNECTED holds CONNECTING while the authoritative snapshot is pending', async () => {
+  const ready = snapshot({ bridgeRevision: 1, presenceRevision: 4 });
+  let resolveReconnectSnapshot;
+  const pendingReconnectSnapshot = new Promise((resolve) => {
+    resolveReconnectSnapshot = resolve;
+  });
+  const state = harness([ready, ready, pendingReconnectSnapshot]);
+  await state.bridge.connect();
+
+  state.handlers.get(TAURI_EVENTS.DISCONNECTED)({
+    payload: {
+      reason: 'RUNTIME.IPC.DISCONNECTED',
+      bridgeRevision: 2,
+    },
+  });
+  assert.equal(state.statuses.at(-1).status, 'OFFLINE');
+
+  const reconnect = state.handlers.get(TAURI_EVENTS.CONNECTED)({
+    payload: { bridgeRevision: 3 },
+  });
+  assert.equal(state.statuses.at(-1).status, 'CONNECTING');
+  await Promise.resolve();
+  assert.equal(state.statuses.at(-1).status, 'CONNECTING');
+  assert.equal(state.snapshots.at(-1).bridgeRevision, 1);
+  assert.equal(
+    state.invokeCalls.filter(({ command }) => command === 'runtime_get_snapshot').length,
+    3,
+  );
+
+  resolveReconnectSnapshot(snapshot({ bridgeRevision: 3, presenceRevision: 1 }));
+  await reconnect;
+
+  assert.deepEqual(
+    state.statuses.slice(-3).map(({ status }) => status),
+    ['OFFLINE', 'CONNECTING', 'READY'],
+  );
+  assert.equal(state.snapshots.at(-1).bridgeRevision, 3);
+  state.bridge.dispose();
+});
+
 test('listener rejection propagates the concrete Tauri exception', async () => {
   const ready = snapshot({ bridgeRevision: 1 });
   const diagnostics = [];

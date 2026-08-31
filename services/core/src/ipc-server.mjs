@@ -463,6 +463,17 @@ export class BirdieIpcServer extends EventEmitter {
       return;
     }
 
+    if (
+      (role === IpcRole.DESKTOP && component !== 'birdie-desktop') ||
+      (role === IpcRole.VOICE && component !== 'birdie-voice')
+    ) {
+      return this.#sendError(
+        socket,
+        message.requestId ?? null,
+        'CONTRACT.ROLE_COMPONENT_MISMATCH',
+      );
+    }
+
     const connectionId = `core-${this.serverInstanceId}-${++this.connectionSequence}`;
     const client = {
       role,
@@ -486,17 +497,6 @@ export class BirdieIpcServer extends EventEmitter {
       if (previousVoice && previousVoice !== socket && !previousVoice.destroyed) {
         previousVoice.end();
       }
-    }
-
-    if (
-      (role === IpcRole.DESKTOP && component !== 'birdie-desktop') ||
-      (role === IpcRole.VOICE && component !== 'birdie-voice')
-    ) {
-      return this.#sendError(
-        socket,
-        message.requestId ?? null,
-        'CONTRACT.ROLE_COMPONENT_MISMATCH',
-      );
     }
 
     this.#send(socket, {

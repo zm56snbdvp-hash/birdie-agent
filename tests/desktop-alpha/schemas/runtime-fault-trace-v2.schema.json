@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:birdie:schema:desktop-runtime-fault-trace:2.0",
+  "title": "Birdie Desktop Runtime Fault Regression Trace",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "name",
+    "system",
+    "fault_class",
+    "initial_state",
+    "seed",
+    "minimal_trace",
+    "expected_first_violation",
+    "minimization",
+    "canonical_hash"
+  ],
+  "properties": {
+    "schema_version": { "const": "2.0" },
+    "name": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "system": { "const": "desktop-runtime-bridge" },
+    "fault_class": {
+      "enum": ["duplicate", "out-of-order", "reconnect-race", "stale-snapshot"]
+    },
+    "initial_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshot"],
+      "properties": { "snapshot": { "$ref": "#/$defs/snapshot" } }
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed_id", "events"],
+      "properties": {
+        "seed_id": { "$ref": "#/$defs/stable_id" },
+        "events": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "oneOf": [
+            { "$ref": "#/$defs/snapshot_event" },
+            { "$ref": "#/$defs/connected_event" }
+          ] }
+        }
+      }
+    },
+    "minimal_trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_ids"],
+      "properties": {
+        "event_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/stable_id" }
+        }
+      }
+    },
+    "expected_first_violation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "invariant_id",
+        "event_id",
+        "sequence_id",
+        "trace_index",
+        "event_kind",
+        "expected_transitions",
+        "fault_model_transitions"
+      ],
+      "properties": {
+        "invariant_id": { "type": "string", "pattern": "^[A-Z][A-Z0-9_.]+$" },
+        "event_id": { "$ref": "#/$defs/stable_id" },
+        "sequence_id": { "$ref": "#/$defs/positive_integer" },
+        "trace_index": { "$ref": "#/$defs/positive_integer" },
+        "event_kind": { "enum": ["snapshot", "connected"] },
+        "expected_transitions": { "$ref": "#/$defs/transitions" },
+        "fault_model_transitions": { "$ref": "#/$defs/transitions" }
+      }
+    },
+    "minimization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_scenario",
+        "original_event_count",
+        "minimal_event_count",
+        "source_event_indices"
+      ],
+      "properties": {
+        "source_scenario": { "type": "string", "minLength": 1 },
+        "original_event_count": { "$ref": "#/$defs/positive_integer" },
+        "minimal_event_count": { "$ref": "#/$defs/positive_integer" },
+        "source_event_indices": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/positive_integer" }
+        }
+      }
+    },
+    "canonical_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "positive_integer": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9007199254740991
+    },
+    "stable_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$"
+    },
+    "transitions": {
+      "type": "array",
+      "items": { "enum": ["CONNECTING", "READY", "OFFLINE", "ERROR"] }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bridgeRevision",
+        "lifecycle",
+        "presence",
+        "microphoneState",
+        "brainState"
+      ],
+      "properties": {
+        "bridgeRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "lifecycle": { "enum": ["STARTING", "READY", "DEGRADED"] },
+        "presence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["revision", "state", "reason"],
+          "properties": {
+            "revision": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "state": {
+              "enum": [
+                "OFFLINE",
+                "IDLE",
+                "SPEECH_DETECTED",
+                "LISTENING",
+                "THINKING",
+                "SPEAKING",
+                "ERROR"
+              ]
+            },
+            "reason": { "type": "string" }
+          }
+        },
+        "microphoneState": {
+          "enum": ["UNKNOWN", "ENABLED", "DISABLED", "UNAVAILABLE"]
+        },
+        "brainState": { "enum": ["UNKNOWN", "READY", "DISABLED", "ERROR"] }
+      }
+    },
+    "snapshot_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "sequence_id", "kind", "payload"],
+      "properties": {
+        "event_id": { "$ref": "#/$defs/stable_id" },
+        "sequence_id": { "$ref": "#/$defs/positive_integer" },
+        "kind": { "const": "snapshot" },
+        "payload": { "$ref": "#/$defs/snapshot" }
+      }
+    },
+    "connected_event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "sequence_id", "kind", "snapshot_response"],
+      "properties": {
+        "event_id": { "$ref": "#/$defs/stable_id" },
+        "sequence_id": { "$ref": "#/$defs/positive_integer" },
+        "kind": { "const": "connected" },
+        "snapshot_response": { "$ref": "#/$defs/snapshot" }
+      }
+    }
+  }
+}

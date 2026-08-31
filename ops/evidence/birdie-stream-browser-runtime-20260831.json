@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "birdie-stream-browser-runtime-20260831",
+  "scope": "LOCAL_BROWSER_RUNTIME_ONLY",
+  "evidenceTimeScope": "HISTORICAL_CAPTURE_NOT_CURRENT_BUILD_STATUS",
+  "build": {
+    "id": "9fff8c26e8ae-stream-dirty",
+    "streamEvidenceSha256": "0eb2a76b81bdb193f26e722399e17f19537fb77244987f0bfcdb47f28770e058",
+    "streamModeTestSha256": "ce740d4b9a25193a847f93df7a97142e898daa8710639f94bb3a2c150ca23057",
+    "sourceDigestScope": "CAPTURED_AT_RUN_NOT_CURRENT",
+    "currentSourceMatch": false,
+    "currentStreamEvidenceSha256AtAudit": "60579c4086705ae50d2c490e0969ed1482090f091fea0446634c321d0779b808",
+    "currentStreamModeTestSha256AtAudit": "1ac050d808d1d0e731b30f3559b4998087239fabe343820beeeac93adb0ab77b"
+  },
+  "runs": [
+    {
+      "id": "high-loop-20260831T002712Z",
+      "profile": "HIGH_WEBGL",
+      "timeline": "LOOP_72S",
+      "startedAtUtc": "2026-08-31T00:27:12.972Z",
+      "observedAtUtc": "2026-08-31T00:28:43.039Z",
+      "durationMs": 89694,
+      "firstFrameMs": 888.5,
+      "configReadyMs": 244.6,
+      "errors": 0,
+      "loopCount": 1,
+      "stateCoverage": "PASS",
+      "transitionOrder": "PASS",
+      "maxFrameGapMs": 369.9,
+      "p95FrameMs": 50.1,
+      "longFrameRate": 0.026758409785932722,
+      "activeFpsP10": {
+        "SPEECH_DETECTED": 23.8,
+        "LISTENING": 26.5,
+        "THINKING": 29.7,
+        "SPEAKING": 27.5,
+        "WORKING": 29.4,
+        "SUCCESS": 27.7
+      },
+      "performanceGate": "STOP_BELOW_28_FPS",
+      "demoVerdict": "STOP"
+    },
+    {
+      "id": "low-clip-60-pre-auditor-fix-20260831T002913Z",
+      "profile": "LOW_WEBGL",
+      "timeline": "CLIP_60",
+      "startedAtUtc": "2026-08-31T00:29:13.318Z",
+      "observedAtUtc": "2026-08-31T00:30:26.377Z",
+      "durationMs": 72133,
+      "errors": 0,
+      "loopCount": 1,
+      "activeFpsLowerBound": 28.4,
+      "performanceGate": "PASS_AT_24_FPS_THRESHOLD",
+      "transitionOrder": "STOP_FALSE_POSITIVE_COLLAPSED_IDLE_BOUNDARY",
+      "supersededByFix": true
+    },
+    {
+      "id": "low-clip-30-post-auditor-fix-20260831T003337Z",
+      "profile": "LOW_WEBGL",
+      "timeline": "CLIP_30",
+      "startedAtUtc": "2026-08-31T00:33:37.986Z",
+      "observedAtUtc": "2026-08-31T00:34:15.695Z",
+      "durationMs": 37524,
+      "firstFrameMs": 371.7,
+      "configReadyMs": 287.2,
+      "errors": 0,
+      "loopCount": 1,
+      "stateCoverage": "PASS",
+      "transitionOrder": "PASS",
+      "idleFpsP10": 29.7,
+      "activeFpsP10LowerBound": 29.7,
+      "maxFrameGapMs": 89.9,
+      "p95FrameMs": 40.1,
+      "longFrameRate": 0.0008968609865470852,
+      "demoVerdict": "PASS",
+      "soakVerdict": "UNPROVEN",
+      "conversionVerdict": "UNPROVEN"
+    }
+  ],
+  "fixedDefects": [
+    {
+      "id": "CLIP_COLLAPSED_IDLE_BOUNDARY_FALSE_TRANSITION",
+      "rootCause": "The final and first clip states are both IDLE, while transition logging intentionally emits no duplicate state at the loop boundary.",
+      "regression": "CLIP_60 partial second loop and eight-loop volume"
+    },
+    {
+      "id": "CLIP_30_GLOBAL_ACTIVE_STATE_FALSE_REQUIREMENT",
+      "rootCause": "The FPS audit required WORKING although CLIP_30 intentionally omits that state.",
+      "regression": "Active FPS requirements derive from the selected timeline."
+    }
+  ],
+  "classification": {
+    "highModeCapturedRun": "HISTORICAL_NO_GO",
+    "lowModeCapturedRun": "HISTORICAL_LOCAL_DEMO_PASS_NOT_CURRENT_BUILD",
+    "staticFallback": "AVAILABLE_BUT_VISUAL_PERFORMANCE_UNPROVEN",
+    "tenMinuteSoak": "UNPROVEN",
+    "strictBaselineRegression": "UNKNOWN_INCOMPATIBLE_FINGERPRINT",
+    "obsCef": "UNPROVEN",
+    "publicStream": "STOP"
+  },
+  "verdict": "HISTORICAL_LOW_END_LOCAL_DEMO_PASS_NOT_CURRENT_BUILD_HIGH_AND_PUBLIC_STOP"
+}

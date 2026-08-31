@@ -1,0 +1,487 @@
+{
+  "schemaVersion": 1,
+  "id": "birdie-stream-show-15min-v1",
+  "scope": "LOCAL_SYNTHETIC_REHEARSAL",
+  "durationMs": 900000,
+  "segments": [
+    {
+      "id": "hook",
+      "role": "HOOK",
+      "label": "Versprechen und ehrliche Demo-Grenze",
+      "startMs": 0,
+      "endMs": 60000,
+      "objective": "Birdies Nutzen in einem Satz zeigen und zugleich festhalten, dass dieser Take nur eine lokale, stille und synthetische UI-Rehearsal ist.",
+      "operatorCue": "Sag: \"Sag es. Birdie macht es sichtbar. Heute zeigen wir ausschließlich einen lokalen synthetischen UI-Ablauf: kein Live-Mikrofon, keine echte PC-Aktion und keine öffentliche Übertragung.\"",
+      "fallbackId": "m006"
+    },
+    {
+      "id": "segment-1",
+      "role": "SEGMENT_1",
+      "label": "Von Absicht zu verständlichem Zustand",
+      "startMs": 60000,
+      "endMs": 240000,
+      "objective": "Den lokalen Demo-Loop und seine sichtbaren Voice- und Arbeitszustände erklären, ohne reale Spracheingabe oder Automationswirkung zu behaupten.",
+      "operatorCue": "Erkläre die feste Folge IDLE, SPEECH_DETECTED, LISTENING, THINKING, WORKING, SPEAKING und SUCCESS. Wiederhole: Die Voice-Reaktion ist eine synthetische visuelle Fixture; Mikrofon und STT werden nicht getestet.",
+      "fallbackId": "m012"
+    },
+    {
+      "id": "segment-2",
+      "role": "SEGMENT_2",
+      "label": "Sichtbarer Arbeitsfluss statt Black Box",
+      "startMs": 240000,
+      "endMs": 480000,
+      "objective": "Zeigen, wie ein Auftrag im Interface nachvollziehbar bleibt, und Erfolg ausschließlich als synthetischen UI-Endzustand einordnen.",
+      "operatorCue": "Sag: \"Birdie soll nicht unsichtbar handeln. Jeder Schritt bekommt einen lesbaren Zustand. Der heutige SUCCESS ist ein deterministischer Demo-Endzustand und kein Nachweis einer ausgeführten PC-Aktion.\"",
+      "fallbackId": "m019"
+    },
+    {
+      "id": "segment-3",
+      "role": "SEGMENT_3",
+      "label": "Evidence, SAFE und beaufsichtigter Rückweg",
+      "startMs": 480000,
+      "endMs": 720000,
+      "objective": "Die lokalen Evidenzgrenzen benennen und einen geplanten SAFE-Wechsel über die OBS-Oberfläche mit sichtbarer Rückkehr proben.",
+      "operatorCue": "Nenne den bekannten FPS-, Audio- und Hotkey-Stand. Wechsle bei 10:00 über die sichtbare OBS-Szenenliste zu 99_SAFE, nicht über den unzuverlässigen globalen F12-Pfad; kehre erst nach Vorschau über die Szenenliste zu 01_STREAM zurück.",
+      "fallbackId": "m029"
+    },
+    {
+      "id": "cta",
+      "role": "CTA",
+      "label": "Founder-geblockter CTA",
+      "startMs": 720000,
+      "endMs": 840000,
+      "objective": "Die Birdieworld-Landingpage erklären, ohne den vorhandenen Draft-Link oder das noch nicht aus der finalen MKV gescannte QR-Raster als fertige Conversion-Strecke auszugeben.",
+      "operatorCue": "Sag: \"Ziel, QR-Asset, Hash und lokaler Payload-Decode sind vorbereitet, aber alles bleibt Draft. Bitte nicht scannen. Ein öffentlicher CTA braucht noch den Scan aus der finalen MKV, Founder-READY und eine belegbare Conversion-Strecke.\"",
+      "fallbackId": "m035"
+    },
+    {
+      "id": "close",
+      "role": "CLOSE",
+      "label": "Zusammenfassung ohne Live-Freigabe",
+      "startMs": 840000,
+      "endMs": 900000,
+      "objective": "Den lokalen Rehearsal-Nutzen zusammenfassen, die offenen Live-Gates nennen und bei exakt 900000 ms enden.",
+      "operatorCue": "Sag: \"Damit ist der lokale Ablauf geprobt. Live bleibt STOP, bis Performance, globale Notpfade, finaler Audio-Review und CTA/QR take-bezogen belegt sind.\" Halte 10_END bis zur exakten 15:00-Grenze.",
+      "fallbackId": "m039"
+    }
+  ],
+  "markers": [
+    {
+      "id": "m001",
+      "atMs": 0,
+      "kind": "SCENE",
+      "segmentId": "hook",
+      "fixture": "local-scene:00_START",
+      "expected": "00_START zeigt ausschließlich SAFE_SLATE; Streaming, Replay Buffer und Virtual Camera bleiben aus.",
+      "evidence": "sceneLog mit plannedAtMs=0, actualAtMs, deltaMs und activeScene=00_START"
+    },
+    {
+      "id": "m002",
+      "atMs": 3000,
+      "kind": "OPERATOR",
+      "segmentId": "hook",
+      "fixture": "copy:hook-open",
+      "expected": "Operator beginnt die kanonische Hook-Copy; die Stimme dient nur dem Timing und wird im stillen Capture nicht aufgezeichnet.",
+      "evidence": "markerLog mit cueAcknowledged=true und actualAtMs"
+    },
+    {
+      "id": "m003",
+      "atMs": 6000,
+      "kind": "AUDIO",
+      "segmentId": "hook",
+      "fixture": "audio:silent-48khz-stereo",
+      "expected": "Browser Audio, Desktop Audio und Operator-Mikrofon sind aus; kein sichtbarer aktiver Mixer-Kanal.",
+      "evidence": "audioCheck mit activeMixerSources=0; AAC-Inhaltsprüfung bleibt UNKNOWN, sofern keine separate Decode-/Listening-Prüfung vorliegt"
+    },
+    {
+      "id": "m004",
+      "atMs": 10000,
+      "kind": "SCENE",
+      "segmentId": "hook",
+      "fixture": "local-scene:01_STREAM",
+      "expected": "Harter Cut auf 01_STREAM ohne schwarzen Zwischenframe; DEMO LOOP und DRAFT CTA bleiben sichtbar.",
+      "evidence": "sceneLog und lokaler Frame-Screenshot; keine Aussage über OBS-CEF aus paralleler Browser-Evidence"
+    },
+    {
+      "id": "m005",
+      "atMs": 15000,
+      "kind": "CLIP",
+      "segmentId": "hook",
+      "fixture": "clip:short-01",
+      "expected": "Clip-Cue short-01 beginnt auf einem lesbaren Hook-Frame und endet bei 45000 ms.",
+      "evidence": "clipMarker mit clipId=short-01, inMs=15000 und outMs=45000"
+    },
+    {
+      "id": "m006",
+      "atMs": 55000,
+      "kind": "FALLBACK",
+      "segmentId": "hook",
+      "fixture": "fallback:OBS_UI_CLICK_TO_99_SAFE",
+      "expected": "Bei schwarzem Frame, ERROR oder Fremdinhalt über die OBS-Szenenliste zu 99_SAFE und Take stoppen; nicht auf globales F12 vertrauen.",
+      "evidence": "fallbackLog mit triggered, reasonId, method=OBS_UI_CLICK und resultingScene; nicht ausgelöst ist ein gültiges Ergebnis"
+    },
+    {
+      "id": "m007",
+      "atMs": 60000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-1",
+      "fixture": "copy:segment-1-open",
+      "expected": "Operator eröffnet Segment 1 und benennt die sieben Zustände als feste synthetische Folge.",
+      "evidence": "markerLog mit actualAtMs und cueAcknowledged=true"
+    },
+    {
+      "id": "m008",
+      "atMs": 72000,
+      "kind": "VOICE",
+      "segmentId": "segment-1",
+      "fixture": "voice:synthetic-ui-loop",
+      "expected": "SPEECH_DETECTED/LISTENING ist rein visuell erkennbar; SYNTHETIC VOICE und NO MIC TEST bleiben die zulässige Aussage.",
+      "evidence": "lokaler Screenshot oder redigierter stateMarker; micInput, STT und echte Voice bleiben NOT_TESTED"
+    },
+    {
+      "id": "m009",
+      "atMs": 95000,
+      "kind": "CLIP",
+      "segmentId": "segment-1",
+      "fixture": "clip:short-02",
+      "expected": "Clip-Cue short-02 beginnt auf der synthetischen Zustandsfolge und endet bei 140000 ms.",
+      "evidence": "clipMarker mit clipId=short-02, inMs=95000 und outMs=140000"
+    },
+    {
+      "id": "m010",
+      "atMs": 120000,
+      "kind": "AUDIO",
+      "segmentId": "segment-1",
+      "fixture": "audio:silent-midroll-check",
+      "expected": "Der stille Capture-Vertrag ist unverändert; kein Meter zeigt Signal und keine Quelle wurde hinzugefügt.",
+      "evidence": "audioCheck mit activeMixerSources=0 und contractChanged=false; decodierter Spurinhalt sonst UNKNOWN"
+    },
+    {
+      "id": "m011",
+      "atMs": 180000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-1",
+      "fixture": "copy:synthetic-boundary",
+      "expected": "Operator sagt ausdrücklich, dass der Loop weder Mikrofon noch STT noch eine reale PC-Aktion belegt.",
+      "evidence": "markerLog mit disclaimerDelivered=true und actualAtMs"
+    },
+    {
+      "id": "m012",
+      "atMs": 230000,
+      "kind": "FALLBACK",
+      "segmentId": "segment-1",
+      "fixture": "fallback:STATE_ORDER_OR_ERROR_STOP",
+      "expected": "Bei falscher State-Reihenfolge oder ERRORS>0 zu 99_SAFE per OBS UI und Take als STOP markieren.",
+      "evidence": "fallbackLog mit observedState, errors, triggered und reasonId"
+    },
+    {
+      "id": "m013",
+      "atMs": 240000,
+      "kind": "SCENE",
+      "segmentId": "segment-2",
+      "fixture": "local-scene:01_STREAM",
+      "expected": "01_STREAM bleibt aktiv und der synthetische Loop läuft ohne Reload weiter.",
+      "evidence": "sceneLog mit activeScene=01_STREAM und unexpectedReload=false"
+    },
+    {
+      "id": "m014",
+      "atMs": 250000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-2",
+      "fixture": "copy:visible-workflow",
+      "expected": "Operator erklärt den sichtbaren Arbeitsfluss und vermeidet jede Behauptung einer ausgeführten PC-Aktion.",
+      "evidence": "markerLog mit claimBoundaryAcknowledged=true"
+    },
+    {
+      "id": "m015",
+      "atMs": 275000,
+      "kind": "CLIP",
+      "segmentId": "segment-2",
+      "fixture": "clip:short-03",
+      "expected": "Clip-Cue short-03 beginnt beim Übergang THINKING/WORKING und endet bei 320000 ms.",
+      "evidence": "clipMarker mit clipId=short-03, inMs=275000 und outMs=320000"
+    },
+    {
+      "id": "m016",
+      "atMs": 330000,
+      "kind": "AUDIO",
+      "segmentId": "segment-2",
+      "fixture": "audio:silent-midroll-check",
+      "expected": "Kein Capture-Audio; ein vorhandener 48-kHz-AAC-Container darf nicht mit geprüftem stillem Inhalt gleichgesetzt werden.",
+      "evidence": "audioCheck mit activeMixerSources und decodedListeningReview; fehlender Review wird UNKNOWN"
+    },
+    {
+      "id": "m017",
+      "atMs": 360000,
+      "kind": "VOICE",
+      "segmentId": "segment-2",
+      "fixture": "voice:synthetic-success-cycle",
+      "expected": "SPEAKING/SUCCESS wird als synthetischer UI-Zustand gezeigt, ohne Stimme oder Automationswirkung zu behaupten.",
+      "evidence": "redigierte stateMarker für SPEAKING und SUCCESS; voiceAudioEvidence=NOT_TESTED"
+    },
+    {
+      "id": "m018",
+      "atMs": 420000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-2",
+      "fixture": "copy:performance-truth",
+      "expected": "Operator trennt die aktuellen Modi: High-WebGL p10 23.8 FPS statt mindestens 28 FPS (STOP); Low-End CLIP_30 mindestens 29.7 FPS statt mindestens 24 FPS (lokal PASS); aktueller Zehn-Minuten-Soak fehlt.",
+      "evidence": "markerLog plus Referenz ops/evidence/birdie-stream-browser-runtime-20260831.json"
+    },
+    {
+      "id": "m019",
+      "atMs": 470000,
+      "kind": "FALLBACK",
+      "segmentId": "segment-2",
+      "fixture": "fallback:FRAME_OR_PERFORMANCE_STOP",
+      "expected": "Bei schwarzem Frame, Gap über lokalem Gate oder neuem ERROR über OBS UI zu 99_SAFE; unbekannte Performance nie als PASS werten.",
+      "evidence": "fallbackLog und getrennte localBrowser/OBS/host-Messfelder; nicht verfügbare Werte bleiben UNKNOWN"
+    },
+    {
+      "id": "m020",
+      "atMs": 480000,
+      "kind": "SCENE",
+      "segmentId": "segment-3",
+      "fixture": "local-scene:09_BRB",
+      "expected": "Harter Cut auf die inert-stille 09_BRB-Slate für den Segmentwechsel.",
+      "evidence": "sceneLog mit activeScene=09_BRB und actualAtMs"
+    },
+    {
+      "id": "m021",
+      "atMs": 485000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-3",
+      "fixture": "copy:evidence-open",
+      "expected": "Operator kündigt Evidence und SAFE-Drill an; kein Live-GO wird behauptet.",
+      "evidence": "markerLog mit liveClaim=false"
+    },
+    {
+      "id": "m022",
+      "atMs": 490000,
+      "kind": "SCENE",
+      "segmentId": "segment-3",
+      "fixture": "local-scene:01_STREAM",
+      "expected": "Rückkehr zu 01_STREAM über einen harten Cut; Szene vor Programmschaltung sichtbar prüfen.",
+      "evidence": "sceneLog mit previewConfirmed=true und activeScene=01_STREAM"
+    },
+    {
+      "id": "m023",
+      "atMs": 510000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-3",
+      "fixture": "copy:known-unknowns",
+      "expected": "Operator benennt FPS-FAIL, globale Hotkey-FAILs und den noch ungehörten AAC-Inhalt als offene Live-Blocker.",
+      "evidence": "markerLog mit blockerIds=[FPS_P10_FAIL,GLOBAL_SAFE_HOTKEY_FAIL,GLOBAL_STOP_HOTKEY_FAIL,AUDIO_CONTENT_UNKNOWN]"
+    },
+    {
+      "id": "m024",
+      "atMs": 535000,
+      "kind": "CLIP",
+      "segmentId": "segment-3",
+      "fixture": "clip:short-04",
+      "expected": "Clip-Cue short-04 beginnt bei der Safety/Evidence-Erklärung und endet vor dem SAFE-Drill bei 580000 ms.",
+      "evidence": "clipMarker mit clipId=short-04, inMs=535000 und outMs=580000"
+    },
+    {
+      "id": "m025",
+      "atMs": 590000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-3",
+      "fixture": "cue:prepare-safe-drill",
+      "expected": "Operator kündigt den geplanten lokalen SAFE-Wechsel an und fokussiert die OBS-Szenenliste; F9 wird nicht benutzt.",
+      "evidence": "markerLog mit obsUiReady=true und reservedStopStreamingHotkeyUsed=false"
+    },
+    {
+      "id": "m026",
+      "atMs": 600000,
+      "kind": "FALLBACK",
+      "segmentId": "segment-3",
+      "fixture": "fallback:PLANNED_OBS_UI_CLICK_TO_99_SAFE",
+      "expected": "Geplanter Wechsel über die sichtbare OBS-Szenenliste zu 99_SAFE; der globale F12-Pfad wird nicht als verlässlich vorausgesetzt.",
+      "evidence": "sceneLog mit method=OBS_UI_CLICK, activeScene=99_SAFE, actualAtMs und deltaMs"
+    },
+    {
+      "id": "m027",
+      "atMs": 625000,
+      "kind": "OPERATOR",
+      "segmentId": "segment-3",
+      "fixture": "copy:safe-hold",
+      "expected": "99_SAFE bleibt sichtbar; Operator protokolliert den UI-Pfad als lokalen Drill, nicht als globalen Hotkey-Nachweis.",
+      "evidence": "markerLog mit safeHeld=true und globalHotkeyEvidence=NOT_TESTED"
+    },
+    {
+      "id": "m028",
+      "atMs": 650000,
+      "kind": "SCENE",
+      "segmentId": "segment-3",
+      "fixture": "local-scene:01_STREAM",
+      "expected": "Nach sauberer Vorschau Rückkehr per OBS UI zu 01_STREAM; bei Artefakt in 99_SAFE bleiben und Take stoppen.",
+      "evidence": "sceneLog mit previewConfirmed, activeScene und actualAtMs"
+    },
+    {
+      "id": "m029",
+      "atMs": 710000,
+      "kind": "FALLBACK",
+      "segmentId": "segment-3",
+      "fixture": "fallback:SAFE_DRILL_ABORT",
+      "expected": "Wenn 99_SAFE oder die Rückkehr nicht innerhalb von 2000 ms visuell bestätigt wurde, in 99_SAFE bleiben und lokal über die OBS-UI stoppen.",
+      "evidence": "fallbackLog mit safeSwitchLatencyMs, restoreLatencyMs, triggered und stopMethod=OBS_UI_CLICK"
+    },
+    {
+      "id": "m030",
+      "atMs": 720000,
+      "kind": "SCENE",
+      "segmentId": "cta",
+      "fixture": "local-scene:05_QR_VERIFY",
+      "expected": "05_QR_VERIFY ist aktiv; DRAFT CTA, das lokal gehashte QR-Raster und VERIFY ONLY bleiben vollständig sichtbar, ohne conversionReady oder Linkfreigabe.",
+      "evidence": "sceneLog plus lokaler Screenshot mit CTA-Status und VERIFY ONLY; keine Conversion-Behauptung"
+    },
+    {
+      "id": "m031",
+      "atMs": 725000,
+      "kind": "OPERATOR",
+      "segmentId": "cta",
+      "fixture": "copy:cta-draft-open",
+      "expected": "Operator beginnt mit der Warnung, dass Link und QR Draft sind und nicht gescannt werden sollen.",
+      "evidence": "markerLog mit noScanDisclaimerDelivered=true"
+    },
+    {
+      "id": "m032",
+      "atMs": 735000,
+      "kind": "CLIP",
+      "segmentId": "cta",
+      "fixture": "clip:short-05",
+      "expected": "Clip-Cue short-05 beginnt mit sichtbarem DRAFT-Hinweis und endet bei 780000 ms.",
+      "evidence": "clipMarker mit clipId=short-05, inMs=735000 und outMs=780000"
+    },
+    {
+      "id": "m033",
+      "atMs": 750000,
+      "kind": "CTA",
+      "segmentId": "cta",
+      "fixture": "cta:local-draft-verified-asset",
+      "expected": "ctaStatus=DRAFT, Ziel ist die kanonische Birdie-&-Breakfast-Landingpage, qrImage/qrSha256 sind lokal gebunden und qrScanVerified=false; Conversion bleibt STOP.",
+      "evidence": "lokaler Config-Snapshot mit redigierter Allowlist und gateResult=STOP; keine Navigation oder Scan-Aktion"
+    },
+    {
+      "id": "m034",
+      "atMs": 800000,
+      "kind": "OPERATOR",
+      "segmentId": "cta",
+      "fixture": "copy:cta-acceptance",
+      "expected": "Operator nennt den Scan aus finaler MKV, Founder-READY und eine belegbare Conversion-Strecke als noch fehlende Freigaben; Ziel, qrTarget, lokaler Raster-Hash und Browser-Payload sind bereits lokal belegt.",
+      "evidence": "markerLog mit conversionDeclaredReady=false und acceptanceExplained=true"
+    },
+    {
+      "id": "m035",
+      "atMs": 830000,
+      "kind": "FALLBACK",
+      "segmentId": "cta",
+      "fixture": "fallback:CTA_NO_SCAN_COPY",
+      "expected": "Solange irgendein CTA-/QR-Feld unready ist, nur die No-Scan-Copy verwenden; keine URL öffnen und keine Conversion behaupten.",
+      "evidence": "fallbackLog mit triggered=true, reasonId=CTA_QR_NOT_READY und externalActionCount=0"
+    },
+    {
+      "id": "m036",
+      "atMs": 840000,
+      "kind": "SCENE",
+      "segmentId": "close",
+      "fixture": "local-scene:10_END",
+      "expected": "Harter Cut auf 10_END; inert-stille SAFE_SLATE bleibt bis 900000 ms stehen.",
+      "evidence": "sceneLog mit activeScene=10_END und actualAtMs"
+    },
+    {
+      "id": "m037",
+      "atMs": 845000,
+      "kind": "OPERATOR",
+      "segmentId": "close",
+      "fixture": "copy:close-no-live-go",
+      "expected": "Operator liefert die Close-Copy und hält Live/Publish ausdrücklich auf STOP.",
+      "evidence": "markerLog mit liveDecision=STOP und actualAtMs"
+    },
+    {
+      "id": "m038",
+      "atMs": 870000,
+      "kind": "AUDIO",
+      "segmentId": "close",
+      "fixture": "audio:silent-final-check",
+      "expected": "Mixer bleibt ohne aktive Quelle; finaler Decode-/Listening-Review ist bis zu eigener Evidence UNKNOWN.",
+      "evidence": "audioCheck mit activeMixerSources=0 und decodedListeningReview=UNKNOWN oder take-bezogenem Ergebnis"
+    },
+    {
+      "id": "m039",
+      "atMs": 890000,
+      "kind": "FALLBACK",
+      "segmentId": "close",
+      "fixture": "fallback:END_ON_99_SAFE_IF_NEEDED",
+      "expected": "Bei jedem Endcard- oder Privacy-Fehler über die OBS-Szenenliste zu 99_SAFE und Take als STOP schließen.",
+      "evidence": "fallbackLog mit triggered, reasonId, resultingScene und externalActionCount=0"
+    },
+    {
+      "id": "m040",
+      "atMs": 899000,
+      "kind": "OPERATOR",
+      "segmentId": "close",
+      "fixture": "cue:exact-stop-at-900000",
+      "expected": "Ein-Sekunden-Cue; lokaler Timer beziehungsweise ausdrücklich autorisierte lokale Aufnahme endet bei exakt 900000 ms über die fokussierte UI, nicht über unbewiesenes globales F10.",
+      "evidence": "timingLog mit plannedStopMs=900000, actualStopMs, deltaMs und stopMethod; öffentliche Übertragung bleibt false"
+    }
+  ],
+  "clips": [
+    {
+      "id": "short-01",
+      "label": "Hook: sichtbar statt Black Box",
+      "startMs": 15000,
+      "endMs": 45000,
+      "hook": "Sag es. Birdie macht es sichtbar.",
+      "visualCue": "01_STREAM; Headline, DEMO LOOP und der erste synthetische Zustandswechsel bleiben lesbar.",
+      "audioCue": "SILENT_TRACK; Operator-Guide wird nicht aufgezeichnet, keine Mikrofon- oder Voice-Audio-Behauptung.",
+      "cta": "Nur Produktidee; kein Scan- oder Conversion-Aufruf.",
+      "fallback": "Bei schwarzem Frame, ERROR oder Fremdinhalt Clip verwerfen und per OBS UI zu 99_SAFE."
+    },
+    {
+      "id": "short-02",
+      "label": "Sieben verständliche Zustände",
+      "startMs": 95000,
+      "endMs": 140000,
+      "hook": "Was tut der Agent gerade? Birdie zeigt es.",
+      "visualCue": "Synthetische Folge von SPEECH_DETECTED/LISTENING über THINKING/WORKING bis SPEAKING/SUCCESS.",
+      "audioCue": "SILENT_TRACK; Captions müssen SYNTHETIC VOICE und NO MIC TEST enthalten.",
+      "cta": "Kein CTA; Fokus auf nachvollziehbare UI-Zustände.",
+      "fallback": "Bei falscher Reihenfolge oder ERRORS>0 Clip verwerfen und Take stoppen."
+    },
+    {
+      "id": "short-03",
+      "label": "Arbeitsfluss mit ehrlicher Grenze",
+      "startMs": 275000,
+      "endMs": 320000,
+      "hook": "Vom Wunsch zum sichtbaren Arbeitsstand.",
+      "visualCue": "THINKING und WORKING führen zum synthetischen SUCCESS; DEMO LOOP bleibt sichtbar.",
+      "audioCue": "SILENT_TRACK; keine synthetische oder reale Sprachspur zuschreiben.",
+      "cta": "Caption: UI-Rehearsal, kein Nachweis einer realen PC-Aktion.",
+      "fallback": "Bei unlesbarem Status oder neuem ERROR Clip verwerfen."
+    },
+    {
+      "id": "short-04",
+      "label": "Safety vor Show",
+      "startMs": 535000,
+      "endMs": 580000,
+      "hook": "Eine gute Demo zeigt auch, was noch nicht bewiesen ist.",
+      "visualCue": "01_STREAM mit ruhiger Evidence-Erklärung; Schnitt endet vor dem geplanten SAFE-Drill.",
+      "audioCue": "SILENT_TRACK; spätere Caption nennt FPS-FAIL, Hotkey-FAILs und Audio-UNKNOWN kompakt.",
+      "cta": "Kein Live-GO; nur beaufsichtigte lokale Rehearsal.",
+      "fallback": "Wenn eine Kennzahl fehlt, UNKNOWN zeigen; nie PASS ergänzen oder schätzen."
+    },
+    {
+      "id": "short-05",
+      "label": "CTA ohne falsches Versprechen",
+      "startMs": 735000,
+      "endMs": 780000,
+      "hook": "Early Access kommt erst nach einer belegten Conversion-Strecke.",
+      "visualCue": "05_QR_VERIFY zeigt DRAFT CTA, das lokal verifizierte QR-Raster und VERIFY ONLY; conversionReady bleibt false.",
+      "audioCue": "SILENT_TRACK; Caption sagt ausdrücklich NICHT SCANNEN.",
+      "cta": "Founder-READY, Scan aus finaler MKV und belegbare Sale-/Lead-Attribution fehlen; Ziel, Asset, Hash und lokaler Payload sind vorhanden.",
+      "fallback": "No-Scan-Copy verwenden; keine URL öffnen, keinen QR scannen und keine Conversion behaupten."
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "birdie-stream-launch-console-20260830T083657Z",
+  "capturedUtc": "2026-08-30T08:36:57.3938576Z",
+  "scope": "LOCAL_SYNTHETIC_REHEARSAL",
+  "externalActions": "LOCKED",
+  "repository": {
+    "branch": "feature/birdie-desktop-alpha",
+    "head": "9fff8c26e8aecdf7364e15004152802458952bc9",
+    "workingTree": "DIRTY_PRESERVED"
+  },
+  "decisions": {
+    "localRehearsal": "GO",
+    "livePublish": "STOP",
+    "publication": "LOCKED"
+  },
+  "liveDecision": {
+    "state": "STOP",
+    "reasonIds": [
+      "ACTIVE_FPS_BELOW_GATE",
+      "AUDIO_CONTENT_UNPROVEN",
+      "VOICE_SYNTHETIC_ONLY",
+      "CTA_QR_DRAFT",
+      "GLOBAL_HOTKEY_FAILED"
+    ]
+  },
+  "preflight": [
+    { "id": "visual", "status": "STOP", "reasonIds": ["ACTIVE_FPS_BELOW_GATE"] },
+    { "id": "audio", "status": "HOLD", "reasonIds": ["AUDIO_CONTENT_UNPROVEN"] },
+    { "id": "voice", "status": "HOLD", "reasonIds": ["VOICE_SYNTHETIC_ONLY"] },
+    { "id": "conversion", "status": "STOP", "reasonIds": ["CTA_QR_DRAFT"] },
+    { "id": "privacy", "status": "PASS", "reasonIds": [] },
+    { "id": "fallback", "status": "STOP", "reasonIds": ["GLOBAL_HOTKEY_FAILED"] }
+  ],
+  "rehearsal": {
+    "preset": "CLIP_30",
+    "clockMode": "REALTIME",
+    "plannedDurationMs": 30000,
+    "completedBoundaryMs": 30000,
+    "decision": "GO",
+    "decisionReasonIds": [],
+    "markers": [
+      { "atMs": 0, "state": "IDLE" },
+      { "atMs": 4000, "state": "SPEECH_DETECTED" },
+      { "atMs": 6000, "state": "LISTENING" },
+      { "atMs": 11000, "state": "THINKING" },
+      { "atMs": 15000, "state": "SPEAKING" },
+      { "atMs": 20000, "state": "SUCCESS" },
+      { "atMs": 24000, "state": "IDLE" },
+      { "atMs": 30000, "state": "COMPLETE" }
+    ],
+    "telemetry": {
+      "timeline": "CLIP_30",
+      "renderer": "WEBGL",
+      "quality": "HIGH",
+      "viewport": { "width": 1280, "height": 720 },
+      "firstFrameMs": 112,
+      "configReadyMs": 5,
+      "fps": 29.7,
+      "fpsP10": 29.7,
+      "stateP10Fps": {
+        "IDLE": 29.7,
+        "SPEECH_DETECTED": 29.7,
+        "LISTENING": 30,
+        "THINKING": 29.7,
+        "SPEAKING": 29.7,
+        "SUCCESS": 30
+      },
+      "p95FrameMs": 40.1,
+      "maxFrameGapMs": 40,
+      "loopCount": 1,
+      "observedStates": [
+        "IDLE",
+        "SPEECH_DETECTED",
+        "LISTENING",
+        "THINKING",
+        "SPEAKING",
+        "SUCCESS"
+      ],
+      "errorCount": 0,
+      "errorCodes": [],
+      "heapUsedMb": 24.8
+    }
+  },
+  "fixtureVerification": {
+    "fallback": {
+      "decision": "HOLD",
+      "renderer": "STATIC",
+      "errorCount": 0,
+      "note": "RAF heartbeat is not renderer-FPS evidence."
+    },
+    "error": {
+      "decision": "STOP",
+      "errorCount": 1,
+      "errorCodes": ["SYNTHETIC_FIXTURE"]
+    },
+    "safe": {
+      "decision": "HOLD",
+      "state": "SAFE",
+      "externalActions": "LOCKED",
+      "visible": true
+    }
+  },
+  "layoutVerification": [
+    {
+      "viewport": "1280x720",
+      "safeRect": { "left": 64, "top": 36, "right": 1216, "bottom": 684 },
+      "checkedBoxes": {
+        "liveVerdict": { "left": 1039, "top": 39, "right": 1215, "bottom": 79 },
+        "preflight": { "left": 79, "top": 176, "right": 403, "bottom": 633 },
+        "preview": { "left": 443, "top": 198, "right": 863, "bottom": 434 },
+        "reasons": { "left": 903, "top": 173, "right": 1201, "bottom": 378 },
+        "localSafe": { "left": 787, "top": 561, "right": 863, "bottom": 630 },
+        "buildLabel": { "left": 1107, "top": 665, "right": 1215, "bottom": 674 }
+      },
+      "overflow": false,
+      "sensitiveTextFound": false,
+      "browserWarningsOrErrors": 0,
+      "status": "PASS"
+    },
+    {
+      "viewport": "1920x1080",
+      "safeRect": { "left": 96, "top": 54, "right": 1824, "bottom": 1026 },
+      "checkedBoxes": {
+        "liveVerdict": { "left": 1578, "top": 59, "right": 1823, "bottom": 118 },
+        "preflight": { "left": 117, "top": 263, "right": 604, "bottom": 949 },
+        "preview": { "left": 664, "top": 300, "right": 1295, "bottom": 654 },
+        "reasons": { "left": 1354, "top": 259, "right": 1803, "bottom": 504 },
+        "localSafe": { "left": 1182, "top": 847, "right": 1295, "bottom": 946 },
+        "buildLabel": { "left": 1701, "top": 1000, "right": 1823, "bottom": 1010 }
+      },
+      "overflow": false,
+      "sensitiveTextFound": false,
+      "browserWarningsOrErrors": 0,
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    {
+      "path": "ops/evidence/birdie-stream-launch-console-20260830-initial-1280x720.png",
+      "dimensions": "1280x720",
+      "bytes": 98046,
+      "sha256": "02413efeb93cc5ffd9843e6e76abd13506d8b454dce795129821e09e48d4f95f"
+    },
+    {
+      "path": "ops/evidence/birdie-stream-launch-console-20260830-complete-1280x720.png",
+      "dimensions": "1280x720",
+      "bytes": 103071,
+      "sha256": "c12f5a8eeea5bfbdba6884c6a3cf51e0edfaf80521f907a34c6d64a2c5e86ee3"
+    },
+    {
+      "path": "ops/evidence/birdie-stream-launch-console-20260830-initial-1920x1080.png",
+      "dimensions": "1920x1080",
+      "bytes": 147066,
+      "sha256": "aa260d31ac4a8cb13940887ffb07d7a69063f273b467a440f90b88e92ee5c0a5"
+    }
+  ],
+  "verification": [
+    {
+      "command": "npm --prefix apps/desktop test",
+      "tests": 92,
+      "passed": 92,
+      "failed": 0,
+      "durationMs": 402.4867,
+      "status": "PASS"
+    },
+    {
+      "command": "npm --prefix apps/desktop run build",
+      "modules": 23,
+      "durationSec": 1.44,
+      "status": "PASS"
+    },
+    {
+      "command": "node scripts/check-birdie-stream-readiness.mjs --plan-only",
+      "repositoryPlanStatus": "PASS",
+      "founderGo": "STOP",
+      "status": "PASS_WITH_EXPECTED_LIVE_STOP"
+    },
+    {
+      "check": "in-app browser console warnings/errors",
+      "observed": 0,
+      "status": "PASS"
+    }
+  ],
+  "redaction": {
+    "version": 1,
+    "applied": true,
+    "allowed": "fixed enums, reason IDs, bounded numeric metrics and relative evidence paths",
+    "excluded": "raw URLs, credentials, query strings, local absolute paths, transcripts, diagnostics, stacktraces and free-form errors"
+  },
+  "limits": [
+    "The local preview is not the OBS Browser Source and does not prove OBS output FPS, dropped frames, audio content or MKV duration.",
+    "The synthetic Voice reaction is not microphone evidence.",
+    "The 60-second marker contract is automated-test evidence; this browser take executed the 30-second preset.",
+    "Live/publish remains STOP and the console never starts an external action."
+  ]
+}

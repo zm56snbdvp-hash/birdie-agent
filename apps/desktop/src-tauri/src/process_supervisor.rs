@@ -17,10 +17,79 @@ use tauri::{AppHandle, Emitter, Manager};
 const EVENT_SUPERVISOR_COMPONENT_CHANGED: &str = "supervisor:component-changed";
 
 #[cfg(windows)]
-use std::os::windows::process::CommandExt;
+use std::os::windows::{io::AsRawHandle, process::CommandExt};
+
+#[cfg(windows)]
+use windows_sys::Win32::{
+    Foundation::{CloseHandle, HANDLE},
+    System::JobObjects::{
+        AssignProcessToJobObject, CreateJobObjectW, JobObjectExtendedLimitInformation,
+        SetInformationJobObject, JOBOBJECT_EXTENDED_LIMIT_INFORMATION,
+        JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
+    },
+};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[cfg(windows)]
+struct KillOnCloseJob {
+    handle: HANDLE,
+}
+
+#[cfg(windows)]
+impl KillOnCloseJob {
+    fn create() -> Result<Self, String> {
+        let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        if handle.is_null() {
+            return Err(format!(
+                "CreateJobObjectW failed: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+
+        let mut limits = JOBOBJECT_EXTENDED_LIMIT_INFORMATION::default();
+        limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        let configured = unsafe {
+            SetInformationJobObject(
+                handle,
+                JobObjectExtendedLimitInformation,
+                std::ptr::addr_of!(limits).cast(),
+                std::mem::size_of::<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>() as u32,
+            )
+        };
+        if configured == 0 {
+            let error = std::io::Error::last_os_error();
+            unsafe {
+                CloseHandle(handle);
+            }
+            return Err(format!("SetInformationJobObject failed: {error}"));
+        }
+
+        Ok(Self { handle })
+    }
+
+    fn assign(&self, child: &Child) -> Result<(), String> {
+        let assigned =
+            unsafe { AssignProcessToJobObject(self.handle, child.as_raw_handle() as HANDLE) };
+        if assigned == 0 {
+            return Err(format!(
+                "AssignProcessToJobObject failed: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        Ok(())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for KillOnCloseJob {
+    fn drop(&mut self) {
+        unsafe {
+            CloseHandle(self.handle);
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 struct ProcessSpec {
@@ -44,6 +113,7 @@ struct SupervisorEvent<'a> {
 struct Worker {
     component: &'static str,
     child: Arc<Mutex<Option<Child>>>,
+    transition: Arc<Mutex<()>>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -69,9 +139,9 @@ fn diagnostic(event: &str, detail: impl AsRef<str>) {
 }
 
 impl ProcessSupervisor {
-    pub fn start(app: AppHandle) -> Self {
+    pub fn start(app: AppHandle, initial_voice_enabled: bool) -> Self {
         let stop = Arc::new(AtomicBool::new(false));
-        let voice_enabled = Arc::new(AtomicBool::new(true));
+        let voice_enabled = Arc::new(AtomicBool::new(initial_voice_enabled));
         let mut workers = Vec::new();
 
         let specs = discover_specs(&app);
@@ -103,6 +173,7 @@ impl ProcessSupervisor {
 
         for spec in specs {
             let child = Arc::new(Mutex::new(None));
+            let transition = Arc::new(Mutex::new(()));
             let component_enabled = if spec.component == "birdie-voice" {
                 voice_enabled.clone()
             } else {
@@ -114,11 +185,13 @@ impl ProcessSupervisor {
                 stop.clone(),
                 component_enabled,
                 child.clone(),
+                transition.clone(),
                 spec,
             );
             workers.push(Worker {
                 component,
                 child,
+                transition,
                 thread: Some(thread),
             });
         }
@@ -131,41 +204,56 @@ impl ProcessSupervisor {
         }
     }
 
-    #[allow(dead_code)]
     pub fn set_voice_enabled(&self, enabled: bool) -> Result<(), String> {
         if !self.voice_managed {
             return Err("VOICE.SUPERVISOR.NOT_MANAGED".to_string());
         }
 
-        self.voice_enabled.store(enabled, Ordering::Release);
-        if enabled {
-            return Ok(());
-        }
-
-        // Privacy first: synchronously terminate the capture process before the
-        // UI command is acknowledged. The worker remains disabled until re-enabled.
+        // Every transition first closes the privacy gate so any failure leaves
+        // capture disabled. On is published only after every managed Voice
+        // transition has been checked successfully.
+        self.voice_enabled.store(false, Ordering::Release);
         let workers = self
             .workers
             .lock()
             .map_err(|_| "VOICE.SUPERVISOR.STATE_POISONED".to_string())?;
+        let mut matched_voice_worker = false;
         for worker in workers
             .iter()
             .filter(|worker| worker.component == "birdie-voice")
         {
+            matched_voice_worker = true;
+            let _transition = worker
+                .transition
+                .lock()
+                .map_err(|_| "VOICE.SUPERVISOR.TRANSITION_POISONED".to_string())?;
+            if enabled {
+                continue;
+            }
+
+            // Privacy first: synchronously terminate the capture process before
+            // the tray command is acknowledged. The transition lock closes the
+            // spawn-before-store race with the worker.
             let mut guard = worker
                 .child
                 .lock()
                 .map_err(|_| "VOICE.SUPERVISOR.CHILD_POISONED".to_string())?;
-            if let Some(mut child) = guard.take() {
-                child
-                    .kill()
-                    .map_err(|error| format!("VOICE.SUPERVISOR.KILL_FAILED:{error}"))?;
-                child
-                    .wait()
-                    .map_err(|error| format!("VOICE.SUPERVISOR.WAIT_FAILED:{error}"))?;
+            if let Some(child) = guard.as_mut() {
+                terminate_child(child)?;
+                *guard = None;
             }
         }
+        if !matched_voice_worker {
+            return Err("VOICE.SUPERVISOR.WORKER_MISSING".to_string());
+        }
+        if enabled {
+            self.voice_enabled.store(true, Ordering::Release);
+        }
         Ok(())
+    }
+
+    pub fn manages_voice(&self) -> bool {
+        self.voice_managed
     }
 
     pub fn component_status(&self, component: &str) -> String {
@@ -208,6 +296,27 @@ impl ProcessSupervisor {
     }
 }
 
+fn terminate_child(child: &mut Child) -> Result<(), String> {
+    match child.try_wait() {
+        Ok(Some(_)) => return Ok(()),
+        Ok(None) => {}
+        Err(error) => return Err(format!("VOICE.SUPERVISOR.STATUS_FAILED:{error}")),
+    }
+    if let Err(kill_error) = child.kill() {
+        return match child.try_wait() {
+            Ok(Some(_)) => Ok(()),
+            Ok(None) => Err(format!("VOICE.SUPERVISOR.KILL_FAILED:{kill_error}")),
+            Err(status_error) => Err(format!(
+                "VOICE.SUPERVISOR.KILL_FAILED:{kill_error};STATUS_FAILED:{status_error}"
+            )),
+        };
+    }
+    child
+        .wait()
+        .map(|_| ())
+        .map_err(|error| format!("VOICE.SUPERVISOR.WAIT_FAILED:{error}"))
+}
+
 impl Drop for ProcessSupervisor {
     fn drop(&mut self) {
         self.shutdown();
@@ -219,6 +328,7 @@ fn spawn_worker(
     stop: Arc<AtomicBool>,
     component_enabled: Arc<AtomicBool>,
     child_slot: Arc<Mutex<Option<Child>>>,
+    component_transition: Arc<Mutex<()>>,
     spec: ProcessSpec,
 ) -> JoinHandle<()> {
     thread::Builder::new()
@@ -247,6 +357,23 @@ fn spawn_worker(
                     continue;
                 }
                 disabled_reported = false;
+
+                #[cfg(windows)]
+                let kill_on_close_job = match KillOnCloseJob::create() {
+                    Ok(job) => job,
+                    Err(error) => {
+                        diagnostic(
+                            "JOB_CREATE_ERR",
+                            format!("component={} error={error}", spec.component),
+                        );
+                        restart_count = restart_count.saturating_add(1);
+                        if sleep_until_restart(&stop, backoff) {
+                            return;
+                        }
+                        backoff = std::cmp::min(backoff.saturating_mul(2), Duration::from_secs(5));
+                        continue;
+                    }
+                };
 
                 let mut command = Command::new(&spec.program);
                 command
@@ -279,14 +406,65 @@ fn spawn_worker(
                             .unwrap_or_default()
                     ),
                 );
+                let transition_guard = component_transition
+                    .lock()
+                    .expect("supervised transition poisoned");
+                if !component_spawn_allowed(&stop, &component_enabled) {
+                    drop(transition_guard);
+                    continue;
+                }
                 match command.spawn() {
-                    Ok(child) => {
+                    Ok(mut child) => {
                         let pid = child.id();
+
+                        #[cfg(windows)]
+                        let child_is_managed = match kill_on_close_job.assign(&child) {
+                            Ok(()) => {
+                                diagnostic(
+                                    "JOB_ASSIGN_OK",
+                                    format!("component={} pid={pid}", spec.component),
+                                );
+                                true
+                            }
+                            Err(error) => {
+                                diagnostic(
+                                    "JOB_ASSIGN_ERR",
+                                    format!("component={} pid={pid} error={error}", spec.component),
+                                );
+                                let _ = child.kill();
+                                let _ = child.wait();
+                                restart_count = restart_count.saturating_add(1);
+                                let _ = app.emit(
+                                    EVENT_SUPERVISOR_COMPONENT_CHANGED,
+                                    SupervisorEvent {
+                                        component: spec.component,
+                                        status: "RESTART_PENDING",
+                                        pid: None,
+                                        restart_count,
+                                        error_code: Some("SUPERVISOR.JOB_ASSIGN_FAILED"),
+                                    },
+                                );
+                                false
+                            }
+                        };
+                        #[cfg(not(windows))]
+                        let child_is_managed = true;
+
+                        if !child_is_managed {
+                            if sleep_until_restart(&stop, backoff) {
+                                return;
+                            }
+                            backoff =
+                                std::cmp::min(backoff.saturating_mul(2), Duration::from_secs(5));
+                            continue;
+                        }
+
                         diagnostic(
                             "SPAWN_OK",
                             format!("component={} pid={pid}", spec.component),
                         );
                         *child_slot.lock().expect("supervised child poisoned") = Some(child);
+                        drop(transition_guard);
                         let _ = app.emit(
                             EVENT_SUPERVISOR_COMPONENT_CHANGED,
                             SupervisorEvent {
@@ -361,6 +539,7 @@ fn spawn_worker(
                         }
                     }
                     Err(_) => {
+                        drop(transition_guard);
                         diagnostic(
                             "SPAWN_ERR",
                             format!(
@@ -396,6 +575,10 @@ fn spawn_worker(
         .expect("could not start Birdie process supervisor thread")
 }
 
+fn component_spawn_allowed(stop: &AtomicBool, component_enabled: &AtomicBool) -> bool {
+    !stop.load(Ordering::Acquire) && component_enabled.load(Ordering::Acquire)
+}
+
 fn sleep_until_restart(stop: &AtomicBool, duration: Duration) -> bool {
     let slices = duration.as_millis().div_ceil(100) as u64;
     for _ in 0..slices {
@@ -416,7 +599,7 @@ fn discover_specs(app: &AppHandle) -> Vec<ProcessSpec> {
     if !env_disabled("BIRDIE_MANAGE_CORE") {
         let core_program = env::var_os("BIRDIE_CORE_PROGRAM")
             .map(PathBuf::from)
-            .unwrap_or_else(discover_node_program);
+            .unwrap_or_else(|| discover_node_program(&runtime_root));
         let core_script = env::var_os("BIRDIE_CORE_SCRIPT")
             .map(PathBuf::from)
             .unwrap_or_else(|| runtime_root.join("services/core/src/server-main.mjs"));
@@ -467,18 +650,25 @@ fn discover_voice_executable(repo_root: &Path) -> Option<PathBuf> {
     .find(|candidate| candidate.is_file())
 }
 
-fn discover_node_program() -> PathBuf {
+fn discover_node_program(runtime_root: &Path) -> PathBuf {
     #[cfg(windows)]
     {
-        let candidates = [
-            PathBuf::from(r"C:\Program Files\nodejs\node.exe"),
-            PathBuf::from(r"C:\Program Files (x86)\nodejs\node.exe"),
-        ];
+        let candidates = node_program_candidates(runtime_root);
         if let Some(candidate) = candidates.into_iter().find(|path| path.is_file()) {
             return candidate;
         }
     }
     PathBuf::from("node")
+}
+
+#[cfg(windows)]
+fn node_program_candidates(runtime_root: &Path) -> [PathBuf; 4] {
+    [
+        runtime_root.join("build/runtime/node.exe"),
+        runtime_root.join("node.exe"),
+        PathBuf::from(r"C:\Program Files\nodejs\node.exe"),
+        PathBuf::from(r"C:\Program Files (x86)\nodejs\node.exe"),
+    ]
 }
 
 fn discover_voice_environment(runtime_root: &Path) -> Vec<(String, String)> {
@@ -563,6 +753,23 @@ fn env_disabled(name: &str) -> bool {
 mod tests {
     use super::*;
 
+    fn test_voice_supervisor(
+        initial_voice_enabled: bool,
+        child: Option<Child>,
+    ) -> ProcessSupervisor {
+        ProcessSupervisor {
+            stop: Arc::new(AtomicBool::new(false)),
+            voice_enabled: Arc::new(AtomicBool::new(initial_voice_enabled)),
+            voice_managed: true,
+            workers: Mutex::new(vec![Worker {
+                component: "birdie-voice",
+                child: Arc::new(Mutex::new(child)),
+                transition: Arc::new(Mutex::new(())),
+                thread: None,
+            }]),
+        }
+    }
+
     #[test]
     fn repo_root_contains_expected_monorepo_directories() {
         let root = repo_root().expect("repo root should resolve from Cargo manifest");
@@ -576,6 +783,133 @@ mod tests {
         assert!(sleep_until_restart(&stop, Duration::from_secs(5)));
     }
 
+    #[test]
+    fn disabled_initial_voice_preference_blocks_spawn_until_reenabled() {
+        let stop = AtomicBool::new(false);
+        let voice_enabled = AtomicBool::new(false);
+
+        assert!(!component_spawn_allowed(&stop, &voice_enabled));
+        voice_enabled.store(true, Ordering::Release);
+        assert!(component_spawn_allowed(&stop, &voice_enabled));
+        stop.store(true, Ordering::Release);
+        assert!(!component_spawn_allowed(&stop, &voice_enabled));
+
+        let supervisor = test_voice_supervisor(false, None);
+        assert_eq!(
+            supervisor.component_status("birdie-voice"),
+            "STOPPED_BY_USER"
+        );
+    }
+
+    #[test]
+    fn failed_voice_enable_keeps_privacy_gate_disabled() {
+        let supervisor = test_voice_supervisor(true, None);
+        let transition = supervisor.workers.lock().unwrap()[0].transition.clone();
+        let poisoned = thread::spawn(move || {
+            let _guard = transition.lock().unwrap();
+            panic!("poison transition for fail-closed enable test");
+        });
+        assert!(poisoned.join().is_err());
+
+        assert_eq!(
+            supervisor.set_voice_enabled(true).unwrap_err(),
+            "VOICE.SUPERVISOR.TRANSITION_POISONED"
+        );
+        assert!(!supervisor.voice_enabled.load(Ordering::Acquire));
+        assert_eq!(
+            supervisor.component_status("birdie-voice"),
+            "STOPPED_BY_USER"
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn disabling_voice_accepts_an_already_exited_child() {
+        let mut child = Command::new("cmd.exe")
+            .args(["/D", "/S", "/C", "exit /B 0"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .expect("short-lived child should start");
+        child.wait().expect("short-lived child should exit");
+        let supervisor = test_voice_supervisor(true, Some(child));
+
+        supervisor
+            .set_voice_enabled(false)
+            .expect("already-exited voice is safely disabled");
+
+        assert_eq!(
+            supervisor.component_status("birdie-voice"),
+            "STOPPED_BY_USER"
+        );
+        assert!(supervisor.workers.lock().unwrap()[0]
+            .child
+            .lock()
+            .unwrap()
+            .is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn disabling_voice_closes_spawn_before_store_race() {
+        let supervisor = Arc::new(test_voice_supervisor(true, None));
+        let (transition, child_slot) = {
+            let workers = supervisor.workers.lock().unwrap();
+            (workers[0].transition.clone(), workers[0].child.clone())
+        };
+        let transition_guard = transition.lock().unwrap();
+        let disabling = {
+            let supervisor = supervisor.clone();
+            thread::spawn(move || supervisor.set_voice_enabled(false))
+        };
+
+        let child = Command::new("cmd.exe")
+            .args(["/D", "/S", "/C", "ping -n 30 127.0.0.1 >NUL"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .expect("long-running child should start");
+        *child_slot.lock().unwrap() = Some(child);
+        drop(transition_guard);
+
+        disabling
+            .join()
+            .expect("disable thread should not panic")
+            .expect("disable should terminate the raced child");
+        assert!(!supervisor.voice_enabled.load(Ordering::Acquire));
+        assert!(child_slot.lock().unwrap().is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn kill_on_close_job_terminates_assigned_child() {
+        let job = KillOnCloseJob::create().expect("job object should be created");
+        let mut child = Command::new("cmd.exe")
+            .args(["/D", "/S", "/C", "ping -n 30 127.0.0.1 >NUL"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .expect("long-running child should start");
+        job.assign(&child)
+            .expect("long-running child should join the job");
+
+        drop(job);
+
+        let deadline = std::time::Instant::now() + Duration::from_secs(3);
+        loop {
+            if child
+                .try_wait()
+                .expect("child status should remain readable")
+                .is_some()
+            {
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("assigned child survived closing its job object");
+            }
+            thread::sleep(Duration::from_millis(25));
+        }
+    }
+
     #[cfg(windows)]
     #[test]
     fn normalize_spawn_path_removes_windows_extended_prefix() {
@@ -586,6 +920,16 @@ mod tests {
         assert_eq!(
             normalize_spawn_path(PathBuf::from(r"\\?\UNC\server\share\Birdie")),
             PathBuf::from(r"\\server\share\Birdie")
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bundled_node_is_the_first_runtime_candidate() {
+        let runtime_root = PathBuf::from(r"C:\Birdie\resources");
+        assert_eq!(
+            node_program_candidates(&runtime_root)[0],
+            runtime_root.join("build/runtime/node.exe")
         );
     }
 }

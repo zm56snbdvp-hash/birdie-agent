@@ -33,8 +33,6 @@ export function createPresenceSnapshot() {
     reason: 'runtime.starting',
     since: new Date(0).toISOString(),
     activeTurnId: null,
-    microphone: 'UNAVAILABLE',
-    connectivity: 'DISCONNECTED',
   };
 }
 
@@ -53,7 +51,5 @@ export function projectPresence(current, nextState, meta = {}) {
     // An explicit null is meaningful: the terminal transition owns clearing
     // the correlation. Only an omitted turnId inherits the previous value.
     activeTurnId: hasTurnId ? meta.turnId : (current.activeTurnId ?? null),
-    microphone: meta.microphone ?? current.microphone,
-    connectivity: meta.connectivity ?? current.connectivity,
   };
 }

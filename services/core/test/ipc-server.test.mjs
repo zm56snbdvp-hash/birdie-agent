@@ -25,6 +25,37 @@ function voicePrivacyEvent(state, sequence = 1) {
   };
 }
 
+function componentReadyEvent(sequence = 1) {
+  return {
+    contract_version: '1.0',
+    kind: 'event',
+    name: 'component.ready',
+    event_id: `component-ready-${sequence}`,
+    source: 'birdie-voice',
+    timestamp_utc: new Date().toISOString(),
+    monotonic_ms: sequence,
+    source_sequence: sequence,
+    trace_id: 'trace-state-contract-test',
+    session_id: 'session-microphone-test',
+    turn_id: null,
+    data_classification: 'operational',
+    payload: { component: 'birdie-voice', status: 'READY' },
+  };
+}
+
+test('Core READY snapshot has one authority for transport and microphone state', () => {
+  const server = new BirdieIpcServer();
+  server.publish(componentReadyEvent(1));
+  server.publish(voicePrivacyEvent('ENABLED', 2));
+
+  const snapshot = server.getSnapshot();
+  assert.equal(snapshot.lifecycle, 'READY');
+  assert.equal(snapshot.presence.state, 'IDLE');
+  assert.equal(snapshot.microphoneState, 'ENABLED');
+  assert.equal(Object.hasOwn(snapshot.presence, 'microphone'), false);
+  assert.equal(Object.hasOwn(snapshot.presence, 'connectivity'), false);
+});
+
 test('IPC routes microphone command and waits for Voice privacy confirmation', async () => {
   const pipeName = process.platform === 'win32'
     ? `\\\\.\\pipe\\birdie-core-test-${process.pid}-${Date.now()}`
@@ -92,6 +123,16 @@ test('IPC routes microphone command and waits for Voice privacy confirmation', a
         message.payload.microphoneState === 'MUTED_BY_USER',
     );
     assert.equal(confirmed.payload.microphoneState, 'MUTED_BY_USER');
+    assert.equal(
+      Object.hasOwn(confirmed.payload.presence, 'microphone'),
+      false,
+      'Presence must not duplicate the authoritative top-level microphoneState',
+    );
+    assert.equal(
+      Object.hasOwn(confirmed.payload.presence, 'connectivity'),
+      false,
+      'Presence must not duplicate the Desktop-owned transport state',
+    );
     assert.equal(server.getSnapshot().microphoneState, 'MUTED_BY_USER');
 
     const eventAck = await voice.waitFor(

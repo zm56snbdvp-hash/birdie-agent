@@ -78,6 +78,50 @@ test('contract major mismatch is rejected', async () => {
   });
 });
 
+test('role/component mismatch cannot replace the active Voice client', async () => {
+  await withServer('role-component', async (_server, pipeName) => {
+    const legitimate = await connectIpcClient(pipeName, {
+      role: IpcRole.VOICE,
+      component: 'birdie-voice',
+      instanceId: 'voice-legitimate',
+    });
+    let legitimateClosed = false;
+    legitimate.socket.once('close', () => {
+      legitimateClosed = true;
+    });
+
+    const rejected = await connectIpcClient(pipeName, {
+      role: IpcRole.VOICE,
+      component: 'not-birdie-voice',
+      instanceId: 'voice-role-impostor',
+      expectAccepted: false,
+    });
+    try {
+      assert.equal(rejected.helloResult.type, 'error');
+      assert.equal(
+        rejected.helloResult.error,
+        'CONTRACT.ROLE_COMPONENT_MISMATCH',
+      );
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      assert.equal(legitimateClosed, false);
+
+      rejected.send({
+        type: 'runtime.event.publish',
+        requestId: 'rejected-voice-publish',
+        payload: {},
+      });
+      const error = await rejected.waitFor(
+        (message) => message.requestId === 'rejected-voice-publish',
+      );
+      assert.equal(error.type, 'error');
+      assert.equal(error.error, 'CONTRACT.HANDSHAKE_REQUIRED');
+    } finally {
+      legitimate.socket.destroy();
+      rejected.socket.destroy();
+    }
+  });
+});
+
 test('observer role cannot publish Voice events', async () => {
   await withServer('capability', async (_server, pipeName) => {
     const observer = await connectIpcClient(pipeName, {

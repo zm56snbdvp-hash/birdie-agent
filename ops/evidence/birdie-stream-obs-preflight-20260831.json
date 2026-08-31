@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "birdie-stream-obs-preflight-20260831T001114Z",
+  "scope": "LOCAL_OBS_READINESS_OBSERVATION",
+  "recordedAtUtc": "2026-08-31T00:11:14.8676162Z",
+  "publicAction": "NONE",
+  "streamStarted": false,
+  "recordingStarted": false,
+  "virtualCameraStarted": false,
+  "observedApplication": {
+    "name": "OBS Studio",
+    "version": "32.2.2",
+    "profile": "Unbenannt",
+    "sceneCollection": "Birdie Live Lab — FreeBridge v4"
+  },
+  "actualVersusPlan": {
+    "requiredProfile": "Birdie-Stream-Local-1080p30",
+    "requiredSceneCollection": "Birdie Stream Local",
+    "requiredOutputFps": 30,
+    "observedOutputFps": 60,
+    "requiredDesktopAudio": false,
+    "observedDesktopAudio": "ACTIVE_METER_VISIBLE",
+    "requiredOperatorMicrophone": "DISABLED_OR_MUTED",
+    "observedOperatorMicrophone": "MUTED_WITH_INPUT_METER_ACTIVITY",
+    "verdict": "STOP"
+  },
+  "outputControls": {
+    "stream": "INACTIVE_START_CONTROL_VISIBLE",
+    "recording": "INACTIVE_START_CONTROL_VISIBLE",
+    "virtualCamera": "INACTIVE_START_CONTROL_VISIBLE",
+    "verdict": "PASS_NO_EXTERNAL_OUTPUT"
+  },
+  "safeScene": {
+    "from": "10_END",
+    "to": "99_SAFE",
+    "method": "FOCUSED_OBS_UI_CLICK",
+    "visualConfirmation": "PASS",
+    "captureRoundTripMs": 4349,
+    "latencyGate": "UNPROVEN_CAPTURE_OVERHEAD_INCLUDED"
+  },
+  "microphone": {
+    "deviceIngressMeter": "SIGNAL_VISIBLE",
+    "muteIcon": "MUTED",
+    "directUiToggleAttempts": 2,
+    "directUiToggleResult": "NO_VISIBLE_STATE_CHANGE",
+    "globalF11FromOtherApp": "NO_VISIBLE_MUTE_STATE_CHANGE",
+    "stableCapture": "UNPROVEN",
+    "birdieStt": "NOT_TESTED",
+    "voiceCommandRouting": "NOT_TESTED",
+    "classification": "DEVICE_INGRESS_PRESENT_BUT_BIRDIE_AUDIO_PATH_UNPROVEN"
+  },
+  "privacy": {
+    "activeSceneAtEnd": "99_SAFE",
+    "safeVisualConfirmed": true,
+    "currentCollectionMatchesAllowlist": false,
+    "serviceConfigurationOpened": false,
+    "secretsObservedOrCopied": false,
+    "verdict": "STOP_WRONG_COLLECTION"
+  },
+  "gates": {
+    "obsInstalled": "PASS",
+    "externalOutputsOff": "PASS",
+    "safeSceneVisual": "PASS",
+    "safeSwitchLatency": "UNPROVEN",
+    "profile1080p30Applied": "STOP",
+    "sceneCollectionApplied": "STOP",
+    "desktopAudioOff": "STOP",
+    "microphoneHardwareIngress": "PARTIAL_SIGNAL_ONLY",
+    "microphoneStable": "UNPROVEN",
+    "globalHotkeys": "STOP_UNPROVEN",
+    "publicStream": "STOP"
+  },
+  "unknowns": [
+    "SAFE_SWITCH_INPUT_ONLY_LATENCY",
+    "GLOBAL_F12_FROM_OTHER_APP_CURRENT",
+    "GLOBAL_F10_FROM_OTHER_APP_CURRENT",
+    "MICROPHONE_STABLE_CAPTURE",
+    "BIRDIE_STT_CURRENT",
+    "VOICE_COMMAND_ROUTING_CURRENT",
+    "OBS_RENDER_DROPPED_FRAMES_CURRENT",
+    "OBS_ENCODING_DROPPED_FRAMES_CURRENT",
+    "FINAL_MKV_AUDIO_REVIEW"
+  ],
+  "verdict": "NO_GO"
+}

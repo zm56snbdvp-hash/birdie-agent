@@ -1,5 +1,6 @@
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
 import { listen as tauriListen } from '@tauri-apps/api/event';
+import { projectRuntimeUiState } from './runtime-state-contract.js';
 
 export const TAURI_EVENTS = Object.freeze({
   PRESENCE_CHANGED: 'runtime:presence-changed',
@@ -15,17 +16,6 @@ export const TAURI_EVENTS = Object.freeze({
 });
 
 export const TAURI_EVENT_NAME_PATTERN = /^[A-Za-z0-9\-/:_]+$/;
-const KNOWN_PRESENCE_STATES = new Set([
-  'IDLE',
-  'SPEECH_DETECTED',
-  'LISTENING',
-  'THINKING',
-  'SPEAKING',
-  'WORKING',
-  'SUCCESS',
-  'ERROR',
-  'OFFLINE',
-]);
 
 export function formatDiagnosticError(error) {
   if (error instanceof Error) return error.stack || error.message;
@@ -38,27 +28,10 @@ export function formatDiagnosticError(error) {
 }
 
 export function evaluateSnapshotStatus(snapshot) {
-  const lifecycle = String(snapshot?.lifecycle ?? '').toUpperCase();
-  const presenceState = String(snapshot?.presence?.state ?? '').toUpperCase();
-  if (lifecycle === 'STARTING') {
-    return { status: 'CONNECTING', reason: 'lifecycle=STARTING' };
-  }
-  if (lifecycle !== 'READY') {
-    return { status: 'OFFLINE', reason: `lifecycle=${lifecycle || 'MISSING'}` };
-  }
-  if (presenceState === 'OFFLINE') {
-    return { status: 'OFFLINE', reason: 'presence.state=OFFLINE' };
-  }
-  if (!KNOWN_PRESENCE_STATES.has(presenceState)) {
-    return {
-      status: 'OFFLINE',
-      reason: `presence.state=${presenceState || 'MISSING'}`,
-    };
-  }
-  return {
-    status: 'READY',
-    reason: `lifecycle=READY presence.state=${presenceState}`,
-  };
+  return projectRuntimeUiState({
+    lifecycle: snapshot?.lifecycle,
+    presenceState: snapshot?.presence?.state,
+  });
 }
 
 export function summarizeSnapshot(snapshot) {
@@ -85,6 +58,25 @@ function presenceFingerprint(presence, bridgeRevision) {
     state: presence?.state ?? null,
     reason: presence?.reason ?? null,
   });
+}
+
+function runtimeSnapshotFingerprint(snapshot) {
+  return JSON.stringify({
+    lifecycle: snapshot?.lifecycle ?? null,
+    presence: {
+      revision: snapshot?.presence?.revision ?? null,
+      state: snapshot?.presence?.state ?? null,
+      reason: snapshot?.presence?.reason ?? null,
+    },
+    microphoneState: snapshot?.microphoneState ?? null,
+    brainState: snapshot?.brainState ?? null,
+  });
+}
+
+function isDisconnectedSnapshot(snapshot) {
+  return String(snapshot?.lifecycle ?? '').toUpperCase() === 'DEGRADED'
+    && String(snapshot?.presence?.state ?? '').toUpperCase() === 'OFFLINE'
+    && String(snapshot?.microphoneState ?? '').toUpperCase() === 'UNAVAILABLE';
 }
 
 export class RuntimeBridge {
@@ -126,30 +118,40 @@ export class RuntimeBridge {
     this.persistDiagnostics = persistDiagnostics;
     this.lastRevision = -1;
     this.lastBridgeRevision = -1;
+    this.lastSnapshotBridgeRevision = -1;
+    this.lastSnapshotFingerprint = null;
+    this.lastSnapshotWasDisconnected = false;
+    this.lastDisconnectBridgeRevision = null;
+    this.lastPresenceEvidenceBridgeRevision = -1;
+    this.lastPresenceEvidenceFingerprint = null;
     this.lastLifecycle = null;
     this.lastPresenceFingerprint = null;
     this.lastStatusFingerprint = null;
     this.unlisten = [];
     this.refreshTimer = null;
     this.refreshInFlight = false;
+    this.connectionGeneration = 0;
   }
 
   async connect() {
+    const generation = ++this.connectionGeneration;
     this.#emitStatus('CONNECTING', 'connect.start');
 
     // Prove the command path independently before event registration. If a
     // Tauri event permission or event-name contract regresses, the exact
     // failure remains visible instead of being collapsed into OFFLINE.
-    await this.requestSnapshot('connect.pre-listeners');
+    await this.requestSnapshot('connect.pre-listeners', generation);
+    if (generation !== this.connectionGeneration) return;
 
     try {
       await this.#registerListener(
         TAURI_EVENTS.PRESENCE_CHANGED,
         ({ payload }) => this.#applyPresence(payload),
+        generation,
       );
       await this.#registerListener(TAURI_EVENTS.SNAPSHOT, ({ payload }) => {
         this.#applySnapshot(payload, 'event.runtime-snapshot');
-      });
+      }, generation);
       await this.#registerListener(TAURI_EVENTS.DISCONNECTED, ({ payload }) => {
         const bridgeRevision = numericRevision(payload?.bridgeRevision);
         this.reportDiagnostic(
@@ -166,55 +168,91 @@ export class RuntimeBridge {
           );
           return;
         }
+        if (
+          bridgeRevision !== null &&
+          bridgeRevision === this.lastBridgeRevision
+        ) {
+          const duplicate = this.lastDisconnectBridgeRevision === bridgeRevision;
+          const matchesDisconnectedSnapshot =
+            this.lastSnapshotBridgeRevision === bridgeRevision
+            && this.lastSnapshotWasDisconnected;
+          const reason = duplicate || matchesDisconnectedSnapshot
+            ? 'duplicate'
+            : 'conflicting-equal-revision';
+          if (matchesDisconnectedSnapshot) {
+            this.lastDisconnectBridgeRevision = bridgeRevision;
+          }
+          this.reportDiagnostic(
+            'RUNTIME_DISCONNECTED_IGNORED',
+            `reason=${reason} bridgeRevision=${bridgeRevision} lastBridgeRevision=${this.lastBridgeRevision}`,
+          );
+          return;
+        }
         if (bridgeRevision !== null) this.lastBridgeRevision = bridgeRevision;
+        this.lastDisconnectBridgeRevision = bridgeRevision;
         this.lastLifecycle = 'DEGRADED';
         this.#emitStatus('OFFLINE', 'event.runtime-disconnected');
-      });
+      }, generation);
       await this.#registerListener(TAURI_EVENTS.CONNECTED, async () => {
-        this.#emitStatus('CONNECTING', 'event.runtime-connected');
-        await this.#refreshSnapshotSafely('event.runtime-connected');
-      });
+        if (this.lastLifecycle !== 'READY') {
+          this.#emitStatus('CONNECTING', 'event.runtime-connected');
+        } else {
+          this.reportDiagnostic(
+            'RUNTIME_CONNECTED_REFRESH',
+            'reason=already-ready',
+          );
+        }
+        await this.#refreshSnapshotSafely('event.runtime-connected', generation);
+      }, generation);
       await this.#registerListener(
         TAURI_EVENTS.COMPONENT_CHANGED,
         ({ payload }) => this.onComponent?.(payload),
+        generation,
       );
       await this.#registerListener(
         TAURI_EVENTS.AUDIO_INPUT,
         ({ payload }) => this.onAudioInput?.(this.#normalizeAudio(payload)),
+        generation,
       );
       await this.#registerListener(
         TAURI_EVENTS.AUDIO_OUTPUT,
         ({ payload }) => this.onAudioOutput?.(this.#normalizeAudio(payload)),
+        generation,
       );
       await this.#registerListener(TAURI_EVENTS.IPC_ERROR, ({ payload }) => {
         const error = new Error(
           `Core IPC error: ${payload?.error ?? JSON.stringify(payload ?? null)}`,
         );
         this.#reportError('event.runtime-ipc-error', error);
-      });
+      }, generation);
       await this.#registerListener(
         TAURI_EVENTS.SURFACE_CHANGED,
         ({ payload }) => this.onSurface?.(payload),
+        generation,
       );
       await this.#registerListener(
         TAURI_EVENTS.COMMAND_STATUS,
         ({ payload }) => this.onCommandStatus?.(payload),
+        generation,
       );
 
-      await this.requestSnapshot('connect.post-listeners');
+      if (generation !== this.connectionGeneration) return;
+      await this.requestSnapshot('connect.post-listeners', generation);
+      if (generation !== this.connectionGeneration) return;
       if (typeof this.setIntervalFn !== 'function') {
         throw new Error('RuntimeBridge timer API is unavailable');
       }
       this.refreshTimer = this.setIntervalFn(() => {
-        void this.#refreshSnapshotSafely('poll');
+        void this.#refreshSnapshotSafely('poll', generation);
       }, 750);
     } catch (error) {
+      if (generation !== this.connectionGeneration) return;
       this.dispose();
       throw error;
     }
   }
 
-  async requestSnapshot(origin = 'manual') {
+  async requestSnapshot(origin = 'manual', generation = null) {
     this.reportDiagnostic(
       'TAURI_INVOKE',
       `command=runtime_get_snapshot origin=${origin} lastRevision=${this.lastRevision}`,
@@ -223,6 +261,7 @@ export class RuntimeBridge {
       const snapshot = await this.invokeFn('runtime_get_snapshot', {
         lastRevision: this.lastRevision,
       });
+      if (generation !== null && generation !== this.connectionGeneration) return snapshot;
       this.reportDiagnostic(
         'TAURI_INVOKE_RESULT',
         `command=runtime_get_snapshot origin=${origin} ${summarizeSnapshot(snapshot)}`,
@@ -230,6 +269,7 @@ export class RuntimeBridge {
       this.#applySnapshot(snapshot, `invoke.${origin}`);
       return snapshot;
     } catch (error) {
+      if (generation !== null && generation !== this.connectionGeneration) return null;
       this.#reportError(`invoke.runtime_get_snapshot origin=${origin}`, error);
       throw error;
     }
@@ -325,6 +365,8 @@ export class RuntimeBridge {
   }
 
   dispose() {
+    this.connectionGeneration += 1;
+    this.refreshInFlight = false;
     if (
       this.refreshTimer !== null &&
       typeof this.clearIntervalFn === 'function'
@@ -343,7 +385,8 @@ export class RuntimeBridge {
     }
   }
 
-  async #registerListener(event, handler) {
+  async #registerListener(event, handler, generation = this.connectionGeneration) {
+    if (generation !== this.connectionGeneration) return false;
     if (!TAURI_EVENT_NAME_PATTERN.test(event)) {
       const error = new Error(`Illegal Tauri event name: ${event}`);
       this.#reportError('tauri.listen.validate', error);
@@ -351,10 +394,24 @@ export class RuntimeBridge {
     }
     this.reportDiagnostic('TAURI_LISTEN', `event=${event}`);
     try {
-      const stop = await this.listenFn(event, handler);
+      const guardedHandler = (...args) => {
+        if (generation !== this.connectionGeneration) return undefined;
+        return handler(...args);
+      };
+      const stop = await this.listenFn(event, guardedHandler);
+      if (generation !== this.connectionGeneration) {
+        try {
+          await stop();
+        } catch (error) {
+          this.#reportError('tauri.unlisten', error);
+        }
+        return false;
+      }
       this.unlisten.push(stop);
       this.reportDiagnostic('TAURI_LISTEN_RESULT', `event=${event} result=OK`);
+      return true;
     } catch (error) {
+      if (generation !== this.connectionGeneration) return false;
       const wrapped = new Error(
         `Tauri listen rejected for ${event}: ${formatDiagnosticError(error)}`,
       );
@@ -363,18 +420,20 @@ export class RuntimeBridge {
     }
   }
 
-  async #refreshSnapshotSafely(origin) {
+  async #refreshSnapshotSafely(origin, generation = this.connectionGeneration) {
+    if (generation !== this.connectionGeneration) return;
     if (this.refreshInFlight) return;
     this.refreshInFlight = true;
     try {
-      await this.requestSnapshot(origin);
+      await this.requestSnapshot(origin, generation);
     } catch (error) {
+      if (generation !== this.connectionGeneration) return;
       this.#emitStatus(
         'OFFLINE',
         `invoke.rejected=${formatDiagnosticError(error)}`,
       );
     } finally {
-      this.refreshInFlight = false;
+      if (generation === this.connectionGeneration) this.refreshInFlight = false;
     }
   }
 
@@ -385,6 +444,11 @@ export class RuntimeBridge {
     }
 
     const bridgeRevision = numericRevision(snapshot.bridgeRevision);
+    const snapshotFingerprint = runtimeSnapshotFingerprint(snapshot);
+    const snapshotPresenceFingerprint = presenceFingerprint(
+      snapshot?.presence,
+      bridgeRevision,
+    );
     if (
       bridgeRevision !== null &&
       bridgeRevision < this.lastBridgeRevision
@@ -395,8 +459,49 @@ export class RuntimeBridge {
       );
       return false;
     }
+    if (
+      bridgeRevision !== null &&
+      bridgeRevision === this.lastPresenceEvidenceBridgeRevision &&
+      snapshotPresenceFingerprint !== this.lastPresenceEvidenceFingerprint
+    ) {
+      this.reportDiagnostic(
+        'JS_SNAPSHOT_IGNORED',
+        `origin=${origin} reason=presence-conflicting-equal-revision bridgeRevision=${bridgeRevision}`,
+      );
+      return false;
+    }
+    if (
+      bridgeRevision !== null &&
+      bridgeRevision === this.lastDisconnectBridgeRevision &&
+      bridgeRevision > this.lastSnapshotBridgeRevision &&
+      !isDisconnectedSnapshot(snapshot)
+    ) {
+      this.reportDiagnostic(
+        'JS_SNAPSHOT_IGNORED',
+        `origin=${origin} reason=disconnect-revision-conflict bridgeRevision=${bridgeRevision}`,
+      );
+      return false;
+    }
+    if (
+      bridgeRevision !== null &&
+      bridgeRevision === this.lastSnapshotBridgeRevision &&
+      snapshotFingerprint !== this.lastSnapshotFingerprint
+    ) {
+      this.reportDiagnostic(
+        'JS_SNAPSHOT_IGNORED',
+        `origin=${origin} reason=conflicting-equal-revision bridgeRevision=${bridgeRevision}`,
+      );
+      return false;
+    }
 
     if (bridgeRevision !== null) this.lastBridgeRevision = bridgeRevision;
+    if (bridgeRevision !== null) {
+      this.lastSnapshotBridgeRevision = bridgeRevision;
+      this.lastSnapshotFingerprint = snapshotFingerprint;
+      this.lastSnapshotWasDisconnected = isDisconnectedSnapshot(snapshot);
+      this.lastPresenceEvidenceBridgeRevision = bridgeRevision;
+      this.lastPresenceEvidenceFingerprint = snapshotPresenceFingerprint;
+    }
     this.lastLifecycle = String(snapshot.lifecycle ?? '').toUpperCase();
     const presence = snapshot.presence ?? snapshot;
     const revision = numericRevision(
@@ -425,6 +530,7 @@ export class RuntimeBridge {
     const presence = payload?.snapshot ?? payload?.presence ?? payload;
     const bridgeRevision = numericRevision(payload?.bridgeRevision);
     const revision = numericRevision(presence?.revision);
+    const fingerprint = presenceFingerprint(presence, bridgeRevision);
 
     if (
       bridgeRevision !== null &&
@@ -447,10 +553,35 @@ export class RuntimeBridge {
       );
       return;
     }
+    if (
+      bridgeRevision !== null &&
+      bridgeRevision === this.lastPresenceEvidenceBridgeRevision &&
+      fingerprint !== this.lastPresenceEvidenceFingerprint
+    ) {
+      this.reportDiagnostic(
+        'JS_PRESENCE_IGNORED',
+        `reason=conflicting-equal-revision bridgeRevision=${bridgeRevision}`,
+      );
+      return;
+    }
+    if (
+      bridgeRevision !== null &&
+      bridgeRevision === this.lastDisconnectBridgeRevision &&
+      String(presence?.state ?? '').toUpperCase() !== 'OFFLINE'
+    ) {
+      this.reportDiagnostic(
+        'JS_PRESENCE_IGNORED',
+        `reason=disconnect-revision-conflict bridgeRevision=${bridgeRevision}`,
+      );
+      return;
+    }
 
     if (bridgeRevision !== null) this.lastBridgeRevision = bridgeRevision;
     if (revision !== null) this.lastRevision = revision;
-    const fingerprint = presenceFingerprint(presence, bridgeRevision);
+    if (bridgeRevision !== null) {
+      this.lastPresenceEvidenceBridgeRevision = bridgeRevision;
+      this.lastPresenceEvidenceFingerprint = fingerprint;
+    }
     if (fingerprint === this.lastPresenceFingerprint) return;
     this.lastPresenceFingerprint = fingerprint;
     this.reportDiagnostic(
