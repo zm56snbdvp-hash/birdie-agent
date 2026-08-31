@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "name": "Birdie Stream Local",
+  "purpose": "offline-demo-recording-only",
+  "profile": {
+    "name": "Birdie-Stream-Local-1080p30",
+    "video": {
+      "baseWidth": 1920,
+      "baseHeight": 1080,
+      "outputWidth": 1920,
+      "outputHeight": 1080,
+      "fps": 30
+    },
+    "audio": {
+      "sampleRateHz": 48000,
+      "channels": "stereo",
+      "desktopAudio": false,
+      "browserAudio": false
+    },
+    "outputs": {
+      "recording": true,
+      "recordingContainer": "mkv",
+      "streaming": false,
+      "replayBuffer": false,
+      "virtualCamera": false
+    }
+  },
+  "browserSources": {
+    "main": {
+      "name": "BIRDIE_STREAM_BROWSER",
+      "type": "browser_source",
+      "url": "http://127.0.0.1:1421/?mode=stream&demo=loop",
+      "width": 1920,
+      "height": 1080,
+      "audio": false,
+      "sceneBindings": ["01_STREAM"],
+      "shutdownWhenHidden": false,
+      "refreshWhenActive": false
+    },
+    "backup": {
+      "name": "BIRDIE_STREAM_BACKUP",
+      "type": "browser_source",
+      "url": "http://127.0.0.1:1421/?mode=stream&demo=loop&renderer=backup&quality=low",
+      "width": 1920,
+      "height": 1080,
+      "audio": false,
+      "sceneBindings": ["02_STREAM_BACKUP"],
+      "shutdownWhenHidden": false,
+      "refreshWhenActive": false
+    },
+    "clip30": {
+      "name": "BIRDIE_STREAM_CLIP_30",
+      "type": "browser_source",
+      "url": "http://127.0.0.1:1421/?mode=stream&demo=loop&clip=30",
+      "width": 1920,
+      "height": 1080,
+      "audio": false,
+      "sceneBindings": ["03_CLIP_30"],
+      "shutdownWhenHidden": true,
+      "refreshWhenActive": true
+    },
+    "clip60": {
+      "name": "BIRDIE_STREAM_CLIP_60",
+      "type": "browser_source",
+      "url": "http://127.0.0.1:1421/?mode=stream&demo=loop&clip=60",
+      "width": 1920,
+      "height": 1080,
+      "audio": false,
+      "sceneBindings": ["04_CLIP_60"],
+      "shutdownWhenHidden": true,
+      "refreshWhenActive": true
+    },
+    "qrVerify": {
+      "name": "BIRDIE_STREAM_QR_VERIFY",
+      "type": "browser_source",
+      "url": "http://127.0.0.1:1421/?mode=stream&demo=loop&qrVerify=local",
+      "width": 1920,
+      "height": 1080,
+      "audio": false,
+      "sceneBindings": ["05_QR_VERIFY"],
+      "shutdownWhenHidden": true,
+      "refreshWhenActive": true
+    }
+  },
+  "staticSources": {
+    "safeSlate": {
+      "name": "SAFE_SLATE",
+      "type": "color_source_v3",
+      "width": 1920,
+      "height": 1080,
+      "color": "#070a0f",
+      "audio": false,
+      "sceneBindings": ["00_START", "09_BRB", "10_END", "99_SAFE"],
+      "shutdownWhenHidden": false,
+      "refreshWhenActive": false
+    }
+  },
+  "scenes": [
+    { "name": "00_START", "sources": ["SAFE_SLATE"] },
+    { "name": "01_STREAM", "sources": ["BIRDIE_STREAM_BROWSER"] },
+    { "name": "02_STREAM_BACKUP", "sources": ["BIRDIE_STREAM_BACKUP"] },
+    { "name": "03_CLIP_30", "sources": ["BIRDIE_STREAM_CLIP_30"] },
+    { "name": "04_CLIP_60", "sources": ["BIRDIE_STREAM_CLIP_60"] },
+    { "name": "05_QR_VERIFY", "sources": ["BIRDIE_STREAM_QR_VERIFY"] },
+    { "name": "09_BRB", "sources": ["SAFE_SLATE"] },
+    { "name": "10_END", "sources": ["SAFE_SLATE"] },
+    { "name": "99_SAFE", "sources": ["SAFE_SLATE"] }
+  ],
+  "sourceAllowlist": [
+    "browser_source",
+    "color_source_v3",
+    "text_gdiplus_v3"
+  ],
+  "sourceDenylist": [
+    "monitor_capture",
+    "window_capture",
+    "game_capture",
+    "dshow_input",
+    "ffmpeg_source",
+    "wasapi_input_capture",
+    "wasapi_output_capture"
+  ],
+  "optionalOperatorMicrophone": {
+    "enabled": false,
+    "startsMuted": true,
+    "monitoring": "off",
+    "filters": ["noise-suppression", "limiter"]
+  },
+  "transitions": {
+    "type": "cut",
+    "durationMs": 0
+  },
+  "hotkeys": {
+    "safeScene": "Ctrl+Alt+Shift+F12",
+    "muteMicrophone": "Ctrl+Alt+Shift+F11",
+    "stopRecording": "Ctrl+Alt+Shift+F10",
+    "stopStreamingReserved": "Ctrl+Alt+Shift+F9"
+  },
+  "privacy": {
+    "captureDesktop": false,
+    "captureNotifications": false,
+    "renderTranscripts": false,
+    "renderDiagnostics": false,
+    "openStreamingServiceConfig": false
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "receiptId": "birdie-stream-cta-only-authorization-20260831",
+  "recordType": "FOUNDER_AUTHORIZATION_RECEIPT",
+  "recordedAtUtc": "2026-08-31T01:09:49.9071306Z",
+  "source": {
+    "type": "FOUNDER_INSTRUCTION_IN_CURRENT_CODEX_WORKSTREAM",
+    "issuedAtUtc": null,
+    "issuedAtReason": "NOT_RECORDED_AT_SOURCE_TIME",
+    "verbatimInstructionStored": false
+  },
+  "authorization": {
+    "scope": "CTA_ONLY_LOCAL_BROWSER_E2E",
+    "status": "AUTHORIZED_PENDING_EXECUTION",
+    "maximumRuns": 1,
+    "consumedRuns": 0,
+    "remainingRuns": 1,
+    "conditions": [
+      "LOCAL_LOOPBACK_BROWSER_ONLY",
+      "NEW_RUN_ID_REQUIRED",
+      "CURRENT_BUILD_ID_REQUIRED",
+      "CURRENT_SOURCE_AND_TEST_DIGESTS_REQUIRED",
+      "CONTRACT_TESTS_MUST_PASS_ON_BOUND_BUILD",
+      "PRIVATE_QR_SUPPRESSION_REQUIRED",
+      "SYNTHETIC_EVENTS_ONLY",
+      "NO_PII",
+      "NO_NETWORK_CONVERSION",
+      "NO_REAL_MONEY"
+    ]
+  },
+  "explicitlyExcludedScopes": {
+    "15_MIN_OBS_RECORDING": "STOP",
+    "OBS_CONFIGURATION_CHANGE": "NOT_AUTHORIZED",
+    "AUDIO_OR_MICROPHONE_TEST": "NOT_AUTHORIZED",
+    "PRIVATE_OR_UNLISTED_STREAM": "NOT_AUTHORIZED",
+    "PUBLIC_STREAM": "NOT_AUTHORIZED",
+    "UPLOAD_OR_PUBLICATION": "NOT_AUTHORIZED",
+    "LEAD_CONTACT": "NOT_AUTHORIZED",
+    "PURCHASE_OR_PAYMENT": "NOT_AUTHORIZED",
+    "DEPLOYMENT": "NOT_AUTHORIZED"
+  },
+  "evidenceRelationship": {
+    "historicalRunLedger": "ops/evidence/birdie-stream-private-cta-e2e-20260831-ledger.json",
+    "historicalRunId": "founder-private-20260831-001",
+    "historicalRunReview": "STOP",
+    "authorizationStoredInsideHistoricalLedger": false,
+    "newRunRequiresSeparateEvidence": true
+  },
+  "buildBinding": {
+    "authorizationIsBuildBound": false,
+    "requiredBeforeExecution": "BIND_NEW_RUN_ID_BUILD_ID_GIT_HEAD_WORKTREE_STATUS_SOURCE_DIGESTS_TEST_DIGESTS_AND_CAPTURE_TIME"
+  },
+  "preExecutionEvidence": {
+    "status": "PENDING",
+    "gitHead": "PENDING",
+    "worktreeStatus": "PENDING",
+    "sourceFileDigests": "PENDING",
+    "testFileDigests": "PENDING",
+    "contractTestResult": "PENDING",
+    "historical100Of100AcceptedAsBuildBinding": false
+  },
+  "externalActions": "LOCKED",
+  "spend": {
+    "maximumEur": 0,
+    "realMoneyAllowed": false
+  },
+  "decisionEffect": {
+    "ctaOnlyBrowserE2E": "AUTHORIZED_PENDING",
+    "obsGate": "NO_EFFECT_STOP",
+    "audioGate": "NO_EFFECT_STOP",
+    "privacyTakeGate": "NO_EFFECT_STOP",
+    "liveGate": "NO_EFFECT_STOP",
+    "publicationGate": "NO_EFFECT_LOCKED"
+  }
+}

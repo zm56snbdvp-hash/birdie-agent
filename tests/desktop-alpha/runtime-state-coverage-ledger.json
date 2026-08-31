@@ -1,0 +1,225 @@
+{
+  "schema_version": "1.0",
+  "scope": "desktop-runtime-transport-ui",
+  "source_corpus": {
+    "corpus_id": "birdie-desktop-runtime-fault-regressions",
+    "manifest_hash": "sha256:6c583e52c854745f0ff84c2319af82443c6183330eb6d25f101a502ce381fb8c",
+    "trace_schema_version": "2.0"
+  },
+  "status_definitions": {
+    "PASS": "Existing deterministic evidence proves the expected edge or protected no-op.",
+    "UNPROVEN": "The contract names the edge, but no executed evidence isolates it.",
+    "STOP": "Observed evidence contradicts the expected edge; further promotion must stop."
+  },
+  "edges": [
+    {
+      "id": "EDGE.BOOTSTRAP.CONNECTING_TO_READY",
+      "from": "CONNECTING",
+      "stimulus": "fresh READY runtime snapshot",
+      "to": "READY",
+      "expected_evidence": "Exactly one visible READY projection after authoritative fresh evidence.",
+      "evidence": [
+        "apps/desktop/test/runtime-bridge.test.mjs: READY snapshot transports IDLE and microphone ENABLED through the bridge",
+        "apps/desktop/test/runtime-state-contract.test.mjs: canonical runtime/transport/freshness matrix projects one UI state"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.BOOTSTRAP.CONNECTING_TO_OFFLINE",
+      "from": "CONNECTING",
+      "stimulus": "authoritative initial OFFLINE snapshot",
+      "to": "OFFLINE",
+      "expected_evidence": "OFFLINE is visible until newer authoritative READY evidence arrives.",
+      "evidence": [
+        "apps/desktop/test/runtime-bridge.test.mjs: initial OFFLINE snapshot is replaced by the authoritative READY snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.DUPLICATE_IDENTICAL_NO_OP",
+      "from": "READY",
+      "stimulus": "identical snapshot at the same bridge revision",
+      "to": "READY",
+      "expected_evidence": "No visible transition and no contradictory state.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: duplicate-identical-snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.DUPLICATE_CONFLICT_NO_OP",
+      "from": "READY",
+      "stimulus": "conflicting OFFLINE snapshot at the same bridge revision",
+      "to": "READY",
+      "expected_evidence": "The conflicting duplicate is rejected; OFFLINE is never rendered.",
+      "evidence": [
+        "tests/desktop-alpha/golden/runtime-fault-regressions/01-desktop-duplicate-revision-conflict.json",
+        "apps/desktop/test/runtime-trace-minimizer.test.mjs: current RuntimeBridge satisfies every minimal regression trace"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.MICROPHONE_UNAVAILABLE_NO_DEGRADE",
+      "from": "READY+MICROPHONE_ENABLED",
+      "stimulus": "microphone becomes UNAVAILABLE while runtime transport remains fresh",
+      "to": "READY+MICROPHONE_UNAVAILABLE",
+      "expected_evidence": "Microphone loss is visible independently and does not advertise a runtime disconnect.",
+      "evidence": [
+        "apps/desktop/test/runtime-state-contract.test.mjs: microphone UNAVAILABLE is independent from a fresh READY runtime",
+        "apps/desktop/test/runtime-fault-injection.test.mjs: voice-unavailable-does-not-degrade-runtime"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.PRESENCE_EVENT_FIRST_NO_DOUBLE_TRANSITION",
+      "from": "READY+IDLE",
+      "stimulus": "Presence LISTENING event followed by matching full snapshot",
+      "to": "READY+LISTENING",
+      "expected_evidence": "Presence projects once and the matching snapshot does not create a contradictory UI edge.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: presence-event-first-full-snapshot-pair"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.DISCONNECT_TO_OFFLINE",
+      "from": "READY",
+      "stimulus": "newer runtime DISCONNECTED marker",
+      "to": "OFFLINE",
+      "expected_evidence": "Exactly one OFFLINE projection at the newer bridge revision.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: disconnect-marker-compatible-snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.OFFLINE.MATCHING_SNAPSHOT_NO_OP",
+      "from": "OFFLINE",
+      "stimulus": "matching DEGRADED/OFFLINE snapshot at the disconnect revision",
+      "to": "OFFLINE",
+      "expected_evidence": "The snapshot materializes disconnect evidence without a second visible OFFLINE edge.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: disconnect-marker-compatible-snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.OUT_OF_ORDER_NO_OP",
+      "from": "READY@12",
+      "stimulus": "late OFFLINE snapshot at bridge revision 11",
+      "to": "READY@12",
+      "expected_evidence": "Lower revision is rejected and cannot render OFFLINE.",
+      "evidence": [
+        "tests/desktop-alpha/golden/runtime-fault-regressions/02-desktop-out-of-order-snapshot.json"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.STALE_SNAPSHOT_NO_OP",
+      "from": "READY@10",
+      "stimulus": "stale OFFLINE snapshot at bridge revision 9",
+      "to": "READY@10",
+      "expected_evidence": "Stale transport evidence is ignored.",
+      "evidence": [
+        "tests/desktop-alpha/golden/runtime-fault-regressions/04-desktop-stale-snapshot.json"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.LATE_CONNECTED_NO_TRANSIENT",
+      "from": "READY",
+      "stimulus": "late CONNECTED with duplicate READY snapshot response",
+      "to": "READY",
+      "expected_evidence": "No transient CONNECTING or duplicate READY display.",
+      "evidence": [
+        "tests/desktop-alpha/golden/runtime-fault-regressions/03-desktop-reconnect-race.json"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.OFFLINE.RECONNECT_TO_READY",
+      "from": "OFFLINE",
+      "stimulus": "CONNECTED followed by newer fresh READY snapshot",
+      "to": "CONNECTING then READY",
+      "expected_evidence": "Reconnect visibly awaits authority, then reaches READY only after the fresh snapshot.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: delayed-reconnect-fresh-snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.READY.RAPID_OFFLINE_READY",
+      "from": "READY",
+      "stimulus": "newer OFFLINE snapshot immediately followed by newer READY snapshot",
+      "to": "OFFLINE then READY",
+      "expected_evidence": "Both ordered edges appear exactly once.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: rapid-offline-ready-edge"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.FRESH.STALE_TO_OFFLINE",
+      "from": "READY+FRESH",
+      "stimulus": "transport age exceeds staleAfterMs",
+      "to": "OFFLINE+STALE",
+      "expected_evidence": "STALE transport evidence fails closed to OFFLINE.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: freshness fault injects STALE and recovers only on a fresh transport snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.STALE.FRESH_SNAPSHOT_TO_READY",
+      "from": "OFFLINE+STALE",
+      "stimulus": "new native snapshot with a fresh lastCoreMessageAt",
+      "to": "READY+FRESH",
+      "expected_evidence": "Only fresh transport evidence clears STALE.",
+      "evidence": [
+        "apps/desktop/test/runtime-fault-injection.test.mjs: freshness fault injects STALE and recovers only on a fresh transport snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.STALE.PRESENCE_ONLY_READY_NO_RECOVERY",
+      "from": "OFFLINE+STALE",
+      "stimulus": "Presence/runtime READY update without a fresh transport timestamp",
+      "to": "OFFLINE+STALE",
+      "expected_evidence": "Presence-only evidence cannot clear transport staleness or render READY.",
+      "evidence": [
+        "apps/desktop/test/runtime-state-contract.test.mjs: Presence-only READY evidence cannot recover a STALE transport snapshot"
+      ],
+      "status": "PASS"
+    },
+    {
+      "id": "EDGE.OFFLINE.CONNECTED_PENDING_SNAPSHOT_HOLDS_CONNECTING",
+      "from": "OFFLINE",
+      "stimulus": "CONNECTED while runtime_get_snapshot remains pending",
+      "to": "CONNECTING",
+      "expected_evidence": "CONNECTING remains visible until a snapshot resolves or the refresh fails.",
+      "evidence": [
+        "apps/desktop/test/runtime-bridge.test.mjs: CONNECTED holds CONNECTING while the authoritative snapshot is pending"
+      ],
+      "status": "PASS"
+    }
+  ],
+  "summary": {
+    "PASS": 17,
+    "UNPROVEN": 0,
+    "STOP": 0
+  },
+  "next_read_only_test": {
+    "id": "TEST.OFFLINE.CONNECTED_PENDING_SNAPSHOT_HOLDS_CONNECTING",
+    "targets_edge": "EDGE.OFFLINE.CONNECTED_PENDING_SNAPSHOT_HOLDS_CONNECTING",
+    "file": "apps/desktop/test/runtime-bridge.test.mjs",
+    "test_name": "CONNECTED holds CONNECTING while the authoritative snapshot is pending",
+    "minimal_sequence": [
+      "Establish an authoritative OFFLINE snapshot",
+      "Deliver CONNECTED while runtime_get_snapshot remains unresolved",
+      "Assert CONNECTING remains visible before the snapshot promise settles",
+      "Resolve a fresh READY snapshot and assert the transition to READY"
+    ],
+    "execution_status": "PASS",
+    "execution_note": "Executed in isolation with Node: 1 test passed, 0 failed; Birdie, Core, and Voice processes were not started."
+  }
+}

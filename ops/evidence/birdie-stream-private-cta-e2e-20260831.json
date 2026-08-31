@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 2,
+  "evidenceId": "private-sale-founder-private-20260831-001",
+  "runId": "founder-private-20260831-001",
+  "runCounter": "1/1",
+  "scope": "PRIVATE_LOCAL_CTA_E2E_REVIEWED",
+  "founderAuthorization": "ONE_SUPERVISED_PRIVATE_RUN_CONSUMED",
+  "variant": "PRODUCT",
+  "externalActions": "LOCKED",
+  "reviewStatus": "STOP",
+  "supersededBy": "ops/evidence/birdie-stream-private-cta-e2e-20260831-ledger.json",
+  "legacyRunnerOutput": {
+    "schemaVersion": 1,
+    "claimedSource": "STREAM_CTA",
+    "evaluationStatus": "PASS",
+    "privateCtaEndToEnd": "PASS",
+    "note": "Preserved historical runner output; not accepted as the reviewed application gate."
+  },
+  "events": [
+    {
+      "eventId": "founder-private-20260831-001-view",
+      "sequenceId": 1,
+      "occurredAtMs": 1,
+      "type": "VIEW",
+      "sessionId": "founder-private-20260831-001",
+      "variantId": "PRODUCT",
+      "offerId": "product-offer-supervised-preview",
+      "campaignId": "campaign-product",
+      "segmentId": "product-cta",
+      "synthetic": true,
+      "externalAction": "LOCKED",
+      "consentState": "NOT_APPLICABLE",
+      "amountTestCents": 0
+    },
+    {
+      "eventId": "founder-private-20260831-001-cta",
+      "sequenceId": 2,
+      "occurredAtMs": 3,
+      "type": "CTA",
+      "sessionId": "founder-private-20260831-001",
+      "variantId": "PRODUCT",
+      "offerId": "product-offer-supervised-preview",
+      "campaignId": "campaign-product",
+      "segmentId": "product-cta",
+      "synthetic": true,
+      "externalAction": "LOCKED",
+      "consentState": "NOT_APPLICABLE",
+      "amountTestCents": 0
+    },
+    {
+      "eventId": "founder-private-20260831-001-lead",
+      "sequenceId": 3,
+      "occurredAtMs": 123056,
+      "type": "LEAD",
+      "sessionId": "founder-private-20260831-001",
+      "variantId": "PRODUCT",
+      "offerId": "product-offer-supervised-preview",
+      "campaignId": "campaign-product",
+      "segmentId": "product-cta",
+      "synthetic": true,
+      "externalAction": "LOCKED",
+      "consentState": "GRANTED",
+      "amountTestCents": 0
+    },
+    {
+      "eventId": "founder-private-20260831-001-sale",
+      "sequenceId": 4,
+      "occurredAtMs": 131056,
+      "type": "SALE",
+      "sessionId": "founder-private-20260831-001",
+      "variantId": "PRODUCT",
+      "offerId": "product-offer-supervised-preview",
+      "campaignId": "campaign-product",
+      "segmentId": "product-cta",
+      "synthetic": true,
+      "externalAction": "LOCKED",
+      "consentState": "GRANTED",
+      "amountTestCents": 4900
+    }
+  ],
+  "evaluation": {
+    "status": "PASS",
+    "meaning": "The stored synthetic event corpus is internally valid; this does not prove CTA provenance.",
+    "firstViolation": null,
+    "metrics": {
+      "eventCount": 4,
+      "sessionCount": 1,
+      "counts": { "VIEW": 1, "CTA": 1, "LEAD": 1, "SALE": 1 },
+      "ratesBps": {
+        "ctaPerView": 10000,
+        "leadPerCta": 10000,
+        "salePerLead": 10000,
+        "salePerView": 10000
+      },
+      "amountTestCents": 4900
+    }
+  },
+  "checks": {
+    "browserOperatorAttestedDomCtaClick": "ATTESTED",
+    "sameOriginNavigation": "ATTESTED",
+    "exactSyntheticFunnelOrder": "PASS",
+    "consentBeforeLead": "PASS",
+    "syntheticTestValueOnly": "PASS",
+    "applicationEnforcedNavigationProvenanceAtExecution": "STOP",
+    "oneShotReplayProtectionAtExecution": "STOP",
+    "executedBuildBinding": "STOP",
+    "externalActionCount": 0,
+    "realMoneyMoved": "NOT_APPLICABLE"
+  },
+  "decisions": {
+    "observedSyntheticEventCorpus": "PASS",
+    "privateCtaEndToEnd": "STOP",
+    "postRunContractFixBrowserE2E": "UNVERIFIED_NO_SECOND_GO",
+    "realLead": "NOT_APPLICABLE",
+    "realSale": "NOT_APPLICABLE",
+    "publicStream": "STOP",
+    "publication": "LOCKED"
+  },
+  "reviewReasonIds": [
+    "EXECUTED_BUILD_CTA_SOURCE_FORGEABLE",
+    "EXECUTED_BUILD_REPLAY_LOCK_NOT_ENFORCED",
+    "EXECUTED_BUILD_UNBOUND_AFTER_HMR"
+  ],
+  "redaction": {
+    "applied": true,
+    "excludes": ["PII", "URLs", "credentials", "payment data", "messages", "free-form lead data"]
+  }
+}

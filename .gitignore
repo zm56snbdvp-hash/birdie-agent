@@ -4,3 +4,15 @@ node_modules/
 !.env.example
 npm-debug.log*
 gha-creds-*.json
+
+# Birdie Desktop / Voice local build artifacts
+build/
+apps/desktop/dist/
+apps/desktop/node_modules/
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/gen/
+.birdie/logs/
+
+# Reviewed local third-party source and model weights are provisioned by script
+third_party/
+models/whisper/

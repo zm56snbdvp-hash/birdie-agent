@@ -1,0 +1,320 @@
+name: Birdie Desktop Alpha
+
+on:
+  push:
+    branches: [feature/birdie-desktop-alpha]
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/protocol/**'
+      - 'services/core/**'
+      - 'services/voice/**'
+      - 'ops/evidence/**'
+      - 'ops/obs/**'
+      - 'ops/stream/**'
+      - 'scripts/*birdie-stream*.mjs'
+      - 'scripts/prepare-birdie-desktop-bundle.ps1'
+      - 'scripts/test-birdie-desktop-bundle-runtime.ps1'
+      - 'scripts/setup-birdie-whisper-cpp.ps1'
+      - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
+      - 'scripts/run-birdie-desktop-embedded.ps1'
+      - 'tests/desktop-alpha/**'
+      - '.gitattributes'
+      - '.github/workflows/birdie-desktop-alpha.yml'
+  pull_request:
+    paths:
+      - 'apps/desktop/**'
+      - 'packages/protocol/**'
+      - 'services/core/**'
+      - 'services/voice/**'
+      - 'ops/evidence/**'
+      - 'ops/obs/**'
+      - 'ops/stream/**'
+      - 'scripts/*birdie-stream*.mjs'
+      - 'scripts/prepare-birdie-desktop-bundle.ps1'
+      - 'scripts/test-birdie-desktop-bundle-runtime.ps1'
+      - 'scripts/setup-birdie-whisper-cpp.ps1'
+      - 'scripts/repair-and-run-birdie-desktop-alpha.ps1'
+      - 'scripts/run-birdie-desktop-embedded.ps1'
+      - 'tests/desktop-alpha/**'
+      - '.gitattributes'
+      - '.github/workflows/birdie-desktop-alpha.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract-and-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate protocol contract
+        run: node packages/protocol/src/validate-contract.mjs
+      - name: Core runtime tests
+        run: node --test services/core/test/*.test.mjs
+      - name: Golden event simulator
+        run: |
+          node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/normal-turn.json
+          node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/barge-in-accepted.json
+          node tests/desktop-alpha/event-simulator.mjs tests/desktop-alpha/golden/barge-in-rejected.json
+      - name: Walking skeleton
+        run: node tests/desktop-alpha/walking-skeleton.mjs
+      - name: Embedded launcher contract
+        run: node --test tests/desktop-alpha/embedded-launcher-contract.test.mjs
+
+  windows-desktop-build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      BIRDIE_DESKTOP_BUILD_ID: ci-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Validate Desktop PowerShell launcher
+        shell: pwsh
+        run: |
+          $tokens = $null
+          $errors = $null
+          foreach ($script in @(
+            'scripts/repair-and-run-birdie-desktop-alpha.ps1',
+            'scripts/run-birdie-desktop-embedded.ps1',
+            'scripts/prepare-birdie-desktop-bundle.ps1',
+            'scripts/test-birdie-desktop-bundle-runtime.ps1'
+          )) {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path $script),
+              [ref]$tokens,
+              [ref]$errors
+            )
+            if ($errors.Count -gt 0) {
+              $errors | ForEach-Object { Write-Error $_.Message }
+              throw "Desktop launcher parser validation failed: $script"
+            }
+          }
+      - name: Validate managed Tauri frontend override
+        shell: pwsh
+        run: |
+          $config = Get-Content 'apps/desktop/src-tauri/tauri.managed-dev.conf.json' -Raw | ConvertFrom-Json
+          if ($null -ne $config.build.beforeDevCommand) {
+            throw 'Managed Tauri config must set beforeDevCommand to null.'
+          }
+      - name: Install desktop dependencies
+        run: npm ci --prefix apps/desktop --include=optional --no-audit --no-fund
+      - name: Test Desktop RuntimeBridge
+        run: npm test --prefix apps/desktop
+      - name: Build Presence frontend
+        run: npm run build --prefix apps/desktop
+      - name: Verify frontend build identity
+        shell: pwsh
+        run: |
+          $match = Get-ChildItem 'apps/desktop/dist' -Recurse -File |
+            Select-String -SimpleMatch $env:BIRDIE_DESKTOP_BUILD_ID -Quiet
+          if (-not $match) {
+            throw 'Built frontend does not contain BIRDIE_DESKTOP_BUILD_ID.'
+          }
+      - name: Build and test clean-checkout bundle resources before Cargo
+        shell: pwsh
+        run: .\scripts\prepare-birdie-desktop-bundle.ps1 -RunVoiceTests | Out-Host
+      - name: Test Tauri host library
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --lib
+      - name: Build Tauri desktop executable
+        run: cargo build --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - name: Smoke embedded Tauri bridge and current frontend
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:RUNNER_TEMP 'birdie-desktop-ci-diagnostic.log'
+          Remove-Item $diagnostic -Force -ErrorAction SilentlyContinue
+          $env:BIRDIE_DESKTOP_DIAGNOSTIC_LOG = $diagnostic
+          $env:BIRDIE_MANAGE_CORE = '0'
+          $env:BIRDIE_MANAGE_VOICE = '0'
+          $executable = Resolve-Path 'apps/desktop/src-tauri/target/debug/birdie-desktop.exe'
+          $desktop = Start-Process -FilePath $executable -PassThru
+          try {
+            $deadline = [DateTime]::UtcNow.AddSeconds(30)
+            $proof = $null
+            do {
+              $desktop.Refresh()
+              if ($desktop.HasExited) {
+                throw "Tauri desktop exited during bridge smoke test: $($desktop.ExitCode)"
+              }
+              if (Test-Path -LiteralPath $diagnostic) {
+                $proof = Get-Content -LiteralPath $diagnostic -Raw
+                $nativeReady = $proof.Contains("DESKTOP_START pid=$($desktop.Id) buildId=$env:BIRDIE_DESKTOP_BUILD_ID")
+                $frontendReady = $proof.Contains("DESKTOP_FRONTEND source=js buildId=$env:BIRDIE_DESKTOP_BUILD_ID")
+                $invokeReady = $proof.Contains('TAURI_INVOKE_RESULT source=js command=runtime_get_snapshot origin=connect.pre-listeners')
+                $listenersReady = $proof.Contains('TAURI_LISTEN_RESULT source=js event=runtime:ipc-error result=OK')
+                if ($nativeReady -and $frontendReady -and $invokeReady -and $listenersReady) { break }
+              }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+
+            if (-not ($nativeReady -and $frontendReady -and $invokeReady -and $listenersReady)) {
+              if ($proof) { Write-Host $proof }
+              throw 'Embedded Tauri bridge did not produce native/frontend/invoke/listener proof.'
+            }
+          }
+          finally {
+            if ($desktop -and -not $desktop.HasExited) {
+              Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $desktop.Id -Timeout 10 -ErrorAction SilentlyContinue
+            }
+          }
+      - name: Prove live Core named pipe through Rust and embedded WebView
+        shell: pwsh
+        run: |
+          $diagnostic = Join-Path $env:RUNNER_TEMP 'birdie-desktop-live-core-diagnostic.log'
+          $coreOut = Join-Path $env:RUNNER_TEMP 'birdie-core-live.stdout.log'
+          $coreErr = Join-Path $env:RUNNER_TEMP 'birdie-core-live.stderr.log'
+          $fixtureOut = Join-Path $env:RUNNER_TEMP 'birdie-ready-runtime-fixture.stdout.log'
+          $fixtureErr = Join-Path $env:RUNNER_TEMP 'birdie-ready-runtime-fixture.stderr.log'
+          Remove-Item $diagnostic,$coreOut,$coreErr,$fixtureOut,$fixtureErr -Force -ErrorAction SilentlyContinue
+          Get-Process birdie-desktop -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+          $env:BIRDIE_DESKTOP_DIAGNOSTIC_LOG = $diagnostic
+          $env:BIRDIE_MANAGE_CORE = '0'
+          $env:BIRDIE_MANAGE_VOICE = '0'
+          $env:BIRDIE_BRAIN_PROVIDER = 'development-ack'
+          $core = Start-Process -FilePath 'node' -ArgumentList @(
+            'services/core/src/server-main.mjs'
+          ) -WorkingDirectory $PWD -RedirectStandardOutput $coreOut -RedirectStandardError $coreErr -PassThru
+          $fixture = Start-Process -FilePath 'node' -ArgumentList @(
+            'tests/desktop-alpha/ready-runtime-fixture.mjs'
+          ) -WorkingDirectory $PWD -RedirectStandardOutput $fixtureOut -RedirectStandardError $fixtureErr -PassThru
+          $desktop = $null
+          try {
+            $fixtureDeadline = [DateTime]::UtcNow.AddSeconds(20)
+            do {
+              $core.Refresh()
+              $fixture.Refresh()
+              if ($core.HasExited) { throw "Birdie Core exited before ready fixture: $($core.ExitCode)" }
+              if ($fixture.HasExited) { throw "Ready runtime fixture exited: $($fixture.ExitCode)" }
+              $fixtureProof = ''
+              if (Test-Path -LiteralPath $fixtureOut) {
+                $fixtureProof = [string](Get-Content -LiteralPath $fixtureOut -Raw)
+              }
+              $fixtureReady = -not [string]::IsNullOrEmpty($fixtureProof) -and
+                $fixtureProof.Contains(
+                'READY_RUNTIME_FIXTURE presence=IDLE microphone=ENABLED'
+              )
+              if ($fixtureReady) { break }
+              Start-Sleep -Milliseconds 100
+            } while ([DateTime]::UtcNow -lt $fixtureDeadline)
+            if (-not $fixtureReady) {
+              if (Test-Path -LiteralPath $fixtureErr) { Get-Content -LiteralPath $fixtureErr | Out-Host }
+              throw 'Ready runtime fixture did not establish IDLE / microphone ENABLED.'
+            }
+
+            $executable = Resolve-Path 'apps/desktop/src-tauri/target/debug/birdie-desktop.exe'
+            $desktop = Start-Process -FilePath $executable -PassThru
+            $deadline = [DateTime]::UtcNow.AddSeconds(40)
+            $nativePipe = $false
+            $hello = $false
+            $rustReady = $false
+            $jsReady = $false
+            $projectionReady = $false
+            do {
+              $core.Refresh()
+              if ($core.HasExited) {
+                throw "Birdie Core exited during live pipe proof: $($core.ExitCode)"
+              }
+              $desktop.Refresh()
+              if ($desktop.HasExited) {
+                throw "Tauri desktop exited during live pipe proof: $($desktop.ExitCode)"
+              }
+              if (Test-Path -LiteralPath $diagnostic) {
+                $lines = @(Get-Content -LiteralPath $diagnostic)
+                $nativePipe = @($lines | Where-Object { $_ -like '*PIPE_CONNECTED*' }).Count -gt 0
+                $hello = @($lines | Where-Object { $_ -like '*HELLO_ACK accepted=true*' }).Count -gt 0
+                $rustReady = @($lines | Where-Object {
+                  $_ -like '*RUST_STATE_UPDATED*' -and
+                  $_ -like '*lifecycle=READY*' -and
+                  $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*microphoneState=ENABLED*' -and
+                  $_ -like '*brainState=READY*'
+                }).Count -gt 0
+                $jsReady = @($lines | Where-Object {
+                  $_ -like '*TAURI_INVOKE_RESULT source=js command=runtime_get_snapshot*' -and
+                  $_ -like '*lifecycle=READY*' -and
+                  $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*microphoneState=ENABLED*' -and
+                  $_ -like '*brainState=READY*'
+                }).Count -gt 0
+                $projectionReady = @($lines | Where-Object {
+                  $_ -like '*JS_SNAPSHOT source=js*' -and
+                  $_ -like '*lifecycle=READY*' -and
+                  $_ -like '*presence.state=IDLE*' -and
+                  $_ -like '*microphoneState=ENABLED*' -and
+                  $_ -like '*brainState=READY*'
+                }).Count -gt 0
+                if ($nativePipe -and $hello -and $rustReady -and $jsReady -and $projectionReady) { break }
+              }
+              Start-Sleep -Milliseconds 250
+            } while ([DateTime]::UtcNow -lt $deadline)
+
+            if (-not ($nativePipe -and $hello -and $rustReady -and $jsReady -and $projectionReady)) {
+              if (Test-Path -LiteralPath $diagnostic) { Get-Content -LiteralPath $diagnostic | Out-Host }
+              if (Test-Path -LiteralPath $coreOut) { Get-Content -LiteralPath $coreOut | Out-Host }
+              if (Test-Path -LiteralPath $coreErr) { Get-Content -LiteralPath $coreErr | Out-Host }
+              if (Test-Path -LiteralPath $fixtureOut) { Get-Content -LiteralPath $fixtureOut | Out-Host }
+              if (Test-Path -LiteralPath $fixtureErr) { Get-Content -LiteralPath $fixtureErr | Out-Host }
+              throw 'Live Core named pipe did not reach the headless embedded WebView READY state.'
+            }
+          }
+          finally {
+            if ($desktop -and -not $desktop.HasExited) {
+              Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $desktop.Id -Timeout 10 -ErrorAction SilentlyContinue
+            }
+            if ($core -and -not $core.HasExited) {
+              Stop-Process -Id $core.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $core.Id -Timeout 10 -ErrorAction SilentlyContinue
+            }
+            if ($fixture -and -not $fixture.HasExited) {
+              Stop-Process -Id $fixture.Id -Force -ErrorAction SilentlyContinue
+              Wait-Process -Id $fixture.Id -Timeout 10 -ErrorAction SilentlyContinue
+            }
+          }
+      - name: Verify native build did not mutate watched source files
+        shell: pwsh
+        run: |
+          git diff --exit-code -- apps/desktop/src-tauri
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The Tauri build mutated source files and can cause an infinite dev rebuild loop.'
+          }
+      - name: Build clean-checkout NSIS installer
+        run: npm --prefix apps/desktop run tauri -- build
+      - name: Verify installer payload build
+        shell: pwsh
+        run: |
+          if (-not (Test-Path 'build/runtime/node.exe' -PathType Leaf)) {
+            throw 'Packaged Node runtime was not staged.'
+          }
+          if (-not (Test-Path 'build/runtime/LICENSE.node.txt' -PathType Leaf)) {
+            throw 'Packaged Node license was not staged.'
+          }
+          if (-not (Test-Path 'build/voice/Release/birdie-voice-host.exe' -PathType Leaf)) {
+            throw 'Packaged Voice host was not built.'
+          }
+          if (-not (Test-Path 'models/whisper/ggml-base.bin' -PathType Leaf)) {
+            throw 'Verified Whisper model was not provisioned.'
+          }
+          $installer = Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File
+          if (@($installer).Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $(@($installer).Count)."
+          }
+      - name: Smoke installed bundle without system Node or microphone hardware
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem 'apps/desktop/src-tauri/target/release/bundle/nsis' -Filter '*.exe' -File)
+          if ($installer.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installer.Count)."
+          }
+          .\scripts\test-birdie-desktop-bundle-runtime.ps1 -InstallerPath $installer[0].FullName | Format-List | Out-Host

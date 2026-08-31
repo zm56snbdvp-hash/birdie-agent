@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 1,
+  "takeId": "birdie-stream-rehearsal-20260830T050017Z",
+  "operator": "Codex local rehearsal",
+  "recordingStartUtc": "2026-08-30T05:41:23.996Z",
+  "recordingStopUtc": "2026-08-30T05:51:41.409Z",
+  "recordingDurationMs": 617413,
+  "repository": {
+    "branch": "feature/birdie-desktop-alpha",
+    "head": "9fff8c26e8aecdf7364e15004152802458952bc9",
+    "ahead": 4,
+    "behind": 0,
+    "workingTreeAtPreflight": {
+      "modified": 20,
+      "untracked": 35,
+      "statusSha256": "c1c531821d3edc721dfca381555ee370eea7ccef35ef2ef0b5c94cbe36fe70e6",
+      "trackedDiffSha256": "7daf65d7b4015ea05f7f1de58da6bc754e991b24e2a4d17fe6457c0bdfcf7881",
+      "untrackedManifestSha256": "00ff7a90642f412dd1daef33753624b7a61b4a53df029360fec35ddac31efff6",
+      "note": "Snapshot predates this evidence file and the isolated synthetic ERROR fixture. Existing changes were preserved."
+    }
+  },
+  "configuration": {
+    "buildId": "9fff8c26e8ae-stream-dirty",
+    "obsVersion": "32.2.2",
+    "obsProfile": "Birdie-Stream-Local-1080p30",
+    "obsSceneCollection": "Birdie Stream Local",
+    "video": "1920x1080@30",
+    "encoder": "NVIDIA NVENC H.264",
+    "container": "mkv",
+    "audioContract": "48000 Hz stereo container; no desktop, browser, microphone, camera or capture source",
+    "files": [
+      {
+        "path": "ops/obs/birdie-stream-local.scene-plan.json",
+        "sha256": "5a50109b783397d14cedc95d976b6ebbcb7b70fefc5d187d3058bb0fb4494701"
+      },
+      {
+        "path": "apps/desktop/public/stream-mode.json",
+        "sha256": "5aa0ebc67d052d700e48d062cc49f7953d43d161e20ccf25403899b1e68df878"
+      },
+      {
+        "path": "apps/desktop/src/stream-mode-config.js",
+        "sha256": "ea70bd5e3818d98378df1fdbeeea55b089dbc7c918294a3d2c71ddb4246d0a83"
+      },
+      {
+        "path": "apps/desktop/src/stream-mode.js",
+        "sha256": "09d11bee13235c1a2556fa8968ca48d7eeed5101f5d6d6d2c2382a4dad06ae75"
+      },
+      {
+        "path": "REDACTED_LOCAL_OBS_PROFILE_PATH",
+        "sha256": "2f7aaae259f5581fd3bb7ef13b1e7a13fee4a3ecc6c07723c11815599a95a302"
+      },
+      {
+        "path": "REDACTED_LOCAL_OBS_SCENE_PATH",
+        "sha256": "d8cef0d6b6b92ae831425a588106658077a0f79152ccf3f444f1f43ca15c1524",
+        "hashPhase": "post-rehearsal after restoring the previous active collection",
+        "semanticSha256ExcludingCurrentScene": "3bf760dc33402d9334572137290bab6073f684652671734f2144eb9c9b6c1f18",
+        "note": "OBS rewrites current_scene/current_program_scene during scene switches; no exact byte hash was captured at recording start."
+      }
+    ]
+  },
+  "artifacts": {
+    "mkv": {
+      "path": "REDACTED_LOCAL_RECORDING_PATH",
+      "bytes": 475240757,
+      "sha256": "2ec3fc3cc8d5723165f4e4a9d97fe7e49072dfd22420773ffd5eb5ceb8229e71"
+    },
+    "obsLog": {
+      "path": "REDACTED_LOCAL_OBS_LOG_PATH",
+      "bytes": 43291,
+      "sha256": "325e5980ab796c8107a6e28f753da71f166f8b07f7d28841cd3ceed5d7acbab1"
+    }
+  },
+  "sceneTimeline": [
+    { "plannedSec": 0, "actualSec": 0, "scene": "00_START", "status": "PASS" },
+    { "plannedSec": 30, "actualSec": 30.227, "scene": "01_STREAM", "status": "PASS" },
+    { "plannedSec": 120, "actualSec": 120.233, "scene": "09_BRB", "status": "PASS" },
+    { "plannedSec": 150, "actualSec": 150.252, "scene": "01_STREAM", "status": "PASS" },
+    { "plannedSec": 240, "actualSec": 240.212, "scene": "02_STREAM_BACKUP", "status": "PASS" },
+    { "plannedSec": 300, "actualSec": 300.174, "scene": "03_CLIP_30", "status": "PASS" },
+    { "plannedSec": 330, "actualSec": 330.222, "scene": "04_CLIP_60", "status": "PASS" },
+    { "plannedSec": 390, "actualSec": 390.241, "scene": "01_STREAM", "status": "PASS" },
+    {
+      "plannedSec": 510,
+      "actualSec": 510.593,
+      "scene": "99_SAFE",
+      "method": "Ctrl+Alt+Shift+F12 targeted at Codex",
+      "status": "FAIL",
+      "observed": "01_STREAM remained active"
+    },
+    {
+      "plannedSec": 510,
+      "actualSec": 531.162,
+      "scene": "99_SAFE",
+      "method": "Ctrl+Alt+Shift+F12 with OBS focused",
+      "status": "PASS",
+      "verificationUpperBoundMs": 7308
+    },
+    { "plannedSec": 540, "actualSec": 546.71, "scene": "01_STREAM", "status": "PASS_WITH_DELAY" },
+    { "plannedSec": 570, "actualSec": 570.173, "scene": "10_END", "status": "PASS" },
+    {
+      "plannedSec": 600,
+      "actualSec": 600.627,
+      "action": "stop recording",
+      "method": "Ctrl+Alt+Shift+F10 targeted at Codex",
+      "status": "FAIL",
+      "observed": "recording remained active"
+    },
+    {
+      "plannedSec": 600,
+      "actualSec": 617.125,
+      "action": "stop recording",
+      "method": "Ctrl+Alt+Shift+F10 with OBS focused",
+      "status": "PASS",
+      "verificationUpperBoundMs": 11054
+    }
+  ],
+  "browserEvidence": {
+    "sourceOwnership": "parallel local browser instance; not the OBS Browser Source process",
+    "url": "REDACTED_LOCAL_LOOPBACK_STREAM_URL",
+    "startedAtUtc": "2026-08-30T05:41:11.190Z",
+    "recordingStartOffsetMs": 12806,
+    "durationMs": 601572,
+    "renderer": "WEBGL",
+    "viewportCss": "1280x720",
+    "firstFrameMs": 258,
+    "configReadyMs": 15,
+    "loops": 8,
+    "transitions": 84,
+    "errors": 0,
+    "p95FrameMs": 50.1,
+    "maxFrameGapMs": 710,
+    "longFrameRate": 0.04931640625,
+    "stateP10Fps": {
+      "IDLE": 29.7,
+      "SPEECH_DETECTED": 27.7,
+      "LISTENING": 28.2,
+      "THINKING": 29.7,
+      "WORKING": 29.7,
+      "SPEAKING": 29.0,
+      "SUCCESS": 26.0
+    },
+    "verdict": "STOP",
+    "stopReason": "active state p10 lower bound 26.0 FPS is below the 28 FPS gate"
+  },
+  "errorFixture": {
+    "url": "REDACTED_LOCAL_LOOPBACK_ERROR_FIXTURE_URL",
+    "startedAtUtc": "2026-08-30T05:52:09.463Z",
+    "state": "ERROR",
+    "copy": "Synthetischer Demo-Fehler",
+    "code": "SYNTHETIC_FIXTURE",
+    "errors": 1,
+    "loops": 0,
+    "transitions": 1,
+    "startsLoop": false,
+    "status": "PASS"
+  },
+  "layoutEvidence": {
+    "viewportCss": "1280x720",
+    "obsDeviceScaleFactor": 1.5,
+    "mappedOutput": "1920x1080",
+    "safeRectCss": { "left": 64, "top": 36, "right": 1216, "bottom": 684 },
+    "checked": [
+      ".stream-header",
+      ".stream-message",
+      ".stream-voice",
+      ".stream-telemetry",
+      ".stream-cta",
+      ".stream-footer",
+      "#stream-qr-fallback"
+    ],
+    "failures": [],
+    "overflow": false,
+    "status": "PASS"
+  },
+  "obsEvidence": {
+    "framesOutput": 18503,
+    "framesDrawn": 18506,
+    "framesAttempted": 18523,
+    "renderLagFrames": 17,
+    "renderLagPercent": 0.1,
+    "encodingSkippedFrames": 17,
+    "encodingAttemptedFrames": 18520,
+    "encodingLagPercent": 0.1,
+    "mixerVisibleSourcesDuringTake": 0,
+    "externalStreamingStarted": false,
+    "virtualCameraStarted": false,
+    "replayBufferStarted": false,
+    "note": "OBS muxed a 48 kHz AAC track. No capture or mixer source was active; decoded waveform content was not independently inspected."
+  },
+  "hostPerformance": {
+    "status": "CONFOUNDED",
+    "durationSec": 620.6,
+    "nominalIntervalSec": 10,
+    "samples": 55,
+    "hostCpuPct": { "p50": 64, "p95": 100, "max": 100 },
+    "gpuEngineAggregatePct": { "p50": 86, "p95": 100, "max": 104 },
+    "availableRamMb": { "min": 961.1, "p50": 2076 },
+    "obsCpuPct": { "p50": 5.18, "p95": 7.09, "max": 9.34 },
+    "obsWorkingSetMb": { "p50": 608.4, "p95": 765.6, "max": 774.9 },
+    "obsPrivateMb": { "p50": 1133.3, "p95": 1402.4, "max": 1410.5 },
+    "viteWorkingSetMb": { "p50": 74.3, "p95": 74.4, "max": 74.4 },
+    "note": "GPU value is a sum over engines and can exceed 100. A process-recycle produced one negative OBS CPU delta; percentile summaries exclude the initial cumulative counter but are not a quiet-host certification."
+  },
+  "tests": [
+    {
+      "command": "node --test apps/desktop/test/stream-mode.test.mjs apps/desktop/test/stream-render-hardening.test.mjs apps/desktop/test/stream-ops.test.mjs",
+      "tests": 29,
+      "passed": 29,
+      "failed": 0,
+      "durationMs": 2871
+    },
+    {
+      "command": "npm --prefix apps/desktop run build",
+      "status": "PASS",
+      "modules": 19,
+      "durationSec": 12.76
+    },
+    {
+      "command": "node scripts/check-birdie-stream-readiness.mjs",
+      "repositoryPlanStatus": "PASS",
+      "founderGo": "STOP"
+    },
+    {
+      "command": "git diff --check",
+      "status": "PASS_WITH_LINE_ENDING_WARNINGS"
+    }
+  ],
+  "decisions": {
+    "privateLocalReview": "GO_WITH_LIMITS",
+    "liveDemo": "NO_GO",
+    "obsRecording": "NO_GO",
+    "conversion": "STOP",
+    "publication": "STOP"
+  },
+  "blockers": [
+    "global OBS SAFE and stop-recording hotkeys did not fire from another application",
+    "active-state p10 FPS failed at 26.0 under a highly loaded host",
+    "CTA remains example.com and the QR is a non-scannable placeholder",
+    "AAC track content was not independently decoded for a final privacy listening pass"
+  ],
+  "rollback": {
+    "recordingStopped": true,
+    "obsProfileRestored": "Unbenannt",
+    "obsSceneCollectionRestored": "Birdie Live Lab — FreeBridge v4",
+    "obsClosed": true,
+    "viteStopped": true,
+    "browserTabClosed": true,
+    "ports1421And1424Listening": false,
+    "taskOwnedObsProcesses": 0,
+    "taskOwnedViteProcesses": 0,
+    "status": "PASS"
+  }
+}

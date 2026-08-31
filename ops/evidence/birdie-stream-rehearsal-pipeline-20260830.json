@@ -1,0 +1,901 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "stream-rehearsal-birdie-stream-show-15min-v1",
+  "scope": "LOCAL_SYNTHETIC_REHEARSAL",
+  "externalActions": "LOCKED",
+  "sourceDigests": {
+    "showPlan": "4c7892e19ef70f972c5ff2f1b668200815164f461f773ab1690397fbac6f04c0",
+    "performanceBaseline": "71a841f18e5c660f71379263c4da5e602d0a377ecd9db307ccfc438998732abd",
+    "currentLaunchConsole": "71871159573330ea8e81ea12d52af72b075c53f32a04c0d2f8029e4fec2ed5d0"
+  },
+  "show": {
+    "id": "birdie-stream-show-15min-v1",
+    "plannedDurationMs": 900000,
+    "plannedDurationTimecode": "15:00",
+    "segmentCount": 6,
+    "markerCount": 40,
+    "clipCount": 5
+  },
+  "planValidation": {
+    "status": "PASS",
+    "gates": [
+      {
+        "id": "schema",
+        "status": "PASS",
+        "observed": 1,
+        "expected": 1,
+        "reasonId": null
+      },
+      {
+        "id": "scope",
+        "status": "PASS",
+        "observed": "LOCAL_SYNTHETIC_REHEARSAL",
+        "expected": "LOCAL_SYNTHETIC_REHEARSAL",
+        "reasonId": null
+      },
+      {
+        "id": "duration",
+        "status": "PASS",
+        "observed": 900000,
+        "expected": 900000,
+        "reasonId": null
+      },
+      {
+        "id": "segment-ids",
+        "status": "PASS",
+        "observed": 6,
+        "expected": ">= 6 unique IDs",
+        "reasonId": null
+      },
+      {
+        "id": "segment-roles",
+        "status": "PASS",
+        "observed": [
+          "HOOK",
+          "SEGMENT_1",
+          "SEGMENT_2",
+          "SEGMENT_3",
+          "CTA",
+          "CLOSE"
+        ],
+        "expected": [
+          "HOOK",
+          "SEGMENT_1",
+          "SEGMENT_2",
+          "SEGMENT_3",
+          "CTA",
+          "CLOSE"
+        ],
+        "reasonId": null
+      },
+      {
+        "id": "segment-continuity",
+        "status": "PASS",
+        "observed": true,
+        "expected": true,
+        "reasonId": null
+      },
+      {
+        "id": "marker-ids",
+        "status": "PASS",
+        "observed": 40,
+        "expected": "> 0 unique IDs",
+        "reasonId": null
+      },
+      {
+        "id": "marker-order",
+        "status": "PASS",
+        "observed": true,
+        "expected": true,
+        "reasonId": null
+      },
+      {
+        "id": "marker-segments",
+        "status": "PASS",
+        "observed": true,
+        "expected": true,
+        "reasonId": null
+      },
+      {
+        "id": "marker-kinds",
+        "status": "PASS",
+        "observed": [
+          "SCENE",
+          "OPERATOR",
+          "AUDIO",
+          "CLIP",
+          "FALLBACK",
+          "VOICE",
+          "CTA"
+        ],
+        "expected": [
+          "SCENE",
+          "AUDIO",
+          "VOICE",
+          "CTA",
+          "CLIP",
+          "FALLBACK",
+          "OPERATOR"
+        ],
+        "reasonId": null
+      },
+      {
+        "id": "audio-fixtures",
+        "status": "PASS",
+        "observed": [
+          "audio:silent-48khz-stereo",
+          "audio:silent-midroll-check",
+          "audio:silent-midroll-check",
+          "audio:silent-final-check"
+        ],
+        "expected": [
+          "audio:silent-48khz-stereo",
+          "audio:silent-midroll-check",
+          "audio:silent-final-check"
+        ],
+        "reasonId": null
+      },
+      {
+        "id": "voice-fixtures",
+        "status": "PASS",
+        "observed": [
+          "voice:synthetic-ui-loop",
+          "voice:synthetic-success-cycle"
+        ],
+        "expected": [
+          "voice:synthetic-ui-loop",
+          "voice:synthetic-success-cycle"
+        ],
+        "reasonId": null
+      },
+      {
+        "id": "cta-fixtures",
+        "status": "PASS",
+        "observed": [
+          "cta:local-draft-verified-asset"
+        ],
+        "expected": [
+          "cta:local-draft-verified-asset"
+        ],
+        "reasonId": null
+      },
+      {
+        "id": "fallback-volume",
+        "status": "PASS",
+        "observed": 7,
+        "expected": ">= 2",
+        "reasonId": null
+      },
+      {
+        "id": "clip-count",
+        "status": "PASS",
+        "observed": 5,
+        "expected": 5,
+        "reasonId": null
+      },
+      {
+        "id": "clip-bounds",
+        "status": "PASS",
+        "observed": true,
+        "expected": true,
+        "reasonId": null
+      }
+    ]
+  },
+  "markerReplay": {
+    "clockMode": "SIMULATED",
+    "contractReplayVerdict": "PASS",
+    "realtimeDurationEvidence": "UNKNOWN",
+    "realtimeWitnessConsistency": "UNKNOWN",
+    "gates": [
+      {
+        "id": "marker-cardinality",
+        "status": "PASS",
+        "observed": 40,
+        "expected": 40,
+        "reasonId": null
+      },
+      {
+        "id": "marker-known",
+        "status": "PASS",
+        "observed": [],
+        "expected": [],
+        "reasonId": null
+      },
+      {
+        "id": "marker-complete",
+        "status": "PASS",
+        "observed": [],
+        "expected": [],
+        "reasonId": null
+      },
+      {
+        "id": "marker-status",
+        "status": "PASS",
+        "observed": [],
+        "expected": [],
+        "reasonId": null
+      },
+      {
+        "id": "marker-time-binding",
+        "status": "PASS",
+        "observed": true,
+        "expected": true,
+        "reasonId": null
+      },
+      {
+        "id": "marker-drift",
+        "status": "PASS",
+        "observed": 18,
+        "expected": "<= 250 ms",
+        "reasonId": null
+      }
+    ],
+    "trace": [
+      {
+        "markerId": "m001",
+        "plannedAtMs": 0,
+        "observedAtMs": 0,
+        "driftMs": 0,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m002",
+        "plannedAtMs": 3000,
+        "observedAtMs": 3010,
+        "driftMs": 10,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m003",
+        "plannedAtMs": 6000,
+        "observedAtMs": 6017,
+        "driftMs": 17,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m004",
+        "plannedAtMs": 10000,
+        "observedAtMs": 9988,
+        "driftMs": -12,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m005",
+        "plannedAtMs": 15000,
+        "observedAtMs": 14990,
+        "driftMs": -10,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m006",
+        "plannedAtMs": 55000,
+        "observedAtMs": 54995,
+        "driftMs": -5,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m007",
+        "plannedAtMs": 60000,
+        "observedAtMs": 60003,
+        "driftMs": 3,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m008",
+        "plannedAtMs": 72000,
+        "observedAtMs": 72003,
+        "driftMs": 3,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m009",
+        "plannedAtMs": 95000,
+        "observedAtMs": 95005,
+        "driftMs": 5,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m010",
+        "plannedAtMs": 120000,
+        "observedAtMs": 120006,
+        "driftMs": 6,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m011",
+        "plannedAtMs": 180000,
+        "observedAtMs": 180012,
+        "driftMs": 12,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m012",
+        "plannedAtMs": 230000,
+        "observedAtMs": 230018,
+        "driftMs": 18,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m013",
+        "plannedAtMs": 240000,
+        "observedAtMs": 239989,
+        "driftMs": -11,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m014",
+        "plannedAtMs": 250000,
+        "observedAtMs": 249984,
+        "driftMs": -16,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m015",
+        "plannedAtMs": 275000,
+        "observedAtMs": 274998,
+        "driftMs": -2,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m016",
+        "plannedAtMs": 330000,
+        "observedAtMs": 330004,
+        "driftMs": 4,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m017",
+        "plannedAtMs": 360000,
+        "observedAtMs": 360012,
+        "driftMs": 12,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m018",
+        "plannedAtMs": 420000,
+        "observedAtMs": 420015,
+        "driftMs": 15,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m019",
+        "plannedAtMs": 470000,
+        "observedAtMs": 469986,
+        "driftMs": -14,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m020",
+        "plannedAtMs": 480000,
+        "observedAtMs": 480004,
+        "driftMs": 4,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m021",
+        "plannedAtMs": 485000,
+        "observedAtMs": 484985,
+        "driftMs": -15,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m022",
+        "plannedAtMs": 490000,
+        "observedAtMs": 489994,
+        "driftMs": -6,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m023",
+        "plannedAtMs": 510000,
+        "observedAtMs": 510007,
+        "driftMs": 7,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m024",
+        "plannedAtMs": 535000,
+        "observedAtMs": 534990,
+        "driftMs": -10,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m025",
+        "plannedAtMs": 590000,
+        "observedAtMs": 590008,
+        "driftMs": 8,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m026",
+        "plannedAtMs": 600000,
+        "observedAtMs": 600017,
+        "driftMs": 17,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m027",
+        "plannedAtMs": 625000,
+        "observedAtMs": 624985,
+        "driftMs": -15,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m028",
+        "plannedAtMs": 650000,
+        "observedAtMs": 650013,
+        "driftMs": 13,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m029",
+        "plannedAtMs": 710000,
+        "observedAtMs": 709994,
+        "driftMs": -6,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m030",
+        "plannedAtMs": 720000,
+        "observedAtMs": 720016,
+        "driftMs": 16,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m031",
+        "plannedAtMs": 725000,
+        "observedAtMs": 725006,
+        "driftMs": 6,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m032",
+        "plannedAtMs": 735000,
+        "observedAtMs": 735008,
+        "driftMs": 8,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m033",
+        "plannedAtMs": 750000,
+        "observedAtMs": 750003,
+        "driftMs": 3,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m034",
+        "plannedAtMs": 800000,
+        "observedAtMs": 800002,
+        "driftMs": 2,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m035",
+        "plannedAtMs": 830000,
+        "observedAtMs": 830011,
+        "driftMs": 11,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m036",
+        "plannedAtMs": 840000,
+        "observedAtMs": 840000,
+        "driftMs": 0,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m037",
+        "plannedAtMs": 845000,
+        "observedAtMs": 845001,
+        "driftMs": 1,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m038",
+        "plannedAtMs": 870000,
+        "observedAtMs": 869986,
+        "driftMs": -14,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m039",
+        "plannedAtMs": 890000,
+        "observedAtMs": 889989,
+        "driftMs": -11,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      },
+      {
+        "markerId": "m040",
+        "plannedAtMs": 899000,
+        "observedAtMs": 899011,
+        "driftMs": 11,
+        "status": "PASS",
+        "source": "SYNTHETIC_FIXTURE"
+      }
+    ],
+    "timing": {
+      "markerCount": 40,
+      "maximumAbsoluteDriftMs": 18,
+      "p95AbsoluteDriftMs": 17,
+      "plannedDurationMs": 900000,
+      "observedRealtimeDurationMs": null
+    }
+  },
+  "performanceRegression": {
+    "verdict": "UNKNOWN",
+    "strictComparability": "UNKNOWN",
+    "descriptiveMetricVerdict": "PASS",
+    "current": {
+      "sourceEvidenceId": "birdie-stream-launch-console-20260830T083657Z",
+      "measurementMode": "REAL_BROWSER",
+      "timeline": "CLIP_30",
+      "producer": "OPERATOR_IFRAME",
+      "sourceOwner": "OPERATOR_IFRAME",
+      "comparisonFingerprintSha256": null,
+      "quietHostStatus": "UNKNOWN",
+      "durationMs": 30000,
+      "firstFrameMs": 112,
+      "fpsP10": 29.7,
+      "p95FrameMs": 40.1,
+      "maxFrameGapMs": 40,
+      "errorCount": 0,
+      "renderer": "WEBGL",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    "baseline": {
+      "sourceEvidenceId": "birdie-stream-rehearsal-20260830T050017Z",
+      "measurementMode": "BASELINE_REPLAY",
+      "timeline": "LOOP",
+      "producer": "PARALLEL_LOCAL_BROWSER",
+      "sourceOwner": "DIRECT_PAGE",
+      "comparisonFingerprintSha256": null,
+      "quietHostStatus": "CONFOUNDED",
+      "durationMs": 601572,
+      "firstFrameMs": 258,
+      "fpsP10": 26,
+      "p95FrameMs": 50.1,
+      "maxFrameGapMs": 710,
+      "errorCount": 0,
+      "renderer": "WEBGL",
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      }
+    },
+    "gates": [
+      {
+        "id": "first-frame",
+        "status": "PASS",
+        "observed": {
+          "current": 112,
+          "baseline": null
+        },
+        "expected": "current <= 2500; baseline delta intentionally not evaluated",
+        "reasonId": null
+      },
+      {
+        "id": "fps-p10",
+        "status": "PASS",
+        "observed": {
+          "current": 29.7,
+          "baseline": null
+        },
+        "expected": "current >= 28; baseline delta intentionally not evaluated",
+        "reasonId": null
+      },
+      {
+        "id": "p95-frame",
+        "status": "PASS",
+        "observed": {
+          "current": 40.1,
+          "baseline": null
+        },
+        "expected": "current <= 55; baseline delta intentionally not evaluated",
+        "reasonId": null
+      },
+      {
+        "id": "max-frame-gap",
+        "status": "PASS",
+        "observed": {
+          "current": 40,
+          "baseline": null
+        },
+        "expected": "current <= 1000; baseline delta intentionally not evaluated",
+        "reasonId": null
+      },
+      {
+        "id": "errors",
+        "status": "PASS",
+        "observed": {
+          "current": 0,
+          "baseline": null
+        },
+        "expected": "current = 0; baseline delta intentionally not evaluated",
+        "reasonId": null
+      },
+      {
+        "id": "measurement-mode",
+        "status": "PASS",
+        "observed": {
+          "current": "REAL_BROWSER",
+          "baseline": "BASELINE_REPLAY"
+        },
+        "expected": "REAL_BROWSER current + real/replayed baseline",
+        "reasonId": null
+      },
+      {
+        "id": "duration-comparability",
+        "status": "UNKNOWN",
+        "observed": {
+          "current": 30000,
+          "baseline": 601572
+        },
+        "expected": "equal observation duration",
+        "reasonId": "DURATION_NOT_COMPARABLE"
+      },
+      {
+        "id": "timeline-comparability",
+        "status": "UNKNOWN",
+        "observed": {
+          "current": "CLIP_30",
+          "baseline": "LOOP"
+        },
+        "expected": "equal timeline ID",
+        "reasonId": "TIMELINE_NOT_COMPARABLE"
+      },
+      {
+        "id": "producer-comparability",
+        "status": "UNKNOWN",
+        "observed": {
+          "current": "OPERATOR_IFRAME",
+          "baseline": "PARALLEL_LOCAL_BROWSER"
+        },
+        "expected": "equal producer ID",
+        "reasonId": "PRODUCER_NOT_COMPARABLE"
+      },
+      {
+        "id": "source-owner-comparability",
+        "status": "UNKNOWN",
+        "observed": {
+          "current": "OPERATOR_IFRAME",
+          "baseline": "DIRECT_PAGE"
+        },
+        "expected": "equal source owner",
+        "reasonId": "SOURCE_OWNER_NOT_COMPARABLE"
+      },
+      {
+        "id": "comparison-fingerprint",
+        "status": "UNKNOWN",
+        "observed": {
+          "current": null,
+          "baseline": null
+        },
+        "expected": "matching complete comparison fingerprint",
+        "reasonId": "FINGERPRINT_MISSING_OR_MISMATCHED"
+      },
+      {
+        "id": "quiet-host",
+        "status": "UNKNOWN",
+        "observed": {
+          "current": "UNKNOWN",
+          "baseline": "CONFOUNDED"
+        },
+        "expected": "PASS for both runs",
+        "reasonId": "HOST_CONFOUNDED_OR_UNKNOWN"
+      }
+    ],
+    "comparableMetrics": [],
+    "descriptiveMetrics": [
+      "firstFrameMs",
+      "fpsP10",
+      "p95FrameMs",
+      "maxFrameGapMs",
+      "errorCount"
+    ],
+    "nonComparableMetrics": [
+      "durationMs",
+      "timeline",
+      "producer",
+      "sourceOwner",
+      "comparisonFingerprint",
+      "quietHost",
+      "OBS dropped frames",
+      "audio content",
+      "real scene switches"
+    ]
+  },
+  "baselineReference": {
+    "evidenceId": "birdie-stream-rehearsal-20260830T050017Z",
+    "hostStatus": "CONFOUNDED",
+    "obs": {
+      "version": "32.2.2",
+      "recordingDurationMs": 617413,
+      "framesOutput": 18503,
+      "framesDrawn": 18506,
+      "framesAttempted": 18523,
+      "renderLagFrames": 17,
+      "renderLagPpm": 918,
+      "encodingSkippedFrames": 17,
+      "encodingAttemptedFrames": 18520,
+      "encodingSkippedPpm": 918,
+      "networkDroppedFramesLocal": "NOT_APPLICABLE",
+      "liveNetworkDroppedFrames": "UNKNOWN"
+    },
+    "scenes": {
+      "cueCount": 14,
+      "passCount": 11,
+      "failCount": 2,
+      "delayedCount": 1,
+      "maximumNormalCueDriftMs": 252,
+      "clip30HoldMs": 30048,
+      "clip60HoldMs": 60019,
+      "globalSafe": "FAIL",
+      "focusedSafe": "PASS",
+      "globalStop": "FAIL",
+      "focusedStop": "PASS"
+    },
+    "audio": {
+      "sampleRateHz": 48000,
+      "channels": 2,
+      "codec": "AAC",
+      "mixerVisibleSourcesMaximum": 0,
+      "captureGraphContract": "PASS",
+      "decodedPcmInspection": "UNKNOWN",
+      "humanListeningReview": "UNKNOWN"
+    }
+  },
+  "checks": {
+    "scenes": {
+      "planContract": "PASS",
+      "syntheticMarkers": "PASS",
+      "actualObsSwitchesCurrent": "UNKNOWN"
+    },
+    "audio": {
+      "plannedCaptureContract": "PASS",
+      "expectedContent": "SILENCE",
+      "currentMixerEvidence": "UNKNOWN",
+      "actualListeningCurrent": "UNKNOWN",
+      "droppedSamplesCurrent": "UNKNOWN"
+    },
+    "voice": {
+      "syntheticUiMarkers": "PASS",
+      "realMicrophone": "UNKNOWN"
+    },
+    "cta": {
+      "draftVisibility": "PASS",
+      "productionDestination": "STOP",
+      "qrScan": "UNKNOWN"
+    },
+    "droppedFrames": {
+      "localFrameGapMeasured": "PASS",
+      "browserDroppedFramesCurrent": "UNKNOWN",
+      "obsRenderDroppedFramesCurrent": "UNKNOWN",
+      "obsEncodingDroppedFramesCurrent": "UNKNOWN",
+      "networkDroppedFramesLocal": "NOT_APPLICABLE",
+      "networkDroppedFramesLive": "UNKNOWN"
+    }
+  },
+  "unknowns": [
+    "SHOW_15_REALTIME_DURATION",
+    "STRICT_PERFORMANCE_COMPARISON_FINGERPRINT",
+    "STRICT_PERFORMANCE_MATCHED_TIMELINE",
+    "QUIET_HOST_CURRENT",
+    "OBS_RENDER_DROPPED_FRAMES_CURRENT",
+    "OBS_ENCODING_DROPPED_FRAMES_CURRENT",
+    "NETWORK_DROPPED_FRAMES_LIVE",
+    "AUDIO_CONTENT_LISTENING_CURRENT",
+    "OBS_SCENE_SWITCHES_CURRENT",
+    "REAL_MICROPHONE_CURRENT",
+    "CTA_QR_PRODUCTION_CURRENT"
+  ],
+  "decisions": {
+    "localPipeline": "PASS",
+    "strictPerformanceRegression": "UNKNOWN",
+    "descriptivePerformanceMetrics": "PASS",
+    "evidenceCompleteness": "HOLD",
+    "supervisedLiveTest": "STOP",
+    "publication": "LOCKED"
+  },
+  "shortformClips": [
+    {
+      "id": "short-01",
+      "startMs": 15000,
+      "endMs": 45000,
+      "durationMs": 30000
+    },
+    {
+      "id": "short-02",
+      "startMs": 95000,
+      "endMs": 140000,
+      "durationMs": 45000
+    },
+    {
+      "id": "short-03",
+      "startMs": 275000,
+      "endMs": 320000,
+      "durationMs": 45000
+    },
+    {
+      "id": "short-04",
+      "startMs": 535000,
+      "endMs": 580000,
+      "durationMs": 45000
+    },
+    {
+      "id": "short-05",
+      "startMs": 735000,
+      "endMs": 780000,
+      "durationMs": 45000
+    }
+  ],
+  "redaction": {
+    "version": 1,
+    "applied": true,
+    "excludes": [
+      "absolute paths",
+      "raw URLs",
+      "credentials",
+      "transcripts",
+      "diagnostics",
+      "stacktraces",
+      "free-form errors"
+    ]
+  },
+  "reportProvenance": {
+    "generatedAtUtc": null,
+    "generatedAtReason": "OMITTED_FOR_DETERMINISTIC_REPLAY",
+    "comparisonInputStatus": "HISTORICAL_REPORT_INPUT_NOT_CURRENT_HOST_STATUS",
+    "inputEvidenceIds": {
+      "performanceBaseline": "birdie-stream-rehearsal-20260830T050017Z",
+      "comparisonLaunchConsole": "birdie-stream-launch-console-20260830T083657Z"
+    },
+    "inputCapturedAtUtc": {
+      "performanceBaseline": "2026-08-30T05:41:23.996Z",
+      "comparisonLaunchConsole": "2026-08-30T08:36:57.3938576Z"
+    }
+  },
+  "canonicalSha256": "b6cf3213e3a30bf2c7d5425bb1fe373b2edce0e4f84be316abc30abaf43f6622"
+}

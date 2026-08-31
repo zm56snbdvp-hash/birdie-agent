@@ -1,0 +1,93 @@
+html[data-birdie-mode="private-sale"],
+body[data-birdie-mode="private-sale"] {
+  width: 100%;
+  min-width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+  visibility: visible;
+  background: #07100d;
+  color: #f2f4dc;
+  pointer-events: auto;
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+body[data-birdie-mode="private-sale"] #app {
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+}
+
+#private-sale {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  width: 100vw;
+  height: 100vh;
+  padding: 5vh 5vw 4vh;
+  background:
+    radial-gradient(circle at 70% 42%, rgb(27 117 76 / 0.24), transparent 31%),
+    linear-gradient(145deg, #06100c, #0a1712 54%, #07100d);
+  grid-template-rows: auto 1fr auto;
+}
+
+.private-sale-header,
+.private-sale-header > div,
+.private-sale-header p,
+#private-sale footer,
+.private-sale-action > div {
+  display: flex;
+  align-items: center;
+}
+
+.private-sale-header { justify-content: space-between; }
+.private-sale-header > div { gap: 14px; color: #dcb45e; letter-spacing: 0.18em; }
+.private-sale-mark { width: 16px; height: 16px; border: 1px solid #dcb45e; transform: rotate(45deg); }
+.private-sale-header p { gap: 10px; margin: 0; font: 12px/1 "Cascadia Code", monospace; letter-spacing: 0.12em; }
+.private-sale-header p span { color: #87958a; }
+.private-sale-header p b { padding: 8px 10px; border: 1px solid #2a9d69; color: #63d69e; }
+
+.private-sale-stage {
+  display: grid;
+  align-self: center;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(280px, 0.9fr) minmax(360px, 1.2fr);
+  gap: 3vw;
+}
+
+.private-sale-copy > span,
+.private-sale-action > span { color: #55c58d; font: 12px/1 "Cascadia Code", monospace; letter-spacing: 0.16em; }
+.private-sale-copy h1 { max-width: 10ch; margin: 20px 0; font-size: clamp(40px, 4vw, 76px); font-weight: 260; line-height: 0.96; }
+.private-sale-copy p { max-width: 42ch; color: #9eaa9f; font-size: clamp(14px, 1vw, 19px); line-height: 1.6; }
+
+.private-sale-steps { display: grid; padding: 0; margin: 0; list-style: none; gap: 10px; }
+.private-sale-steps li { display: grid; padding: 14px; border: 1px solid rgb(235 239 209 / 0.13); background: rgb(0 0 0 / 0.12); grid-template-columns: 42px 1fr; }
+.private-sale-steps li > span { color: #67766b; font: 12px/1.5 "Cascadia Code", monospace; }
+.private-sale-steps li div { display: flex; flex-direction: column; gap: 4px; }
+.private-sale-steps li strong { letter-spacing: 0.16em; }
+.private-sale-steps li small { color: #7c8a80; }
+.private-sale-steps li[data-state="PASS"] { border-color: rgb(45 174 112 / 0.54); background: rgb(24 113 73 / 0.16); }
+.private-sale-steps li[data-state="PASS"] > span,
+.private-sale-steps li[data-state="PASS"] strong { color: #67d79f; }
+
+.private-sale-action { padding: 26px; border: 1px solid rgb(220 180 94 / 0.3); background: rgb(4 12 9 / 0.78); }
+.private-sale-action h2 { margin: 14px 0 20px; font-size: clamp(24px, 2vw, 40px); font-weight: 350; }
+.private-sale-action label { display: flex; align-items: flex-start; color: #b7c1b5; line-height: 1.5; gap: 10px; }
+.private-sale-action input { width: 20px; height: 20px; accent-color: #2daa72; }
+.private-sale-action > div { flex-wrap: wrap; margin-top: 22px; gap: 10px; }
+.private-sale-action button { min-height: 46px; padding: 0 15px; border: 1px solid #3a9d70; background: #123a29; color: #eaf4db; font: 700 11px/1 "Cascadia Code", monospace; letter-spacing: 0.06em; cursor: pointer; }
+.private-sale-action button:disabled { border-color: #354039; background: #171d19; color: #69746c; cursor: not-allowed; }
+.private-sale-action .private-sale-safe { border-color: #8a5d4b; background: #2e1b16; color: #e8b5a1; }
+.private-sale-action > p { min-height: 42px; margin: 18px 0 0; color: #91a095; font-size: 13px; line-height: 1.5; }
+
+#private-sale footer { justify-content: space-between; color: #68766d; font: 11px/1 "Cascadia Code", monospace; letter-spacing: 0.13em; }
+#private-sale footer strong { color: #b99d63; }
+
+@media (max-width: 980px) {
+  .private-sale-stage { grid-template-columns: 0.8fr 0.8fr 1.2fr; gap: 2vw; }
+  .private-sale-copy p { font-size: 13px; }
+  .private-sale-action { padding: 18px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; }
+}

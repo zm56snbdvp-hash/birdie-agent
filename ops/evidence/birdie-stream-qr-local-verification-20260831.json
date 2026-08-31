@@ -1,0 +1,115 @@
+{
+  "schemaVersion": 1,
+  "evidenceId": "birdie-stream-qr-local-verification-20260831T000645Z",
+  "scope": "LOCAL_BROWSER_QR_VERIFICATION_ONLY",
+  "observedAtUtc": "2026-08-31T00:06:51.727Z",
+  "publicAction": "NONE",
+  "externalTransmission": "NONE",
+  "build": {
+    "id": "9fff8c26e8ae-stream-dirty",
+    "gitCommit": "9fff8c26e8ae",
+    "worktree": "DIRTY",
+    "sourceDigestScope": "CAPTURED_AT_RUN_NOT_CURRENT",
+    "currentSourceMatch": false,
+    "currentSourceMatchReason": "AT_LEAST_SHOW_PLAN_CHANGED_AFTER_CAPTURE",
+    "sourceBytesPreserved": false,
+    "sourceBytesPreservedReason": "DIGESTS_ONLY_NO_BYTE_SNAPSHOT",
+    "sourceDigests": {
+      "streamConfig": "47d05b4fdf3934a82b2f1a0303ab6356d5db13503a7b75d74a529a036d331f18",
+      "streamModeConfigJs": "aa931920db6ed5ac5b4c3a9ae312bb082d7daa46752a7e5a87f1de33891cc85a",
+      "streamModeJs": "32ddb2610d7129c05355843285dd39c6ec222f07dabb7a25feb0c6a99f0912ee",
+      "obsScenePlan": "d11b680293777968c764a23b9c82004a455950f33a2d28121afe51b947f70989",
+      "showPlan": "5aa41d4578e42550199719b17f987aa8081a19e8e7fa68d59ee4eb61329ef6ed"
+    }
+  },
+  "asset": {
+    "relativePath": "/assets/birdie-stream-cta.png",
+    "bytes": 8459,
+    "declaredSha256": "c482e0de1e1928c5fa23712bc0373527be963b57fda33070118e97cd911fc228",
+    "actualSha256": "c482e0de1e1928c5fa23712bc0373527be963b57fda33070118e97cd911fc228",
+    "hashVerdict": "PASS"
+  },
+  "browserRun": {
+    "startedAtUtc": "2026-08-31T00:06:45.193Z",
+    "durationMs": 6282,
+    "viewport": {
+      "width": 1280,
+      "height": 720,
+      "pixelRatio": 0.55
+    },
+    "firstFrameMs": 1229,
+    "configReadyMs": 826,
+    "rendererFps": 29.7,
+    "maxFrameGapMs": 730,
+    "pageErrors": 0,
+    "payload": {
+      "decoder": "LOCAL_JSQR_FALLBACK",
+      "status": "PASS",
+      "exactTargetMatch": true,
+      "rawTargetCopiedToEvidence": false
+    },
+    "render": {
+      "qrRenderReady": true,
+      "qrVerificationPreview": true,
+      "imageVisible": true,
+      "imageSourceScheme": "blob",
+      "verificationLabel": "VERIFY ONLY"
+    },
+    "releaseSafety": {
+      "ctaStatus": "DRAFT",
+      "conversionDeclaredReady": false,
+      "conversionReady": false,
+      "ctaHrefPresent": false,
+      "ctaAriaDisabled": true,
+      "qrScanVerified": false
+    }
+  },
+  "negativeMatrix": [
+    {
+      "case": "NORMAL_STREAM_URL",
+      "previewRequested": false,
+      "qrBlobCreated": false,
+      "qrVisible": false,
+      "ctaHrefPresent": false,
+      "verdict": "PASS"
+    },
+    {
+      "case": "PRIVATE_CTA_PLUS_LOCAL_PREVIEW_QUERY",
+      "previewRequested": true,
+      "qrBlobCreated": false,
+      "qrVisible": false,
+      "ctaHrefPresent": false,
+      "verdict": "PASS"
+    },
+    {
+      "case": "WRONG_CASE_QRVERIFY_LOCAL",
+      "previewRequested": false,
+      "qrBlobCreated": false,
+      "qrVisible": false,
+      "ctaHrefPresent": false,
+      "verdict": "PASS"
+    }
+  ],
+  "gates": {
+    "localAssetHash": "PASS",
+    "localPayloadExactMatch": "PASS",
+    "localVerificationRender": "PASS",
+    "draftFailClosed": "PASS",
+    "finalObsMkvScan": "UNPROVEN",
+    "secondDeviceScan": "UNPROVEN",
+    "founderReady": "STOP",
+    "saleOrLeadAttribution": "NOT_ESTABLISHED",
+    "publicStream": "STOP"
+  },
+  "unknowns": [
+    "OBS_CEF_INSTANCE_PAYLOAD",
+    "FINAL_OBS_MKV_SCAN",
+    "SECOND_DEVICE_TARGET_SCAN",
+    "OBS_1080P30_PROFILE_APPLIED",
+    "OBS_RENDER_DROPPED_FRAMES_CURRENT",
+    "OBS_ENCODING_DROPPED_FRAMES_CURRENT",
+    "REAL_MICROPHONE_CURRENT",
+    "SALE_OR_LEAD_ATTRIBUTION"
+  ],
+  "verdict": "LOCAL_QR_VERIFICATION_PASS_PUBLIC_STOP"
+}
