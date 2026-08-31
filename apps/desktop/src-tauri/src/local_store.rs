@@ -4,7 +4,10 @@ use std::{
     fs::{self, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex,
+    },
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -14,6 +17,7 @@ const MAX_FOCUS_TASK_CHARS: usize = 1_000;
 const MAX_FOCUS_DURATION_MS: u64 = 24 * 60 * 60 * 1_000;
 const MAX_CAPTURE_TEXT_CHARS: usize = 4_000;
 const MAX_CAPTURE_ENTRIES: usize = 500;
+static TEMP_FILE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn default_microphone_enabled() -> bool {
     true
@@ -279,18 +283,14 @@ fn write_atomic(path: &Path, data: &PersistedData) -> Result<(), String> {
         .parent()
         .ok_or_else(|| "LOCAL.STORE.PATH_INVALID".to_string())?;
     fs::create_dir_all(parent).map_err(|_| "LOCAL.STORE.CREATE_DIR_FAILED".to_string())?;
-    let temporary = parent.join(format!(
-        ".birdie-function-layer-{}-{}.tmp",
-        std::process::id(),
-        now_ms(),
-    ));
+    let temporary = temporary_path(parent, now_ms());
     let bytes = serde_json::to_vec(data).map_err(|_| "LOCAL.STORE.SERIALIZE_FAILED".to_string())?;
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&temporary)
+        .map_err(|_| "LOCAL.STORE.TEMP_OPEN_FAILED".to_string())?;
     let result = (|| {
-        let mut file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&temporary)
-            .map_err(|_| "LOCAL.STORE.TEMP_OPEN_FAILED".to_string())?;
         file.write_all(&bytes)
             .map_err(|_| "LOCAL.STORE.WRITE_FAILED".to_string())?;
         file.sync_all()
@@ -301,6 +301,14 @@ fn write_atomic(path: &Path, data: &PersistedData) -> Result<(), String> {
         let _ = fs::remove_file(&temporary);
     }
     result
+}
+
+fn temporary_path(parent: &Path, timestamp_ms: u64) -> PathBuf {
+    let sequence = TEMP_FILE_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    parent.join(format!(
+        ".birdie-function-layer-{}-{timestamp_ms}-{sequence}.tmp",
+        std::process::id(),
+    ))
 }
 
 #[cfg(windows)]
@@ -349,6 +357,31 @@ pub fn now_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn temporary_paths_stay_unique_for_parallel_writes_in_same_millisecond() {
+        const THREAD_COUNT: usize = 32;
+        const FIXED_TIMESTAMP_MS: u64 = 1_787_961_600_000;
+
+        let parent = std::sync::Arc::new(std::env::temp_dir());
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(THREAD_COUNT));
+        let handles = (0..THREAD_COUNT)
+            .map(|_| {
+                let parent = std::sync::Arc::clone(&parent);
+                let barrier = std::sync::Arc::clone(&barrier);
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    temporary_path(parent.as_ref(), FIXED_TIMESTAMP_MS)
+                })
+            })
+            .collect::<Vec<_>>();
+
+        let paths = handles
+            .into_iter()
+            .map(|handle| handle.join().expect("path generator thread should finish"))
+            .collect::<HashSet<_>>();
+        assert_eq!(paths.len(), THREAD_COUNT);
+    }
 
     fn test_path(label: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
