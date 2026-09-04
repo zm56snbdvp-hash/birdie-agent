@@ -61,6 +61,33 @@ Apply mode may create a missing canonical consumable IAP, add its German localiz
 
 App Store Connect metadata changes can take time to propagate to the StoreKit sandbox. Do not interpret immediate StoreKit product absence as proof that creation failed.
 
+## Guarded GitHub Actions workflow
+
+The repository contains:
+
+`.github/workflows/birdie-moments-staging-bootstrap.yml`
+
+It is **manual-only** (`workflow_dispatch`). No push, PR, schedule, or branch update can run provider bootstrap automatically.
+
+Create/protect the GitHub Environment:
+
+`birdie-moments-staging`
+
+Environment secrets:
+
+- `APP_STORE_CONNECT_ISSUER_ID`
+- `APP_STORE_CONNECT_KEY_ID`
+- `APP_STORE_CONNECT_PRIVATE_KEY`
+- `GELATO_API_KEY`
+
+Environment variable after deliberate Gelato product selection:
+
+- `GELATO_PRODUCT_UID`
+
+The default workflow input is `dry-run`. The only mutating option is the explicitly selected `apply-app-store` action. The workflow uploads only `birdie-moments-staging-summary.json`, a sanitized receipt containing statuses, canonical public App Store product IDs, and Gelato candidate count. The raw provider response is not uploaded.
+
+For stronger governance, configure required reviewers on the `birdie-moments-staging` GitHub Environment before allowing `apply-app-store`.
+
 ## Gelato A3 discovery
 
 Provide:
