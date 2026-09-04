@@ -1,7 +1,9 @@
 import { BIRDIE_IOS_APP } from "../commerce/apple-app-config.mjs";
+import { BIRDIE_MOMENTS_APP_STORE_PRODUCTS } from "../commerce/apple-products.mjs";
 import { PRODUCT_TYPE } from "../commerce/contracts.mjs";
 
 export const MOMENTS_CONFIG_KEY = Object.freeze({
+  // Deprecated: App Store product IDs are now canonical product constants, not runtime secrets/config.
   IAP_ROUND_PRODUCT_ID: "BIRDIE_MOMENTS_IAP_ROUND_PRODUCT_ID",
   IAP_PB_PRODUCT_ID: "BIRDIE_MOMENTS_IAP_PB_PRODUCT_ID",
   APP_STORE_ENVIRONMENT: "BIRDIE_MOMENTS_APP_STORE_ENVIRONMENT",
@@ -37,9 +39,17 @@ function validAppAppleId(value) {
   return /^\d+$/.test(normalized) && Number(normalized) > 0;
 }
 
+function canonicalProductIds() {
+  return Object.freeze({
+    round: BIRDIE_MOMENTS_APP_STORE_PRODUCTS[PRODUCT_TYPE.DIGITAL_ROUND].productId,
+    personalBest: BIRDIE_MOMENTS_APP_STORE_PRODUCTS[PRODUCT_TYPE.DIGITAL_PERSONAL_BEST].productId
+  });
+}
+
 /**
  * Readiness output is deliberately metadata-only. It never returns secret values,
- * certificate contents, product UIDs, or payment/provider credentials.
+ * certificate contents, provider product UIDs, or payment/provider credentials.
+ * App Store product IDs are public product identifiers and are safe to expose.
  */
 export function evaluateBirdieMomentsStagingReadiness({ env = {}, runtime = {} } = {}) {
   const coreMissing = [];
@@ -50,9 +60,8 @@ export function evaluateBirdieMomentsStagingReadiness({ env = {}, runtime = {} }
 
   const digitalMissing = [];
   const appStoreEnvironment = normalizeEnvironment(env[MOMENTS_CONFIG_KEY.APP_STORE_ENVIRONMENT]);
-  missingIf(digitalMissing, configured(env[MOMENTS_CONFIG_KEY.IAP_ROUND_PRODUCT_ID]), "IAP_ROUND_PRODUCT_ID");
-  missingIf(digitalMissing, configured(env[MOMENTS_CONFIG_KEY.IAP_PB_PRODUCT_ID]), "IAP_PB_PRODUCT_ID");
   missingIf(digitalMissing, appStoreEnvironment !== null, "APP_STORE_ENVIRONMENT");
+  missingIf(digitalMissing, runtimeCheck(runtime.appStoreProductsConfigured), "APP_STORE_PRODUCTS_CONFIGURED");
   missingIf(digitalMissing, runtimeCheck(runtime.appleRootCertificates), "APPLE_ROOT_CERTIFICATES");
   missingIf(digitalMissing, runtimeCheck(runtime.appleServerLibrary), "APPLE_SERVER_LIBRARY");
   if (appStoreEnvironment === "PRODUCTION") {
@@ -77,30 +86,28 @@ export function evaluateBirdieMomentsStagingReadiness({ env = {}, runtime = {} }
       ready: digitalReady,
       missing: Object.freeze(digitalMissing),
       bundleId: BIRDIE_IOS_APP.bundleId,
-      environment: appStoreEnvironment
+      environment: appStoreEnvironment,
+      productIds: canonicalProductIds()
     }),
     print: Object.freeze({ ready: printReady, missing: Object.freeze(printMissing) })
   });
 }
 
 /**
- * Creates the server-authoritative product catalog without inventing App Store IDs.
- * Prices remain centralized and may be overridden deliberately at deployment time.
+ * Creates the server-authoritative product catalog from canonical product IDs.
+ * Product IDs are immutable commerce identifiers; only prices/currency remain deliberate deployment inputs.
  */
-export function buildBirdieMomentsCatalogFromConfig({ env = {}, pricing = {} } = {}) {
-  const roundProductId = text(env[MOMENTS_CONFIG_KEY.IAP_ROUND_PRODUCT_ID]);
-  const pbProductId = text(env[MOMENTS_CONFIG_KEY.IAP_PB_PRODUCT_ID]);
-
+export function buildBirdieMomentsCatalogFromConfig({ pricing = {} } = {}) {
   return Object.freeze({
     [PRODUCT_TYPE.DIGITAL_ROUND]: Object.freeze({
       amountMinor: Number.isInteger(pricing.digitalRoundMinor) ? pricing.digitalRoundMinor : 690,
       currency: text(pricing.currency) || "EUR",
-      appStoreProductId: roundProductId || null
+      appStoreProductId: BIRDIE_MOMENTS_APP_STORE_PRODUCTS[PRODUCT_TYPE.DIGITAL_ROUND].productId
     }),
     [PRODUCT_TYPE.DIGITAL_PERSONAL_BEST]: Object.freeze({
       amountMinor: Number.isInteger(pricing.personalBestDigitalMinor) ? pricing.personalBestDigitalMinor : 990,
       currency: text(pricing.currency) || "EUR",
-      appStoreProductId: pbProductId || null
+      appStoreProductId: BIRDIE_MOMENTS_APP_STORE_PRODUCTS[PRODUCT_TYPE.DIGITAL_PERSONAL_BEST].productId
     }),
     [PRODUCT_TYPE.PRINT_A3]: Object.freeze({
       amountMinor: Number.isInteger(pricing.premiumA3PrintMinor) ? pricing.premiumA3PrintMinor : 3490,
