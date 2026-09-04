@@ -2,6 +2,7 @@
 -- Print fulfillment needs the paid purchase to retain its server-validated address until order submission.
 
 ALTER TABLE moment_purchases ADD COLUMN shipping_address_json TEXT;
+ALTER TABLE moment_print_orders ADD COLUMN tracking_reference TEXT;
 
 CREATE TABLE IF NOT EXISTS moment_failures (
   id TEXT PRIMARY KEY,
