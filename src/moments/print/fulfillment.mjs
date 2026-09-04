@@ -1,4 +1,5 @@
 import { MomentCommerceError } from "../commerce/contracts.mjs";
+import { MOMENT_FAILURE_STAGE, recordMomentFailureSafely } from "../failures.mjs";
 import { assertPrintPurchaseReady, internalPrintOrderKey, PRINT_ORDER_STATUS, validateShippingAddress } from "./contracts.mjs";
 
 /**
@@ -9,7 +10,13 @@ import { assertPrintPurchaseReady, internalPrintOrderKey, PRINT_ORDER_STATUS, va
  * - getOrderStatus(providerOrderId)
  * - handleWebhook({ rawBody, signature }) -> verified normalized event
  */
-export async function submitPaidPrintOrder({ purchaseId, repo, printProvider, now = () => new Date().toISOString() }) {
+export async function submitPaidPrintOrder({
+  purchaseId,
+  repo,
+  printProvider,
+  analytics,
+  now = () => new Date().toISOString()
+}) {
   const purchase = await repo.getPurchase(purchaseId);
   if (!purchase) throw new MomentCommerceError("PURCHASE_NOT_FOUND", "Print purchase not found", 404);
   const moment = await repo.getMoment(purchase.momentId);
@@ -68,6 +75,19 @@ export async function submitPaidPrintOrder({ purchaseId, repo, printProvider, no
       failureCode: error?.code ?? "PRINT_PROVIDER_ERROR",
       failureMessage: String(error?.message ?? error),
       updatedAt: now()
+    });
+    await recordMomentFailureSafely({
+      repo,
+      analytics,
+      stage: MOMENT_FAILURE_STAGE.PRINT_FULFILLMENT,
+      error,
+      context: {
+        roundId: moment?.roundId,
+        momentId: purchase.momentId,
+        purchaseId: purchase.id,
+        productType: purchase.productType,
+        fulfillmentType: purchase.fulfillmentType
+      }
     });
     return { submitted: false, duplicate: false, status: PRINT_ORDER_STATUS.FULFILLMENT_FAILED, error };
   }
