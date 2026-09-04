@@ -45,8 +45,8 @@ export function detectPersonalBest(currentRound, previousRounds) {
     reason: "NEW_PERSONAL_BEST",
     previousBestScore,
     newBestScore: currentRound.totalScore,
-    // Canonical v1 convention: improvement is the score delta.
-    // Example: 86 -> 82 = -4 strokes.
-    improvement: currentRound.totalScore - previousBestScore
+    // Canonical TASK-142 convention: positive strokes saved.
+    // Example: 86 -> 82 = 4 strokesImproved.
+    strokesImproved: previousBestScore - currentRound.totalScore
   };
 }
