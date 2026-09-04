@@ -1,0 +1,10 @@
+{
+  "deck": {"method":"PUT","path":"/api/deck","body":["playerCardId","cardIds"]},
+  "boosterOpen": {"method":"POST","path":"/api/boosters/open","body":["idempotencyKey"]},
+  "starterClaim": {"method":"POST","path":"/api/starter-set/claim","body":[]},
+  "roundLoad": {"method":"GET","path":"/api/round"},
+  "roundSave": {"method":"POST","path":"/api/round","body":["id","courseName","playedAt","holeCount","holes"]},
+  "localDuelCreate": {"method":"POST","path":"/api/local-duel","body":["idempotencyKey","seatADeck","seatBDeck"]},
+  "localDuelShot": {"method":"PUT","path":"/api/local-duel","body":["sessionId","expectedRevision","clientActionId","seat","clubId","timingMeter","mode","spinId","tacticId","ballId","signature"]},
+  "localDuelReward": {"method":"POST","path":"/api/local-duel/reward","body":["sessionId"]}
+}
