@@ -1,6 +1,11 @@
-import { CARD_BY_ID, type CanonicalCard, type CardFamily } from "./card-catalog";
+export type CardFamily = "PLAYER" | "CLUB" | "BALL" | "SPIN" | "TACTIC" | "COURSE";
 
-export type ArtworkVersion = string;
+export interface CanonicalCardIdentity {
+  id: string;
+  physicalNumber: string;
+  family: CardFamily;
+  name: string;
+}
 
 export interface ArtworkManifestEntry {
   cardId: string;
@@ -8,25 +13,19 @@ export interface ArtworkManifestEntry {
   family: CardFamily;
   name: string;
   assetPath: string;
-  artworkVersion: ArtworkVersion;
+  artworkVersion: string;
   verified: boolean;
 }
 
 export interface ArtworkResolution {
   status: "VERIFIED" | "MISSING" | "MISMATCH" | "UNVERIFIED";
   assetPath: string | null;
-  reason: string | null;
+  reason: "CARD_ARTWORK_MISSING" | "CARD_ARTWORK_MISMATCH" | "CARD_ARTWORK_UNVERIFIED" | null;
 }
 
-/**
- * Fail-safe artwork resolver recovered from the live incident.
- *
- * IMPORTANT: Never derive artwork solely from the numeric physical card number.
- * The deployed build did exactly that and silently paired the current BW1 catalog
- * with a legacy First Edition image set.
- */
+/** Fail-safe replacement for the deployed number-only artwork lookup. */
 export function resolveArtwork(
-  card: CanonicalCard,
+  card: CanonicalCardIdentity,
   manifest: ReadonlyMap<string, ArtworkManifestEntry>,
 ): ArtworkResolution {
   const entry = manifest.get(card.id);
@@ -49,15 +48,4 @@ export function resolveArtwork(
   }
 
   return { status: "VERIFIED", assetPath: entry.assetPath, reason: null };
-}
-
-export function resolveArtworkById(
-  cardId: string,
-  manifest: ReadonlyMap<string, ArtworkManifestEntry>,
-): ArtworkResolution {
-  const card = CARD_BY_ID.get(cardId);
-  if (!card) {
-    return { status: "MISSING", assetPath: null, reason: "CARD_ID_UNKNOWN" };
-  }
-  return resolveArtwork(card, manifest);
 }
