@@ -29,8 +29,18 @@ function moment(overrides = {}) {
     momentType: MOMENT_TYPE.ROUND,
     status: MOMENT_STATUS.PREVIEW_READY,
     previewAsset: "private://moments/moment-1/preview.svg",
+    digitalAsset: "private://moments/moment-1/digital.svg",
     renderData,
     ...overrides
+  };
+}
+
+function ownedRepo(value = moment()) {
+  return {
+    async getMoment() { return value; },
+    async getRound(id) {
+      return id === "round-1" ? { id, userId: "user-1", status: "completed" } : null;
+    }
   };
 }
 
@@ -62,7 +72,7 @@ test("PB is preferred over ROUND for the same post-round upsell", () => {
   assert.equal(selectPrimaryPostRoundMoment([round, pb]).id, "pb-moment");
 });
 
-test("owner can load their Moment", async () => {
+test("owner can load their Moment through the retained legacy Moment-only helper", async () => {
   const owned = await getOwnedMoment({
     momentId: "moment-1",
     authUserId: "user-1",
@@ -86,33 +96,33 @@ test("detail route requires authentication", async () => {
   const response = await handleMomentDetailRequest({
     momentId: "moment-1",
     authUserId: null,
-    repo: { async getMoment() { return moment(); } },
-    pricing: {}
+    repo: ownedRepo()
   });
   assert.equal(response.status, 401);
 });
 
-test("detail route is private and no-store", async () => {
+test("detail route is private and exposes free digital access without a paywall", async () => {
   const response = await handleMomentDetailRequest({
     momentId: "moment-1",
     authUserId: "user-1",
-    repo: { async getMoment() { return moment(); } },
-    pricing: { roundDigital: 6.9, personalBestDigital: 9.9, premiumA3Print: 34.9 }
+    repo: ownedRepo()
   });
   assert.equal(response.status, 200);
   assert.equal(response.cacheControl, "private, no-store");
-  assert.equal(response.body.products[0].price, "6,90 €");
-  assert.equal(response.body.products[1].price, "34,90 €");
+  assert.equal(response.body.digital.price, "Kostenlos");
+  assert.equal(response.body.digital.paymentRequired, false);
+  assert.equal(response.body.digital.entitlementRequired, false);
+  assert.equal(response.body.digital.downloadHref, "/moments/moment-1/download");
 });
 
-test("pricing is injected rather than hard-coded in the view model", () => {
-  const vm = buildMomentDetailViewModel(moment(), {
-    roundDigital: 7.5,
-    personalBestDigital: 11,
-    premiumA3Print: 39
-  });
-  assert.equal(vm.products[0].price, "7,50 €");
-  assert.equal(vm.products[1].price, "39,00 €");
+test("detail exposes A4 physical upsell only as an unproven target", () => {
+  const vm = buildMomentDetailViewModel(moment());
+  assert.equal(vm.physicalUpsell.title, "A4 Birdie Moment Print");
+  assert.equal(vm.physicalUpsell.targetPrice, "19,90 € inkl. Versand Deutschland");
+  assert.equal(vm.physicalUpsell.economicsStatus, "UNPROVEN");
+  assert.equal(vm.physicalUpsell.availability, "PREPARATION");
+  assert.equal(vm.physicalUpsell.productionClaim, false);
+  assert.equal(vm.physicalUpsell.ctaEnabled, false);
 });
 
 test("PB detail exposes proven comparison data", () => {
@@ -124,7 +134,7 @@ test("PB detail exposes proven comparison data", () => {
       templateVersion: "birdie-moment-pb-v1",
       personalBestData: { previousBestScore: 86, newBestScore: 82, improvement: -4 }
     }
-  }), { personalBestDigital: 9.9, premiumA3Print: 34.9 });
+  }));
   assert.deepEqual(vm.personalBest, {
     previousBestScore: 86,
     newBestScore: 82,
