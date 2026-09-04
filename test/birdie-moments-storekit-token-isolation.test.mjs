@@ -10,7 +10,7 @@ const migrations = [
   "004_expand_purchase_fulfillment_status.sql",
   "005_moment_app_store_iap.sql",
   "006_purchase_shipping_and_failures.sql",
-  "007_unique_app_store_purchase_tokens.sql"
+  "008_unique_app_store_purchase_tokens.sql"
 ];
 
 function migrate(db) {
@@ -19,11 +19,11 @@ function migrate(db) {
   }
 }
 
-test("complete migration chain enforces one appAccountToken per Moment purchase intent", () => {
+test("complete migration chain enforces one appAccountToken per Moment purchase intent case-insensitively", () => {
   const db = new SQLiteD1TestDatabase();
   try {
     migrate(db);
-    const token = "123e4567-e89b-42d3-a456-426614174000";
+    const token = "123e4567-e89b-42d3-a456-426614174abc";
     db.exec(`INSERT INTO moment_app_store_purchase_intents
       (purchase_id,user_id,moment_id,app_store_product_id,app_account_token,created_at,updated_at)
       VALUES ('p1','u1','m1','configured.round','${token}','t','t')`);
@@ -31,7 +31,7 @@ test("complete migration chain enforces one appAccountToken per Moment purchase 
     assert.throws(() => {
       db.exec(`INSERT INTO moment_app_store_purchase_intents
         (purchase_id,user_id,moment_id,app_store_product_id,app_account_token,created_at,updated_at)
-        VALUES ('p2','u1','m2','configured.round','${token}','t','t')`);
+        VALUES ('p2','u1','m2','configured.round','${token.toUpperCase()}','t','t')`);
     }, /UNIQUE/i);
   } finally {
     db.close();
