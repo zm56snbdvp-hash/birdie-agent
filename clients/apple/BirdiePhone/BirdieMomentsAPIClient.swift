@@ -33,7 +33,7 @@ struct BirdieMomentsAPIEndpoints: Sendable {
     init(
         startAppStorePurchase: @escaping @Sendable (_ momentId: String) throws -> URL,
         confirmAppStorePurchase: @escaping @Sendable (_ purchaseId: String) throws -> URL,
-        recoverAppStorePurchase: (@escaping @Sendable () throws -> URL)? = nil
+        recoverAppStorePurchase: (@Sendable () throws -> URL)? = nil
     ) {
         self.startAppStorePurchase = startAppStorePurchase
         self.confirmAppStorePurchase = confirmAppStorePurchase
