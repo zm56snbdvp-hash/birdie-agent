@@ -13,7 +13,6 @@ function setup() {
   const db = new SQLiteD1TestDatabase();
   db.exec(migration001);
   db.exec(migration004);
-  // TASK-142 canonical telemetry migration is deliberately repeat-safe.
   db.exec(migration004);
 
   const rounds = new Map([
@@ -29,13 +28,9 @@ function setup() {
       async getRound(id) { return rounds.get(id) ?? null; },
       async listPreviousComparableRounds() { return []; }
     },
-    idFactory() {
-      idSequence += 1;
-      return `id-${idSequence}`;
-    },
+    idFactory() { idSequence += 1; return `id-${idSequence}`; },
     now: () => "2026-09-04T12:00:00Z"
   });
-
   return { db, repo };
 }
 
@@ -63,19 +58,15 @@ test("free Digital D1 repository is idempotent on round/type/template and contai
   try {
     const first = await repo.ensureMoment(momentInput());
     const second = await repo.ensureMoment(momentInput());
-
     assert.equal(first.id, second.id);
     assert.equal(first.roundId, "round-1");
     assert.equal(first.userId, "user-1");
     assert.equal(first.status, MOMENT_STATUS.PENDING);
     assert.equal("ensurePurchase" in repo, false);
     assert.equal("getPurchaseForProduct" in repo, false);
-
     const count = db.sqlite.prepare("SELECT COUNT(*) AS count FROM birdie_moments").get().count;
     assert.equal(Number(count), 1);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 });
 
 test("render completion persists private preview and Digital master references", async () => {
@@ -88,13 +79,10 @@ test("render completion persists private preview and Digital master references",
       previewAsset: "private://moments/id-1/preview.svg",
       digitalAsset: "private://moments/id-1/digital.svg"
     });
-
     assert.equal(ready.status, MOMENT_STATUS.PREVIEW_READY);
     assert.equal(ready.previewAsset, "private://moments/id-1/preview.svg");
     assert.equal(ready.digitalAsset, "private://moments/id-1/digital.svg");
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 });
 
 test("Collection reads real D1 Moment rows and PB wins without a purchase table", async () => {
@@ -114,7 +102,7 @@ test("Collection reads real D1 Moment rows and PB wins without a purchase table"
       isPersonalBest: true,
       renderData: {
         ...momentInput().renderData,
-        personalBestData: { previousBestScore: 86, newBestScore: 82, improvement: -4 }
+        personalBestData: { previousBestScore: 86, newBestScore: 82, strokesImproved: 4 }
       }
     }));
     await repo.markMomentPreviewReady({
@@ -129,24 +117,16 @@ test("Collection reads real D1 Moment rows and PB wins without a purchase table"
     assert.equal(response.body.items.length, 1);
     assert.equal(response.body.items[0].momentId, pbMoment.id);
     assert.equal(response.body.items[0].roundId, "round-1");
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 });
 
 test("D1 Collection owner query excludes another user's Moments before round checks", async () => {
   const { db, repo } = setup();
   try {
-    await repo.ensureMoment(momentInput({
-      userId: "user-2",
-      roundId: "round-x"
-    }));
-
+    await repo.ensureMoment(momentInput({ userId: "user-2", roundId: "round-x" }));
     const owned = await repo.listMomentsForUser("user-1");
     assert.deepEqual(owned, []);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 });
 
 test("canonical TASK-142 moment_failures schema is active and repeat-safe", () => {
@@ -154,22 +134,12 @@ test("canonical TASK-142 moment_failures schema is active and repeat-safe", () =
   try {
     const columns = db.sqlite.prepare("PRAGMA table_info(moment_failures)").all().map((row) => row.name);
     assert.deepEqual(columns, [
-      "id",
-      "stage",
-      "code",
-      "summary",
-      "round_id",
-      "moment_id",
-      "purchase_id",
-      "product_type",
-      "fulfillment_type",
-      "occurred_at"
+      "id", "stage", "code", "summary", "round_id", "moment_id", "purchase_id",
+      "product_type", "fulfillment_type", "occurred_at"
     ]);
     assert.equal(columns.includes("message"), false);
     assert.equal(columns.includes("created_at"), false);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 });
 
 test("Moment failures use canonical summary/occurred_at and redact sensitive message data", async () => {
@@ -183,7 +153,6 @@ test("Moment failures use canonical summary/occurred_at and redact sensitive mes
         { code: "RENDER_TEST_FAILURE" }
       )
     });
-
     assert.equal(failed.status, MOMENT_STATUS.FAILED);
     const failure = db.sqlite.prepare("SELECT * FROM moment_failures LIMIT 1").get();
     assert.equal(failure.stage, "RENDERING");
@@ -196,7 +165,5 @@ test("Moment failures use canonical summary/occurred_at and redact sensitive mes
     assert.equal(failure.summary.includes("private.example"), false);
     assert.equal(failure.summary.includes("user@example.com"), false);
     assert.equal(failure.summary.includes("SUPERSECRET"), false);
-  } finally {
-    db.close();
-  }
+  } finally { db.close(); }
 });
