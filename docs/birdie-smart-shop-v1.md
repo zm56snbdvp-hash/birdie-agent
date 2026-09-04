@@ -57,6 +57,12 @@ Supported initial signals:
 
 Do not send round scores, handicap history, profile data, or recommendation reasons to an affiliate merchant merely to choose a product. Personalization remains inside BirdieWorld.
 
+### Scorecard integration
+
+A no-op-safe client bridge exists for the recovered Scorecard flow. It requests BirdieWorld recommendations only after a persisted completed round. A Commerce failure must never fail or roll back the saved round.
+
+The authoritative player-context adapter intentionally emits only minimal commerce signals. Raw score and handicap fields are not part of the recommendation context.
+
 ### Client contract
 
 The app receives a public recommendation object containing product display data and an internal BirdieWorld outbound path.
@@ -122,6 +128,7 @@ This is an implementation priority, not a guarantee of acceptance or commercial 
 - no hard-coded commission assumptions
 - fail closed on malformed, unavailable, inactive, region-incompatible, or unsafe products
 - private/no-store for personalized recommendation responses
+- Commerce failure must never break Scorecard persistence
 
 ## Current implementation
 
@@ -132,6 +139,8 @@ Core modules:
 - `src/affiliate-commerce/click.mjs`
 - `src/affiliate-commerce/service.mjs`
 - `src/affiliate-commerce/integration/live-routes.mjs`
+- `src/affiliate-commerce/integration/player-context.mjs`
+- `src/affiliate-commerce/integration/scorecard-client.mjs`
 - `src/affiliate-commerce/providers/awin.mjs`
 - `src/affiliate-commerce/providers/csv.mjs`
 - `src/affiliate-commerce/providers/awin-remote.mjs`
@@ -141,6 +150,8 @@ Tests:
 
 - `test/birdie-smart-shop-v1.test.mjs`
 - `test/birdie-smart-shop-awin-remote.test.mjs`
+- `test/birdie-smart-shop-registry.test.mjs`
+- `test/birdie-smart-shop-scorecard-context.test.mjs`
 
 The framework-neutral route handlers are intentional. They should be mounted into the actual BirdieWorld authenticated app backend rather than assumed to belong to the Birdie Agent operator service.
 
@@ -149,7 +160,7 @@ The framework-neutral route handlers are intentional. They should be mounted int
 - actual affiliate-account approvals
 - real server-side credentials
 - mount handlers into the authoritative BirdieWorld app backend
-- authoritative player-context adapter
+- bind `loadPlayerCommerceSignals` to the authoritative BirdieWorld player/round source
 - persistent click sink / analytics store
 - real provider feed/link adapters for any non-Awin providers
 - end-to-end staging proof: recommendation -> click -> affiliate attribution
