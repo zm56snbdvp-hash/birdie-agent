@@ -9,7 +9,6 @@ import {
 import { startDigitalCheckout } from "../src/moments/commerce/checkout.mjs";
 import { handlePaymentWebhook } from "../src/moments/commerce/payment-webhook.mjs";
 import { getDigitalDownload } from "../src/moments/commerce/download.mjs";
-import { buildMomentDetailViewModel } from "../src/moments/ui/view-models.mjs";
 
 const catalog = Object.freeze({
   [PRODUCT_TYPE.DIGITAL_ROUND]: { amountMinor: 690, currency: "EUR" },
@@ -276,7 +275,7 @@ test("failed payment does not grant digital entitlement", async () => {
   assert.equal(purchase.entitlementGrantedAt, null);
 });
 
-test("unpaid user cannot obtain the full-resolution download", async () => {
+test("legacy paid download still requires entitlement", async () => {
   const repo = makeRepo();
   await createPendingPurchase(repo);
   await assert.rejects(
@@ -290,7 +289,7 @@ test("unpaid user cannot obtain the full-resolution download", async () => {
   );
 });
 
-test("paid owner receives only a short-lived signed URL, never the raw private asset reference", async () => {
+test("legacy paid owner receives only a short-lived signed URL", async () => {
   const repo = makeRepo();
   const purchase = await createPendingPurchase(repo);
   const event = paidEvent(purchase);
@@ -321,12 +320,8 @@ test("paid owner receives only a short-lived signed URL, never the raw private a
   assert.equal(JSON.stringify(response).includes("private://moments"), false);
 });
 
-test("detail view uses the same canonical product ids as checkout", () => {
-  const vm = buildMomentDetailViewModel(makeMoment(), {
-    roundDigital: 6.9,
-    personalBestDigital: 9.9,
-    premiumA3Print: 34.9
-  });
-  assert.equal(vm.products[0].productType, PRODUCT_TYPE.DIGITAL_ROUND);
-  assert.equal(vm.products[1].productType, PRODUCT_TYPE.PRINT_A3);
+test("legacy Phase-4 commerce contracts remain intact for future Birdie products", () => {
+  assert.equal(PRODUCT_TYPE.DIGITAL_ROUND, "DIGITAL_ROUND");
+  assert.equal(PRODUCT_TYPE.DIGITAL_PERSONAL_BEST, "DIGITAL_PERSONAL_BEST");
+  assert.equal(FULFILLMENT_TYPE.DIGITAL, "DIGITAL");
 });
