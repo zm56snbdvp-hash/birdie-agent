@@ -12,6 +12,11 @@ import {
   createCommerceRecommendationsHttpHandler,
   createCommerceOutboundHttpHandler
 } from "../src/affiliate-commerce/integration/live-routes.mjs";
+import {
+  createAwinCatalogProvider,
+  inferGolfCommerceCategory,
+  mapAwinProduct
+} from "../src/affiliate-commerce/providers/awin.mjs";
 
 function product(overrides = {}) {
   return {
@@ -181,4 +186,77 @@ test("outbound HTTP handler records then returns 302 to provider", async () => {
   assert.equal(res.statusCode, 302);
   assert.equal(headers.Location, "https://example.com/affiliate/balls");
   assert.equal(headers["Cache-Control"], "private, no-store");
+});
+
+test("Awin mapper recognizes golf retail categories from feed fields", () => {
+  assert.equal(inferGolfCommerceCategory({ product_name: "Tour Golf Balls 12 Pack" }), COMMERCE_CATEGORY.BALLS);
+  assert.equal(inferGolfCommerceCategory({ category_name: "Golf Gloves" }), COMMERCE_CATEGORY.GLOVES);
+  assert.equal(inferGolfCommerceCategory({ merchant_category: "Laser Rangefinder" }), COMMERCE_CATEGORY.RANGEFINDER);
+  assert.equal(inferGolfCommerceCategory({ product_name: "Unrelated Polo Shirt" }), null);
+});
+
+test("Awin mapper uses tracked deep link, price and stock fields", () => {
+  const mapped = mapAwinProduct({
+    merchant_id: "11593",
+    merchant_name: "Golf Retailer",
+    aw_product_id: "p-1",
+    product_name: "Premium Golf Balls",
+    aw_deep_link: "https://www.awin1.com/cread.php?awinmid=11593&awinaffid=123",
+    search_price: "39.99",
+    currency: "EUR",
+    in_stock: "1",
+    is_for_sale: "1",
+    aw_image_url: "https://images.example.com/balls.jpg"
+  });
+  assert.equal(mapped.id, "awin:11593:p-1");
+  assert.equal(mapped.price, 39.99);
+  assert.equal(mapped.available, true);
+  assert.equal(mapped.active, true);
+});
+
+test("Awin mapper keeps out-of-stock products fail-closed", () => {
+  const mapped = mapAwinProduct({
+    merchant_id: "11593",
+    aw_product_id: "p-1",
+    product_name: "Premium Golf Balls",
+    aw_deep_link: "https://www.awin1.com/cread.php?x=1",
+    search_price: "39,99",
+    stock_status: "out of stock"
+  });
+  assert.equal(mapped.available, false);
+});
+
+test("Awin mapper drops unrelated or unsafe feed rows", () => {
+  assert.equal(mapAwinProduct({
+    merchant_id: "1",
+    aw_product_id: "x",
+    product_name: "Polo Shirt",
+    aw_deep_link: "https://example.com/x",
+    search_price: "20"
+  }), null);
+  assert.equal(mapAwinProduct({
+    merchant_id: "1",
+    aw_product_id: "x",
+    product_name: "Golf Balls",
+    aw_deep_link: "javascript:alert(1)",
+    search_price: "20"
+  }), null);
+});
+
+test("Awin catalog provider combines feeds and deduplicates by canonical product id", async () => {
+  const row = {
+    merchant_id: "11593",
+    aw_product_id: "p-1",
+    product_name: "Premium Golf Balls",
+    aw_deep_link: "https://www.awin1.com/cread.php?x=1",
+    search_price: "39.99",
+    in_stock: "1"
+  };
+  const provider = createAwinCatalogProvider({
+    feeds: [{ id: "feed-a" }, { id: "feed-b" }],
+    loadRows: async () => [row]
+  });
+  const products = await provider.listProducts();
+  assert.equal(products.length, 1);
+  assert.equal(products[0].id, "awin:11593:p-1");
 });
