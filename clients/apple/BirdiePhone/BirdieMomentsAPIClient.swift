@@ -34,15 +34,6 @@ struct BirdieMomentsAppStoreIntent: Decodable, Sendable {
     let appStoreProductId: String?
     let appAccountToken: String?
     let downloadHref: String?
-
-    enum CodingKeys: String, CodingKey {
-        case status
-        case purchaseId
-        case productType
-        case appStoreProductId
-        case appAccountToken
-        case downloadHref
-    }
 }
 
 struct BirdieMomentsAppStoreConfirmation: Decodable, Sendable {
@@ -67,8 +58,8 @@ final class BirdieMomentsAPIClient: @unchecked Sendable {
     private let session: URLSession
     private let endpoints: BirdieMomentsAPIEndpoints
     private let authorizer: (any BirdieMomentsRequestAuthorizing)?
-    private let decoder: JSONDecoder
-    private let encoder: JSONEncoder
+    private let decoder = JSONDecoder()
+    private let encoder = JSONEncoder()
 
     init(
         session: URLSession = .shared,
@@ -78,8 +69,6 @@ final class BirdieMomentsAPIClient: @unchecked Sendable {
         self.session = session
         self.endpoints = endpoints
         self.authorizer = authorizer
-        self.decoder = JSONDecoder()
-        self.encoder = JSONEncoder()
     }
 
     func startAppStorePurchase(momentId: String) async throws -> BirdieMomentsAppStoreIntent {
@@ -127,8 +116,8 @@ final class BirdieMomentsAPIClient: @unchecked Sendable {
         }
 
         guard (200..<300).contains(http.statusCode) else {
-            let errorCode = try? decoder.decode(BirdieMomentsErrorBody.self, from: data).error
-            throw BirdieMomentsAPIError.server(status: http.statusCode, code: errorCode ?? nil)
+            let errorBody = try? decoder.decode(BirdieMomentsErrorBody.self, from: data)
+            throw BirdieMomentsAPIError.server(status: http.statusCode, code: errorBody?.error)
         }
 
         do {
