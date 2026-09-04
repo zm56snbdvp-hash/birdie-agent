@@ -142,11 +142,14 @@ test("PB detail exposes proven comparison data", () => {
   });
 });
 
-test("post-round lookup only uses the authenticated user's Moments", async () => {
+test("post-round lookup only uses the authenticated user's Moments and owned round", async () => {
   const vm = await getPostRoundUpsell({
     roundId: "round-1",
     authUserId: "user-1",
     repo: {
+      async getRound(id) {
+        return { id, userId: "user-1", status: "completed" };
+      },
       async listMomentsForRound() {
         return [
           moment({ id: "foreign", userId: "user-2", momentType: MOMENT_TYPE.PERSONAL_BEST }),
@@ -156,4 +159,24 @@ test("post-round lookup only uses the authenticated user's Moments", async () =>
     }
   });
   assert.equal(vm.primaryAction.href, "/moments/owned");
+});
+
+test("post-round reveal is hidden when the persisted source round belongs to another user", async () => {
+  let momentsQueried = false;
+  const vm = await getPostRoundUpsell({
+    roundId: "round-1",
+    authUserId: "user-1",
+    repo: {
+      async getRound() {
+        return { id: "round-1", userId: "user-2", status: "completed" };
+      },
+      async listMomentsForRound() {
+        momentsQueried = true;
+        return [moment()];
+      }
+    }
+  });
+
+  assert.equal(vm, null);
+  assert.equal(momentsQueried, false);
 });
