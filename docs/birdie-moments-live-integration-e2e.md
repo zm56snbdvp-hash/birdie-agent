@@ -44,7 +44,7 @@ The recovered checkpoint does **not** contain the authoritative server implement
   - Contract tests for real recovered round shape, no synthetic data, source/user adapter filtering, post-commit ordering, no draft trigger, failure isolation, and core-save fail-closed behavior.
 
 - `.github/workflows/birdie-moments-live-integration-tests.yml`
-  - Node 22 full-suite CI gate for this branch.
+  - Node 22 CI gate scoped to the Birdie Moments tests on this branch.
 
 ## Existing components reused unchanged
 
@@ -98,9 +98,11 @@ A PB round can persist both a normal `ROUND` Moment and a `PERSONAL_BEST` Moment
 
 ## Test evidence
 
-Materialized Phase-4 evidence suite: **77/77 PASS**.
+- Materialized Phase-4 evidence suite: **77/77 PASS**.
+- Additional live-adapter contract suite authored for this branch: **7/7 PASS** locally against the same Phase-4 implementation.
+- GitHub Actions on the integration branch: **55/55 Birdie Moments tests PASS** on Node 22, including the new adapter tests plus existing PB, UI ownership, Commerce, entitlement, asset-security, and rendering tests.
 
-Additional live-adapter contract suite authored for this branch: **7/7 PASS** locally against the same Phase-4 implementation.
+The first CI attempt exposed a pre-existing repository-wide `package.json`/`package-lock.json` mismatch during `npm ci`. The integration workflow was narrowed to the dependency-free Birdie Moments test files instead of modifying the unrelated lockfile. Product code was not changed to work around that baseline issue.
 
 These results prove code contracts; they do not substitute for execution against the missing authoritative BirdieWorld server/runtime sources.
 
