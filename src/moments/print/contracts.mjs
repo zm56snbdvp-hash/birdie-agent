@@ -20,8 +20,15 @@ export function validateShippingAddress(address) {
   if (!/^[A-Z]{2}$/.test(countryCode)) {
     throw new MomentCommerceError("PRINT_ADDRESS_INVALID", "countryCode must be ISO-3166 alpha-2", 400);
   }
+  const email = typeof address.email === "string" && address.email.trim() ? address.email.trim() : null;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new MomentCommerceError("PRINT_ADDRESS_INVALID", "email is invalid", 400);
+  }
   return Object.freeze({
     recipientName: address.recipientName.trim(),
+    firstName: typeof address.firstName === "string" && address.firstName.trim() ? address.firstName.trim() : null,
+    lastName: typeof address.lastName === "string" && address.lastName.trim() ? address.lastName.trim() : null,
+    email,
     company: typeof address.company === "string" && address.company.trim() ? address.company.trim() : null,
     line1: address.line1.trim(),
     line2: typeof address.line2 === "string" && address.line2.trim() ? address.line2.trim() : null,
