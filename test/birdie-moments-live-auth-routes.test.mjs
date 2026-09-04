@@ -112,7 +112,7 @@ test("post-round reveal is filtered by the server-resolved Site user", async () 
   });
 
   assert.equal(response.status, 200);
-  assert.equal(response.body.reveal.momentId, "moment-1");
+  assert.equal(response.body.reveal.primaryAction.href, "/moments/moment-1");
 });
 
 test("foreign Site session receives 404 for another user's Moment", async () => {
