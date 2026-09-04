@@ -5,7 +5,7 @@ import { assertPrintPurchaseReady, internalPrintOrderKey, PRINT_ORDER_STATUS, va
 /**
  * Required print provider contract:
  * - name: stable provider name
- * - validateProduct({ productType, printAsset, format })
+ * - validateProduct({ productType, printAsset, format, countryCode })
  * - createOrder({ idempotencyKey, productType, printAsset, format, recipient, address, metadata })
  * - getOrderStatus(providerOrderId)
  * - handleWebhook({ rawBody, signature }) -> verified normalized event
@@ -45,7 +45,12 @@ export async function submitPaidPrintOrder({
   });
 
   try {
-    await printProvider.validateProduct({ productType: purchase.productType, printAsset, format: "A3_PORTRAIT_300DPI" });
+    await printProvider.validateProduct({
+      productType: purchase.productType,
+      printAsset,
+      format: "A3_PORTRAIT_300DPI",
+      countryCode: address.countryCode
+    });
     const providerOrder = await printProvider.createOrder({
       idempotencyKey: key,
       productType: purchase.productType,
