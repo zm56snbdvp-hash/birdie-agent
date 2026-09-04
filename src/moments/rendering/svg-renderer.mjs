@@ -54,7 +54,7 @@ export function renderMomentSvg(renderData, target = RENDER_TARGET.PREVIEW) {
   const pbPanel = isPb ? `
     <rect x="${left}" y="${pbPanelY}" width="${right - left}" height="${pbPanelHeight}" rx="${px(28, width)}" fill="#F5D98B" fill-opacity="0.08" stroke="${accent}" stroke-opacity="0.55" stroke-width="${px(2, width)}"/>
     <text x="${left + px(34, width)}" y="${pbPanelY + Math.round(pbPanelHeight * 0.32)}" fill="${accent}" font-family="Arial, Helvetica, sans-serif" font-size="${px(21, width)}" font-weight="800" letter-spacing="${px(4, width)}">NEW PERSONAL BEST</text>
-    <text x="${left + px(34, width)}" y="${pbPanelY + Math.round(pbPanelHeight * 0.70)}" fill="#F7F2E8" font-family="Georgia, 'Times New Roman', serif" font-size="${px(37, width)}" font-weight="700">Previous ${escapeXml(renderData.personalBestData.previousBestScore)}  ·  New ${escapeXml(renderData.personalBestData.newBestScore)}  ·  ${escapeXml(renderData.personalBestData.improvement)} strokes</text>` : "";
+    <text x="${left + px(34, width)}" y="${pbPanelY + Math.round(pbPanelHeight * 0.70)}" fill="#F7F2E8" font-family="Georgia, 'Times New Roman', serif" font-size="${px(37, width)}" font-weight="700">Previous ${escapeXml(renderData.personalBestData.previousBestScore)}  ·  New ${escapeXml(renderData.personalBestData.newBestScore)}  ·  ${escapeXml(renderData.personalBestData.strokesImproved)} strokes better</text>` : "";
 
   const optionalScoreMetric = scoreVsPar !== null
     ? renderMetric({
