@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "representativeContext": "FAIRWAY stroke2 hole5 targetGREEN WEDGE_52 previousFAIRWAY PERFECT previousPERFECT tailwind tied par4",
+  "summary": {
+    "totalCards": 96,
+    "totals": {
+      "EXACT": 24,
+      "PROVISIONAL": 18,
+      "DEFERRED": 28,
+      "CONDITIONAL_EXACT": 20,
+      "REFERENCE_ONLY": 6
+    },
+    "byFamily": {
+      "PLAYER": { "total": 12, "status": { "EXACT": 12 } },
+      "CLUB": { "total": 18, "status": { "PROVISIONAL": 18 } },
+      "BALL": { "total": 12, "status": { "EXACT": 5, "DEFERRED": 1, "CONDITIONAL_EXACT": 6 } },
+      "SPIN": { "total": 24, "status": { "EXACT": 7, "CONDITIONAL_EXACT": 9, "DEFERRED": 8 } },
+      "TACTIC": { "total": 24, "status": { "DEFERRED": 19, "CONDITIONAL_EXACT": 5 } },
+      "COURSE": { "total": 6, "status": { "REFERENCE_ONLY": 6 } }
+    }
+  },
+  "deferredIds": [
+    "BW1-BALL-005",
+    "BW1-SPIN-006", "BW1-SPIN-011", "BW1-SPIN-014", "BW1-SPIN-015", "BW1-SPIN-016", "BW1-SPIN-017", "BW1-SPIN-018", "BW1-SPIN-024",
+    "BW1-TAC-001", "BW1-TAC-002", "BW1-TAC-004", "BW1-TAC-006", "BW1-TAC-007", "BW1-TAC-010", "BW1-TAC-011", "BW1-TAC-012", "BW1-TAC-013", "BW1-TAC-014", "BW1-TAC-015", "BW1-TAC-016", "BW1-TAC-017", "BW1-TAC-018", "BW1-TAC-019", "BW1-TAC-020", "BW1-TAC-022", "BW1-TAC-023", "BW1-TAC-024"
+  ],
+  "provisionalIds": [
+    "BW1-CLB-001", "BW1-CLB-002", "BW1-CLB-003", "BW1-CLB-004", "BW1-CLB-005", "BW1-CLB-006", "BW1-CLB-007", "BW1-CLB-008", "BW1-CLB-009", "BW1-CLB-010", "BW1-CLB-011", "BW1-CLB-012", "BW1-CLB-013", "BW1-CLB-014", "BW1-CLB-015", "BW1-CLB-016", "BW1-CLB-017", "BW1-CLB-018"
+  ],
+  "policy": "DEFERRED disabled; PROVISIONAL is not claimed as original server mapping; COURSE reference-only."
+}
