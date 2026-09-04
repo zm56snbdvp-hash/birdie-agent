@@ -39,6 +39,18 @@ function assertApplePurchaseContext({ purchase, moment, authUserId }) {
   }
 }
 
+function assertStoredIntentMatches({ intent, authUserId, moment, product }) {
+  if (
+    !intent ||
+    String(intent.userId) !== String(authUserId) ||
+    String(intent.momentId) !== String(moment.id) ||
+    String(intent.appStoreProductId) !== String(product.appStoreProductId)
+  ) {
+    throw new MomentCommerceError("APPLE_PURCHASE_INTENT_MISMATCH", "Stored App Store purchase intent does not match purchase", 409);
+  }
+  return intent;
+}
+
 export async function startAppStoreDigitalPurchase({
   authUserId,
   momentId,
@@ -51,7 +63,7 @@ export async function startAppStoreDigitalPurchase({
   const moment = await getOwnedMoment({ momentId, authUserId, repo });
   const productType = digitalProductTypeForMoment(moment);
   const product = resolveAppStoreProduct(catalog, productType);
-  const accountToken = requireUuid(appAccountToken, "appAccountToken");
+  const proposedAccountToken = requireUuid(appAccountToken, "appAccountToken");
 
   const purchase = await repo.ensurePurchase({
     userId: authUserId,
@@ -72,15 +84,23 @@ export async function startAppStoreDigitalPurchase({
     };
   }
 
-  await repo.ensureAppStorePurchaseIntent({
-    purchaseId: purchase.id,
-    userId: authUserId,
-    momentId: moment.id,
-    appStoreProductId: product.appStoreProductId,
-    appAccountToken: accountToken,
-    createdAt: now(),
-    updatedAt: now()
-  });
+  const existingIntent = await repo.getAppStorePurchaseIntent?.(purchase.id);
+  let intent;
+  if (existingIntent) {
+    intent = assertStoredIntentMatches({ intent: existingIntent, authUserId, moment, product });
+  } else {
+    intent = await repo.ensureAppStorePurchaseIntent({
+      purchaseId: purchase.id,
+      userId: authUserId,
+      momentId: moment.id,
+      appStoreProductId: product.appStoreProductId,
+      appAccountToken: proposedAccountToken,
+      createdAt: now(),
+      updatedAt: now()
+    });
+    intent = assertStoredIntentMatches({ intent, authUserId, moment, product });
+  }
+  const accountToken = requireUuid(intent.appAccountToken, "stored appAccountToken");
 
   await emitMomentAnalytics(analytics, MOMENT_ANALYTICS_EVENT.DIGITAL_PURCHASE_STARTED, {
     userId: authUserId,
@@ -123,15 +143,12 @@ export async function confirmAppStoreDigitalPurchase({
   assertApplePurchaseContext({ purchase, moment, authUserId });
 
   const product = resolveAppStoreProduct(catalog, purchase.productType);
-  const intent = await repo.getAppStorePurchaseIntent(purchase.id);
-  if (!intent) throw new MomentCommerceError("APPLE_PURCHASE_INTENT_MISSING", "App Store purchase intent not found", 409);
-  if (
-    String(intent.userId) !== String(authUserId) ||
-    String(intent.momentId) !== String(moment.id) ||
-    String(intent.appStoreProductId) !== String(product.appStoreProductId)
-  ) {
-    throw new MomentCommerceError("APPLE_PURCHASE_INTENT_MISMATCH", "Stored App Store purchase intent does not match purchase", 409);
-  }
+  const intent = assertStoredIntentMatches({
+    intent: await repo.getAppStorePurchaseIntent(purchase.id),
+    authUserId,
+    moment,
+    product
+  });
 
   const transaction = await appleVerifier.verifyAndDecodeTransaction(signedTransactionInfo);
   const transactionId = transaction?.transactionId;
