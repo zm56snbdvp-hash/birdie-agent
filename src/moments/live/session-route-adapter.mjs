@@ -10,18 +10,13 @@ import {
 } from "../digital/free-download.mjs";
 
 function privateResponse(status, body) {
-  return {
-    status,
-    headers: { "Cache-Control": "private, no-store" },
-    body
-  };
+  return { status, headers: { "Cache-Control": "private, no-store" }, body };
 }
 
 async function authenticatedUserId(request, resolveAuthenticatedUserId) {
   if (typeof resolveAuthenticatedUserId !== "function") {
     throw new TypeError("resolveAuthenticatedUserId must be provided by the authoritative app runtime");
   }
-
   const value = await resolveAuthenticatedUserId(request);
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
@@ -30,24 +25,26 @@ export async function handleLivePostRoundRevealRequest({
   request,
   roundId,
   resolveAuthenticatedUserId,
-  repo
+  repo,
+  assetGateway
 }) {
   const authUserId = await authenticatedUserId(request, resolveAuthenticatedUserId);
   if (!authUserId) return privateResponse(401, { error: "AUTH_REQUIRED" });
 
-  const reveal = await getPostRoundUpsell({ roundId, authUserId, repo });
+  const reveal = await getPostRoundUpsell({ roundId, authUserId, repo, assetGateway });
   return privateResponse(200, { reveal });
 }
 
 export async function handleLiveMomentCollectionRequest({
   request,
   resolveAuthenticatedUserId,
-  repo
+  repo,
+  assetGateway
 }) {
   const authUserId = await authenticatedUserId(request, resolveAuthenticatedUserId);
   if (!authUserId) return privateResponse(401, { error: "AUTH_REQUIRED" });
 
-  const response = await handleMomentCollectionRequest({ authUserId, repo });
+  const response = await handleMomentCollectionRequest({ authUserId, repo, assetGateway });
   return {
     status: response.status,
     headers: { "Cache-Control": response.cacheControl },
@@ -59,17 +56,13 @@ export async function handleLiveMomentDetailRequest({
   request,
   momentId,
   resolveAuthenticatedUserId,
-  repo
+  repo,
+  assetGateway
 }) {
   const authUserId = await authenticatedUserId(request, resolveAuthenticatedUserId);
   if (!authUserId) return privateResponse(401, { error: "AUTH_REQUIRED" });
 
-  const response = await handleMomentDetailRequest({
-    momentId,
-    authUserId,
-    repo
-  });
-
+  const response = await handleMomentDetailRequest({ momentId, authUserId, repo, assetGateway });
   return {
     status: response.status,
     headers: { "Cache-Control": response.cacheControl },
@@ -77,10 +70,7 @@ export async function handleLiveMomentDetailRequest({
   };
 }
 
-/**
- * Retained legacy Phase-4 commerce adapter.
- * Birdie Moments Digital v1 does not call this route.
- */
+/** Retained legacy Phase-4 commerce adapter. Birdie Moments Digital v1 does not call this route. */
 export async function handleLiveDigitalCheckoutRequest({
   request,
   momentId,
@@ -105,10 +95,7 @@ export async function handleLiveDigitalCheckoutRequest({
   });
 }
 
-/**
- * Birdie Moments Digital v1 download route: free but private.
- * No payment or entitlement lookup is performed.
- */
+/** Birdie Moments Digital v1 download route: free but private. */
 export async function handleLiveDigitalDownloadRequest({
   request,
   momentId,
@@ -120,12 +107,7 @@ export async function handleLiveDigitalDownloadRequest({
   if (!authUserId) return privateResponse(401, { error: "AUTH_REQUIRED" });
 
   try {
-    return await getFreePrivateMomentDownload({
-      authUserId,
-      momentId,
-      repo,
-      assetSigner
-    });
+    return await getFreePrivateMomentDownload({ authUserId, momentId, repo, assetSigner });
   } catch (error) {
     if (isFreeMomentAccessError(error)) {
       return privateResponse(error.status, { error: error.code });
