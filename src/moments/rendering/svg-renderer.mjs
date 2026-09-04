@@ -117,7 +117,9 @@ function digitalSvg(renderData, target, layout) {
   <line x1="${left}" y1="${Math.round(height * 0.36)}" x2="${right}" y2="${Math.round(height * 0.36)}" stroke="${accent}" stroke-opacity="0.27" stroke-width="${scale(2, width)}"/>
   <text x="${left}" y="${Math.round(height * 0.415)}" fill="#8EA297" font-family="Arial, Helvetica, sans-serif" font-size="${scale(18, width)}" font-weight="800" letter-spacing="${scale(5, width)}">TOTAL SCORE</text>
   <text x="${left}" y="${Math.round(height * 0.585)}" fill="#F7F2E8" font-family="Georgia, 'Times New Roman', serif" font-size="${scoreSize}" font-weight="700" letter-spacing="${scale(-8, width)}">${renderData.totalScore}</text>
-  ${scoreVsPar === null ? "" : `<text x="${right}" y="${Math.round(height * 0.535)}" text-anchor="end" fill="${accent}" font-family="Georgia, 'Times New Roman', serif" font-size="${scale(62, width)}" font-weight="700">${escapeXml(scoreVsPar)} <tspan font-family="Arial, Helvetica, sans-serif" font-size="${scale(17, width)}" font-weight="800" letter-spacing="${scale(3, width)}">TO PAR</tspan></text>`}
+  ${scoreVsPar === null ? "" : `
+  <text x="${right}" y="${Math.round(height * 0.525)}" text-anchor="end" fill="${accent}" font-family="Georgia, 'Times New Roman', serif" font-size="${scale(62, width)}" font-weight="700">${escapeXml(scoreVsPar)}</text>
+  <text x="${right}" y="${Math.round(height * 0.557)}" text-anchor="end" fill="${accent}" font-family="Arial, Helvetica, sans-serif" font-size="${scale(16, width)}" font-weight="800" letter-spacing="${scale(3, width)}">TO PAR</text>`}
 
   <text x="${left}" y="${Math.round(height * 0.665)}" fill="#F7F2E8" font-family="Arial, Helvetica, sans-serif" font-size="${scale(stats.length >= 3 ? 24 : 27, width)}" font-weight="750" letter-spacing="${scale(2.2, width)}">${escapeXml(statsText)}</text>
   ${pbBlock}
@@ -185,7 +187,9 @@ function printSvg(renderData, target, layout) {
 
   <text x="${safe}" y="${Math.round(height * 0.39)}" fill="${mute}" font-family="Arial, Helvetica, sans-serif" font-size="48" font-weight="800" letter-spacing="14">TOTAL SCORE</text>
   <text x="${safe}" y="${Math.round(height * 0.585)}" fill="${ink}" font-family="Georgia, 'Times New Roman', serif" font-size="${renderData.totalScore >= 100 ? 660 : 745}" font-weight="700" letter-spacing="-28">${renderData.totalScore}</text>
-  ${scoreVsPar === null ? "" : `<text x="${width - safe}" y="${Math.round(height * 0.53)}" text-anchor="end" fill="${accent}" font-family="Georgia, 'Times New Roman', serif" font-size="160" font-weight="700">${escapeXml(scoreVsPar)}<tspan dx="28" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="800" letter-spacing="8">TO PAR</tspan></text>`}
+  ${scoreVsPar === null ? "" : `
+  <text x="${width - safe}" y="${Math.round(height * 0.515)}" text-anchor="end" fill="${accent}" font-family="Georgia, 'Times New Roman', serif" font-size="160" font-weight="700">${escapeXml(scoreVsPar)}</text>
+  <text x="${width - safe}" y="${Math.round(height * 0.548)}" text-anchor="end" fill="${accent}" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="800" letter-spacing="8">TO PAR</text>`}
 
   <text x="${safe}" y="${Math.round(height * 0.655)}" fill="${ink}" font-family="Arial, Helvetica, sans-serif" font-size="58" font-weight="750" letter-spacing="7">${escapeXml(statsText)}</text>
   ${pb}
