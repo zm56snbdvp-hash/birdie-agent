@@ -27,8 +27,8 @@ export function createRoundSaveWithMoments({
 
     if (!roundId || !isCompletedPersistedRound(persistedRound)) return saved;
 
-    const persistedOwnerId = userIdOf(persistedRound);
-    const authenticatedOwnerId = userIdOf(context?.authenticatedUser ?? context?.authUserId);
+    const persistedOwnerId = roundOwnerId(persistedRound);
+    const authenticatedOwnerId = authenticatedUserId(context?.authenticatedUser ?? context?.authUserId);
     if (!persistedOwnerId || !authenticatedOwnerId || persistedOwnerId !== authenticatedOwnerId) {
       logger.error?.("birdie_moments_round_owner_unproven", {
         roundId,
@@ -75,7 +75,12 @@ function isCompletedPersistedRound(round) {
     || round?.is_completed === true;
 }
 
-function userIdOf(value) {
+function roundOwnerId(round) {
+  const candidate = round?.userId ?? round?.user_id ?? null;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+}
+
+function authenticatedUserId(value) {
   if (typeof value === "string") return value.trim() || null;
   const candidate = value?.id ?? value?.userId ?? value?.user_id ?? null;
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
