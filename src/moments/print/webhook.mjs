@@ -16,6 +16,9 @@ export async function handlePrintProviderWebhook({ rawBody, signature, repo, pri
     throw new MomentCommerceError("INVALID_PRINT_PROVIDER_EVENT", "Verified print provider event is incomplete", 400);
   }
 
+  const order = await repo.getPrintOrderByProviderOrderId(printProvider.name, event.providerOrderId);
+  if (!order) throw new MomentCommerceError("PRINT_ORDER_NOT_FOUND", "Print order not found", 404);
+
   const claimed = await repo.claimPrintProviderEvent({
     providerName: printProvider.name,
     providerEventId: event.id,
@@ -24,9 +27,6 @@ export async function handlePrintProviderWebhook({ rawBody, signature, repo, pri
     processedAt: now()
   });
   if (claimed?.duplicate === true) return { processed: true, duplicate: true };
-
-  const order = await repo.getPrintOrderByProviderOrderId(printProvider.name, event.providerOrderId);
-  if (!order) throw new MomentCommerceError("PRINT_ORDER_NOT_FOUND", "Print order not found", 404);
 
   const status = STATUS_MAP[event.type];
   if (!status) return { processed: false, ignored: true, eventType: event.type };
