@@ -7,12 +7,14 @@ import { handleMomentCollectionRequest } from "../src/moments/ui/routes.mjs";
 import { SQLiteD1TestDatabase } from "./helpers/sqlite-d1.mjs";
 
 const migration001 = readFileSync(new URL("../db/001_birdie_moments.sql", import.meta.url), "utf8");
-const migration008 = readFileSync(new URL("../db/008_free_digital_moment_failures.sql", import.meta.url), "utf8");
+const migration004 = readFileSync(new URL("../db/004_moment_telemetry.sql", import.meta.url), "utf8");
 
 function setup() {
   const db = new SQLiteD1TestDatabase();
   db.exec(migration001);
-  db.exec(migration008);
+  db.exec(migration004);
+  // TASK-142 canonical telemetry migration is deliberately repeat-safe.
+  db.exec(migration004);
 
   const rounds = new Map([
     ["round-1", { id: "round-1", userId: "user-1", status: "completed", holeCount: 18 }],
@@ -147,13 +149,39 @@ test("D1 Collection owner query excludes another user's Moments before round che
   }
 });
 
-test("Moment failures are persisted independently of purchase/payment infrastructure", async () => {
+test("canonical TASK-142 moment_failures schema is active and repeat-safe", () => {
+  const { db } = setup();
+  try {
+    const columns = db.sqlite.prepare("PRAGMA table_info(moment_failures)").all().map((row) => row.name);
+    assert.deepEqual(columns, [
+      "id",
+      "stage",
+      "code",
+      "summary",
+      "round_id",
+      "moment_id",
+      "purchase_id",
+      "product_type",
+      "fulfillment_type",
+      "occurred_at"
+    ]);
+    assert.equal(columns.includes("message"), false);
+    assert.equal(columns.includes("created_at"), false);
+  } finally {
+    db.close();
+  }
+});
+
+test("Moment failures use canonical summary/occurred_at and redact sensitive message data", async () => {
   const { db, repo } = setup();
   try {
     const created = await repo.ensureMoment(momentInput());
     const failed = await repo.markMomentFailed({
       momentId: created.id,
-      error: Object.assign(new Error("renderer exploded"), { code: "RENDER_TEST_FAILURE" })
+      error: Object.assign(
+        new Error("renderer exploded https://private.example/file user@example.com Bearer_SUPERSECRET123456789"),
+        { code: "RENDER_TEST_FAILURE" }
+      )
     });
 
     assert.equal(failed.status, MOMENT_STATUS.FAILED);
@@ -161,6 +189,13 @@ test("Moment failures are persisted independently of purchase/payment infrastruc
     assert.equal(failure.stage, "RENDERING");
     assert.equal(failure.code, "RENDER_TEST_FAILURE");
     assert.equal(failure.moment_id, created.id);
+    assert.equal(failure.occurred_at, "2026-09-04T12:00:00Z");
+    assert.match(failure.summary, /\[url\]/);
+    assert.match(failure.summary, /\[email\]/);
+    assert.match(failure.summary, /\[secret\]/);
+    assert.equal(failure.summary.includes("private.example"), false);
+    assert.equal(failure.summary.includes("user@example.com"), false);
+    assert.equal(failure.summary.includes("SUPERSECRET"), false);
   } finally {
     db.close();
   }
