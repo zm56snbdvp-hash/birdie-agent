@@ -1,19 +1,17 @@
 # Birdie Score / BirdieWorld — Live Recovery 2026-09-04
 
-This branch is a **source-recovery checkpoint**, reconstructed from the currently deployed BirdieWorld browser bundles because the original Codex/Sites workspace is not accessible without additional credits.
+This branch is a **source-recovery checkpoint**, reconstructed from the deployed BirdieWorld browser bundles because the original Codex/Sites workspace is not accessible without additional credits.
 
-It is deliberately isolated from older BirdieWorld implementation branches and **must not be described as the original source tree**.
+It is isolated from older BirdieWorld implementation branches and **must not be described as the original source tree**.
 
 ## Proven deployment identity
 
 - Product title: `BirdieWorld — Golf, Karten & Fortschritt`
-- Deployed app artifact compatibility deploymentVersion: `a19bcfc2-99f0-46c4-8fb1-892a368f6e73`
-- Recovered card catalog source metadata: `Birdieworld-First-Edition-v1.md`, generated `2026-09-01`
-- Recovered canonical identities: **96**
+- Deployed artifact `deploymentVersion`: `a19bcfc2-99f0-46c4-8fb1-892a368f6e73`
+- Recovered catalog source metadata: `Birdieworld-First-Edition-v1.md`, generated `2026-09-01`
+- Canonical identities: **96**
 
-## Recovered current card taxonomy
-
-The actual deployed product taxonomy is retained exactly:
+## Canonical card taxonomy
 
 - `PLAYER` — 12
 - `CLUB` — 18
@@ -22,19 +20,15 @@ The actual deployed product taxonomy is retained exactly:
 - `TACTIC` — 24
 - `COURSE` — 6
 
-Do not collapse this into a new speculative taxonomy. `SPIN` and `TACTIC` are real current gameplay families and `BALL` is a first-class equipment family.
+`SPIN`, `TACTIC` and `BALL` are real deployed gameplay families and are retained as-is.
 
-## Root cause of the artwork defect
+## Proven artwork root cause
 
-The current canonical catalog and the deployed JPG artwork set are incompatible versions.
-
-The live resolver in `card-artwork-Bc7-dFuR.js` extracts only the three-digit physical number and renders:
+The current catalog and deployed 96 JPG fronts are incompatible catalog versions. Production resolves front art only from the physical-number suffix:
 
 `/assets/cards/edition-01/BW-E01-XXX-standard.jpg`
 
-It does **not** validate card ID, family, name, or artwork version. The existing image therefore wins silently even when its identity belongs to a legacy catalog.
-
-Observed legacy artwork ranges:
+It does not validate card ID, family, name or artwork version. The deployed legacy front-art ranges are:
 
 - 001–048 `COMMUNITY`
 - 049–064 `PLACES`
@@ -42,54 +36,52 @@ Observed legacy artwork ranges:
 - 081–092 `MOMENTS`
 - 093–096 `SIGNATURE`
 
-This makes all 18 current `CLUB` cards point at legacy `COMMUNITY` / person artwork.
+Therefore all 18 current `CLUB` cards point to legacy `COMMUNITY` / person artwork.
 
 ## Recovery policy
 
-`src/domain/card-artwork.ts` is fail-safe:
-
-- card ID must match;
-- physical number must match;
-- family must match;
-- name must match;
-- artwork must be explicitly verified;
-- otherwise no image is returned.
-
-A UI integrating this contract must render a neutral text/family fallback for `MISSING`, `MISMATCH`, or `UNVERIFIED`. It must never guess another family or blindly build an image path from a number.
-
-## API surface recovered from client behavior
-
-Known client calls are recorded in `src/contracts/live-api-contracts.json`, including:
-
-- `/api/deck`
-- `/api/boosters/open`
-- `/api/starter-set/claim`
-- `/api/round`
-- `/api/local-duel`
-- `/api/local-duel/reward`
-
-Server implementations, authentication internals, D1 schema/migrations and secret configuration are **not recoverable from browser bundles** and remain UNPROVEN until another source artifact is obtained.
+`src/domain/card-artwork.ts` and `src/components/CardArtwork.tsx` fail closed. Front art is shown only when card ID, physical number, family and name all match an explicitly verified manifest entry. Otherwise the UI renders a canonical text/family fallback. A number-derived JPG is never accepted as proof of identity.
 
 ## Recovery Phase 2 — maintainable client card layer
 
-The first maintainable React/TypeScript reconstruction now exists under `src/features/`:
+Recovered into maintainable React/TypeScript:
 
-- `card-vault/CardVault.tsx` — collection, starter-set claim and digital booster client flow;
-- `deck-builder/DeckBuilder.tsx` — deployed 1 PLAYER + 24-card deck composition flow;
-- `game/GameApp.tsx` — recovered GameApp **card layer** (player, equipment install, five-card action hand and hole-start draw);
-- `game/card-state.ts` — pure, testable equipment/action draw semantics recovered from the deployed GameApp;
-- `components/CardArtwork.tsx` — shared fail-safe card face renderer.
+- `card-vault/CardVault.tsx` — collection, starter-set claim, booster client flow
+- `deck-builder/DeckBuilder.tsx` — deployed player + 24-card deck composition flow
+- `game/GameApp.tsx` — player/equipment/action-hand card layer
+- `game/card-state.ts` — equipment auto-install + replacement-draw semantics
+- `components/CardArtwork.tsx` — shared fail-safe renderer
 
-All three reconstructed feature surfaces route card faces through `CardArtwork`. None constructs a front-artwork URL from `physicalNumber`.
+Known client API contracts are retained for `/api/deck`, `/api/boosters/open`, `/api/starter-set/claim`, `/api/round`, `/api/local-duel` and `/api/local-duel/reward`.
 
-The complete shot simulator / physics rendering is **not yet claimed as decompiled maintainable source**. Its immutable production bundle evidence remains part of the external recovery archive and is the next recovery boundary.
+## Recovery Phase 3 — shot engine
 
-Validation:
+`src/features/game/shot-engine.ts` is a pure TypeScript reconstruction of the deployed `game-engine-BHNViZ1-.js` golf simulation core. It preserves:
+
+- the six deployed holes, hazard rules and target-stroke ladder
+- `CONTROL`, `STANDARD`, `ATTACK` shot modes
+- timing grades and perfect/good windows
+- legal/recommended club thresholds
+- carry, roll, wind, lie and lateral calculations
+- putt break/reach behavior
+- Lee-Ann `ONE READ` signature putt
+- `CROSSWIND`, `TREE_GATE`, `WATER_CARRY`, `BUNKER_JAWS`, `BREAKING_GREEN`, `FALSE_FRONT` hazard branches
+- action eligibility (`teeOnly`, `afterFirstShot`), spin curve and timing-window modifiers
+
+The equivalence suite pins 11 representative outputs generated directly from the deployed production bundle and compares the reconstructed engine against those results. Cases cover all six hazards, putting, signature behavior and active/inactive action modifiers.
+
+Latest local validation: strict TypeScript PASS and **34/34 tests PASS**.
 
 ```bash
 npm run verify
 ```
 
+## Evidence boundary
+
+Immutable browser bundle snapshots remain in the external/local recovery archive supplied during this recovery session. The GitHub branch contains recovered contracts, source, production-output fixtures and evidence metadata; it is not claimed to contain the original Codex workspace or every raw production bundle.
+
+Server implementations, auth/session internals, D1/Drizzle schema/migrations, server booster randomization/persistence and exact ChatGPT-Site deployment configuration remain **UNPROVEN**.
+
 ## Release state
 
-**BLOCKED** — this recovery checkpoint proves and contains the card/artwork fix contract but does not reconstruct the complete original server/source tree and does not contain verified replacement artwork.
+**BLOCKED** for Production replacement: verified current 96-card artwork and the unrecovered server/runtime source are still missing. The recovered client card layer and shot-engine core are **READY_TO_REVIEW** as isolated recovery code.
