@@ -39,6 +39,10 @@ function repoFor(items = [moment()]) {
     async getMoment(id) {
       return items.find((item) => item.id === id) ?? null;
     },
+    async getRound(id) {
+      const linked = items.find((item) => item.roundId === id && item.userId === "site-user-1");
+      return linked ? { id, userId: "site-user-1", status: "completed" } : null;
+    },
     async ensurePurchase(input) {
       const existing = purchases.find((item) =>
         item.userId === input.userId && item.momentId === input.momentId
@@ -68,12 +72,6 @@ function repoFor(items = [moment()]) {
   };
 }
 
-const pricing = {
-  roundDigital: 6.9,
-  personalBestDigital: 9.9,
-  premiumA3Print: 34.9
-};
-
 const catalog = {
   [PRODUCT_TYPE.DIGITAL_ROUND]: { amountMinor: 690, currency: "EUR" },
   [PRODUCT_TYPE.DIGITAL_PERSONAL_BEST]: { amountMinor: 990, currency: "EUR" }
@@ -89,8 +87,7 @@ test("live Moments routes fail closed when the ChatGPT Site session has no authe
     request: {},
     momentId: "moment-1",
     resolveAuthenticatedUserId: noSession,
-    repo: { async getMoment() { touchedRepo = true; return moment(); } },
-    pricing
+    repo: { async getMoment() { touchedRepo = true; return moment(); } }
   });
 
   assert.equal(response.status, 401);
@@ -98,7 +95,7 @@ test("live Moments routes fail closed when the ChatGPT Site session has no authe
   assert.equal(touchedRepo, false);
 });
 
-test("post-round reveal is filtered by the server-resolved Site user", async () => {
+test("post-round reveal is filtered by the server-resolved Site user and owned source round", async () => {
   const repo = repoFor([
     moment(),
     moment({ id: "foreign", userId: "site-user-2" })
@@ -120,15 +117,14 @@ test("foreign Site session receives 404 for another user's Moment", async () => 
     request: {},
     momentId: "moment-1",
     resolveAuthenticatedUserId: foreignSession,
-    repo: repoFor(),
-    pricing
+    repo: repoFor()
   });
 
   assert.equal(response.status, 404);
   assert.deepEqual(response.body, { error: "MOMENT_NOT_FOUND" });
 });
 
-test("digital checkout purchase ownership comes only from the server Site session", async () => {
+test("retained legacy digital checkout purchase ownership comes only from the server Site session", async () => {
   const repo = repoFor();
   const capture = {};
   const response = await handleLiveDigitalCheckoutRequest({
@@ -154,18 +150,8 @@ test("digital checkout purchase ownership comes only from the server Site sessio
   assert.notEqual(capture.input.metadata.user_id, "attacker");
 });
 
-test("foreign Site session cannot use another user's paid digital entitlement", async () => {
+test("foreign Site session cannot download another user's free Digital Moment", async () => {
   const repo = repoFor();
-  repo.purchases.push({
-    id: "purchase-1",
-    userId: "site-user-1",
-    momentId: "moment-1",
-    productType: PRODUCT_TYPE.DIGITAL_ROUND,
-    fulfillmentType: "DIGITAL",
-    paymentStatus: "PAID",
-    entitlementGrantedAt: "2026-09-04T12:00:00Z"
-  });
-
   let signerCalled = false;
   const response = await handleLiveDigitalDownloadRequest({
     request: {},
