@@ -8,7 +8,7 @@ It must not create a separate storefront, require BirdieWorld to hold stock, acc
 
 The intended flow is:
 
-`BirdieWorld player context -> internal recommendation -> disclosed partner offer -> BirdieWorld outbound route -> affiliate merchant -> merchant checkout/fulfilment`
+`BirdieWorld player context -> internal recommendation -> disclosed partner offer -> BirdieWorld outbound route -> affiliate merchant -> merchant checkout/fulfilment -> network transaction reconciliation`
 
 ## v1 scope
 
@@ -41,6 +41,8 @@ Awin-backed merchants use the Awin Datafeed flow:
 9. Drop unrelated, malformed, unsafe, unavailable, or inactive rows fail-closed.
 
 The datafeed key is a server secret. It must never be shipped to the app.
+
+Awin product destinations are accepted only when the tracked deep link uses an HTTPS `awin1.com` tracking host. An arbitrary HTTPS destination from a malformed feed row is rejected.
 
 ### Recommendation
 
@@ -76,12 +78,36 @@ On an actual user click:
 1. authenticate the BirdieWorld user
 2. resolve the product server-side
 3. re-check product validity and region
-4. create/record an internal click ID
-5. return a 302 redirect to the current affiliate destination
+4. create an opaque internal click ID
+5. resolve the user's server-side Awin tracking-consent state
+6. for Awin, add the opaque ID as `clickref2` and explicitly set `cons=0` or `cons=1`
+7. persist the click without storing the final destination URL
+8. return a 302 redirect to the current affiliate destination
+
+The service defaults to `cons=0` when no consent adapter is configured or the consent lookup fails. It does not rely on a network default to infer consent.
+
+`clickref2` is used instead of the public first click-reference slot so BirdieWorld can reconcile a network transaction to its internal click without intentionally placing BirdieWorld's opaque click reference on the advertiser landing page.
 
 This makes partner URLs replaceable without an app release and preserves BirdieWorld attribution telemetry.
 
 No tracking cookie or outbound merchant request should be triggered merely because a recommendation was rendered.
+
+### Conversion reconciliation
+
+`db/009_affiliate_commerce.sql` owns two Smart Shop persistence surfaces:
+
+- `affiliate_clicks`
+- `affiliate_conversions`
+
+The Awin transaction adapter uses server-side Bearer authentication and can reconcile network transaction state back into `affiliate_conversions`. Network transaction ID plus network is the idempotency key, allowing pending/approved/declined state to be refreshed without creating duplicate sales.
+
+Transaction windows are capped at 31 days by the adapter. Input instants are converted into the declared IANA timezone before being serialized to the Awin query, avoiding UTC/local-time drift.
+
+`affiliate_conversions.click_id` is intentionally nullable and is not a foreign key. A valid network transaction must still be retained when its original local click row is unavailable because of retention, migration, or pre-rollout boundaries. A click reference in a network report therefore means `withClickRef`, not automatically a proven local-click match.
+
+### Platform boundary
+
+Smart Shop is for physical golf goods that are bought and fulfilled by an external merchant. It does not replace the separate StoreKit path for BirdieWorld digital content.
 
 ## Disclosure
 
@@ -97,10 +123,12 @@ To activate an Awin provider:
 
 1. BirdieWorld's publisher account is approved for the advertiser program.
 2. A dedicated Awin Datafeed API key exists server-side.
-3. The advertiser's current program terms are reviewed for allowed placements, creatives, deep links, paid search, vouchers, and email use.
-4. Add the provider ID to the server-side enabled-provider configuration.
-5. Run feed-sync and recommendation integration tests against real non-production data.
-6. Verify disclosure and redirect attribution before production release.
+3. A server-side Awin API access token exists for transaction reconciliation.
+4. The advertiser's current program terms are reviewed for allowed placements, creatives, deep links, paid search, vouchers, and app use.
+5. Add the provider ID to the server-side enabled-provider configuration.
+6. Bind the authoritative consent provider.
+7. Run feed-sync, redirect and recommendation integration tests against real non-production data.
+8. Verify disclosure, click attribution and transaction reconciliation before production release.
 
 Direct networks such as Refersion/Affiliatly require equivalent approval and server-side catalog/link adapters before activation.
 
@@ -126,9 +154,11 @@ This is an implementation priority, not a guarantee of acceptance or commercial 
 - no raw affiliate URL exposed to the client
 - no user score/profile payload sent to merchants for recommendation logic
 - no hard-coded commission assumptions
+- no implied tracking consent
 - fail closed on malformed, unavailable, inactive, region-incompatible, or unsafe products
 - private/no-store for personalized recommendation responses
 - Commerce failure must never break Scorecard persistence
+- network revenue records must not be discarded merely because a local click row is absent
 
 ## Current implementation
 
@@ -144,7 +174,11 @@ Core modules:
 - `src/affiliate-commerce/providers/awin.mjs`
 - `src/affiliate-commerce/providers/csv.mjs`
 - `src/affiliate-commerce/providers/awin-remote.mjs`
+- `src/affiliate-commerce/providers/awin-attribution.mjs`
+- `src/affiliate-commerce/providers/awin-transactions.mjs`
 - `src/affiliate-commerce/providers/registry.mjs`
+- `src/affiliate-commerce/persistence/d1-store.mjs`
+- `db/009_affiliate_commerce.sql`
 
 Tests:
 
@@ -152,18 +186,27 @@ Tests:
 - `test/birdie-smart-shop-awin-remote.test.mjs`
 - `test/birdie-smart-shop-registry.test.mjs`
 - `test/birdie-smart-shop-scorecard-context.test.mjs`
+- `test/birdie-smart-shop-attribution.test.mjs`
+
+CI:
+
+- `.github/workflows/birdie-smart-shop-tests.yml`
+- runs the isolated Smart Shop test suite on Node 22 without depending on unrelated repository package installation
 
 The framework-neutral route handlers are intentional. They should be mounted into the actual BirdieWorld authenticated app backend rather than assumed to belong to the Birdie Agent operator service.
 
 ## Still required before live revenue
 
 - actual affiliate-account approvals
-- real server-side credentials
-- mount handlers into the authoritative BirdieWorld app backend
+- real server-side Awin Datafeed/API credentials
+- current private BirdieWorld server source implementing the authoritative `/api/round` persistence
+- mount handlers into that authoritative BirdieWorld app backend
 - bind `loadPlayerCommerceSignals` to the authoritative BirdieWorld player/round source
-- persistent click sink / analytics store
+- bind the real consent source
+- apply migration 009 to staging/production D1
+- schedule transaction reconciliation in the authoritative backend/runtime
 - real provider feed/link adapters for any non-Awin providers
-- end-to-end staging proof: recommendation -> click -> affiliate attribution
+- end-to-end staging proof: recommendation -> click -> merchant -> network transaction -> BirdieWorld conversion
 - program-term review immediately before activation
 
 Until those items are complete, Smart Shop is implemented infrastructure, not a live revenue channel.
