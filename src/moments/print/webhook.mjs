@@ -1,4 +1,5 @@
 import { MomentCommerceError } from "../commerce/contracts.mjs";
+import { MOMENT_FAILURE_STAGE, recordMomentFailureSafely } from "../failures.mjs";
 import { PRINT_ORDER_STATUS } from "./contracts.mjs";
 
 const STATUS_MAP = Object.freeze({
@@ -10,7 +11,14 @@ const STATUS_MAP = Object.freeze({
   CANCELLED: PRINT_ORDER_STATUS.CANCELLED
 });
 
-export async function handlePrintProviderWebhook({ rawBody, signature, repo, printProvider, now = () => new Date().toISOString() }) {
+export async function handlePrintProviderWebhook({
+  rawBody,
+  signature,
+  repo,
+  printProvider,
+  analytics,
+  now = () => new Date().toISOString()
+}) {
   const event = await printProvider.handleWebhook({ rawBody, signature });
   if (!event?.id || !event?.providerOrderId || !event?.type) {
     throw new MomentCommerceError("INVALID_PRINT_PROVIDER_EVENT", "Verified print provider event is incomplete", 400);
@@ -41,6 +49,23 @@ export async function handlePrintProviderWebhook({ rawBody, signature, repo, pri
     failureMessage: event.failureMessage ?? null,
     updatedAt: now()
   });
+
+  if (status === PRINT_ORDER_STATUS.FULFILLMENT_FAILED) {
+    await recordMomentFailureSafely({
+      repo,
+      analytics,
+      stage: MOMENT_FAILURE_STAGE.PRINT_FULFILLMENT,
+      error: Object.assign(new Error(event.failureMessage ?? "Print provider reported fulfillment failure"), {
+        code: event.failureCode ?? "PRINT_PROVIDER_FAILED"
+      }),
+      context: {
+        momentId: order.momentId,
+        purchaseId: order.purchaseId,
+        productType: order.productType,
+        fulfillmentType: "PRINT"
+      }
+    });
+  }
 
   return { processed: true, duplicate: false, status, order: result ?? order };
 }
