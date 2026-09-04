@@ -234,7 +234,7 @@ test("webhook retry is idempotent", async () => {
     repo: fixture.repo,
     assetUrlSigner: {}
   });
-  const event = { id: "evt-1", event: "order_status_updated", orderId: "gelato-1", fulfillmentStatus: "shipped" };
+  const event = { id: "evt-1", event: "order_status_updated", orderId: "gelato-1", fulfillmentStatus: "delivered" };
   assert.equal((await service.handleWebhook(event)).duplicatePrevented, false);
   assert.equal((await service.handleWebhook(event)).duplicatePrevented, true);
   assert.equal(fixture.p.fulfillmentStatus, "FULFILLED");
