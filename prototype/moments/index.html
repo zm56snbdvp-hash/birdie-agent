@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Birdie Moments v1 · Phase 3 Prototype</title>
+<style>
+:root{color-scheme:dark;--bg:#030a07;--panel:#0b1710;--gold:#d7b86a;--cream:#f7f2e8;--moss:#8fa99b;--line:rgba(215,184,106,.25)}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 10%,rgba(215,184,106,.13),transparent 34%),var(--bg);color:var(--cream);font-family:Arial,Helvetica,sans-serif}.shell{max-width:1050px;margin:auto;padding:28px 18px 64px}.brand{font-family:Georgia,serif;color:var(--gold);font-size:24px}.eyebrow{color:var(--moss);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.grid{display:grid;grid-template-columns:.88fr 1.12fr;gap:24px;margin-top:28px}.panel{border:1px solid var(--line);background:rgba(11,23,16,.86);border-radius:28px;padding:24px;box-shadow:0 24px 70px rgba(0,0,0,.25)}h1,h2{font-family:Georgia,serif;margin:.3em 0}.moment{aspect-ratio:4/5;border:1px solid var(--line);border-radius:22px;padding:26px;display:flex;flex-direction:column;background:linear-gradient(145deg,#07130d,#0b1c13 58%,#030a07);position:relative;overflow:hidden}.moment:after{content:"";position:absolute;width:250px;height:250px;border:1px solid rgba(215,184,106,.12);border-radius:50%;right:-90px;top:-90px}.player{font-family:Georgia,serif;font-size:38px;margin-top:32px}.course{color:var(--moss);margin-top:8px}.score-label{margin-top:70px;color:var(--moss);font-size:12px;font-weight:800;letter-spacing:.22em}.score{font-family:Georgia,serif;font-size:116px;line-height:.9}.metrics{display:flex;gap:52px;margin-top:38px}.metric small{display:block;color:var(--moss);font-weight:800;letter-spacing:.12em}.metric b{font-family:Georgia,serif;color:var(--gold);font-size:34px}.pb{margin-top:auto;border:1px solid rgba(245,217,139,.4);border-radius:16px;padding:14px;color:#f5d98b}.actions{display:grid;gap:12px;margin-top:22px}.btn{min-height:52px;border-radius:16px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;text-decoration:none;font-weight:800}.primary{background:var(--gold);color:#08100b;border-color:transparent}.secondary{color:var(--cream);background:transparent}.products{display:grid;gap:14px;margin-top:22px}.product{padding:17px;border:1px solid rgba(255,255,255,.08);border-radius:18px;display:flex;justify-content:space-between;gap:20px}.product span{color:var(--moss)}.note{margin-top:24px;color:var(--moss);font-size:13px;line-height:1.6}@media(max-width:760px){.grid{grid-template-columns:1fr}.score{font-size:96px}}
+</style>
+</head>
+<body>
+<main class="shell">
+<div class="brand">BirdieWorld</div>
+<p class="eyebrow">Birdie Moments · Phase 3 · synthetic UX fixture</p>
+<div class="grid">
+<section class="panel">
+<p class="eyebrow">Post-Round Upsell</p>
+<h1>Dein Birdie Moment ist fertig.</h1>
+<p style="color:var(--moss)">Gut Testhof · Score 82 · Personal Best</p>
+<div class="moment" aria-label="Synthetic Personal Best preview">
+<div class="eyebrow" style="color:var(--gold)">Personal Best Edition</div>
+<div class="player">Kevin</div>
+<div class="course">Gut Testhof · 04.09.2026</div>
+<div class="score-label">FINAL SCORE</div><div class="score">82</div>
+<div class="metrics"><div class="metric"><small>BIRDIES</small><b>3</b></div><div class="metric"><small>HOLES</small><b>18</b></div></div>
+<div class="pb"><b>NEW PERSONAL BEST</b><br>Previous 86 · New 82 · -4 strokes</div>
+</div>
+<div class="actions"><a class="btn primary" href="#detail">Moment ansehen</a><button class="btn secondary" type="button">Später</button></div>
+</section>
+<section class="panel" id="detail">
+<p class="eyebrow">Protected route · /moments/:momentId</p>
+<h2>Personal Best</h2>
+<p style="color:var(--moss)">Gut Testhof · 18 Loch · 82 Schläge · 3 Birdies</p>
+<div class="products">
+<div class="product"><div><b>Digitale Edition</b><br><span>Full-Resolution nach bestätigter Zahlung</span></div><strong>9,90 €</strong></div>
+<div class="product"><div><b>Premium A3 Print</b><br><span>Druck-Master bleibt privat bis Payment + Fulfillment</span></div><strong>34,90 €</strong></div>
+</div>
+<div class="actions"><button class="btn primary" type="button">Digitale Edition kaufen</button><button class="btn secondary" type="button">Als Premium Print bestellen</button></div>
+<p class="note">Prototype only. Die Werte sind synthetische Testdaten. Die produktive Route muss serverseitig Auth + Eigentümer prüfen und mit <code>private, no-store</code> antworten.</p>
+</section>
+</div>
+</main>
+</body>
+</html>
