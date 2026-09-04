@@ -16,24 +16,14 @@ const base = {
   isCompleted: true
 };
 
-function round(overrides = {}) {
-  return { ...base, ...overrides };
-}
-
+function round(overrides = {}) { return { ...base, ...overrides }; }
 function prior(id, totalScore, holesPlayed = 18, userId = "u-1") {
   return {
-    id,
-    userId,
-    displayName: "Kevin",
-    courseName: "Old Course",
-    playedAt: "2026-08-01T10:00:00+02:00",
-    holesPlayed,
-    totalScore,
-    birdieCount: 1,
-    isCompleted: true
+    id, userId, displayName: "Kevin", courseName: "Old Course",
+    playedAt: "2026-08-01T10:00:00+02:00", holesPlayed, totalScore,
+    birdieCount: 1, isCompleted: true
   };
 }
-
 function memoryRepo(currentRound, previous = []) {
   const byKey = new Map();
   let insertCount = 0;
@@ -53,11 +43,12 @@ function memoryRepo(currentRound, previous = []) {
   };
 }
 
-test("true new 18-hole best is detected", () => {
+test("true new 18-hole best is detected with positive strokesImproved", () => {
   const result = detectPersonalBest(base, [prior("r1", 86), prior("r2", 84)]);
   assert.equal(result.isPersonalBest, true);
   assert.equal(result.previousBestScore, 84);
-  assert.equal(result.improvement, -2);
+  assert.equal(result.strokesImproved, 2);
+  assert.equal("improvement" in result, false);
 });
 
 test("tie is not a PB", () => {
