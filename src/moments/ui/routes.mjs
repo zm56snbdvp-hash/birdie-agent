@@ -19,6 +19,13 @@ function roundIdOf(moment) {
 
 export async function getPostRoundUpsell({ roundId, authUserId, repo }) {
   if (!authUserId) return null;
+  if (typeof repo?.getRound !== "function") {
+    throw new TypeError("repo.getRound is required for Reveal round-ownership verification");
+  }
+
+  const round = await repo.getRound(roundId);
+  if (!round || userIdOf(round) !== authUserId) return null;
+
   const moments = await repo.listMomentsForRound(roundId);
   const owned = (moments ?? []).filter((moment) => userIdOf(moment) === authUserId);
   return buildPostRoundUpsellViewModel(selectPrimaryPostRoundMoment(owned));
