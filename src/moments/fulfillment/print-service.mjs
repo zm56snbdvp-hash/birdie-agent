@@ -5,29 +5,26 @@ import { PrintFulfillmentError } from "./gelato-provider.mjs";
 function value(record, camel, snake) {
   return record?.[camel] ?? record?.[snake] ?? null;
 }
+function paymentStatus(purchase) { return value(purchase, "paymentStatus", "payment_status"); }
+function fulfillmentStatus(purchase) { return value(purchase, "fulfillmentStatus", "fulfillment_status"); }
+function productType(purchase) { return value(purchase, "productType", "product_type"); }
+function shippingAddress(purchase) { return value(purchase, "shippingAddress", "shipping_address"); }
+function momentId(purchase) { return value(purchase, "momentId", "moment_id"); }
+function userId(purchase) { return value(purchase, "userId", "user_id"); }
 
-function paymentStatus(purchase) {
-  return value(purchase, "paymentStatus", "payment_status");
+function paidState(purchase) {
+  const explicit = paymentStatus(purchase);
+  if (explicit) return explicit === "PAID";
+
+  // Transitional compatibility only: the pre-integration in-memory/store
+  // contract used fulfillmentStatus=PAID and then FULFILLING/FULFILLED as the
+  // sole lifecycle field. New persisted rows always use payment_status.
+  return ["PAID", "FULFILLING", "FULFILLED", "FULFILLMENT_FAILED"].includes(fulfillmentStatus(purchase));
 }
 
-function fulfillmentStatus(purchase) {
-  return value(purchase, "fulfillmentStatus", "fulfillment_status");
-}
-
-function productType(purchase) {
-  return value(purchase, "productType", "product_type");
-}
-
-function shippingAddress(purchase) {
-  return value(purchase, "shippingAddress", "shipping_address");
-}
-
-function momentId(purchase) {
-  return value(purchase, "momentId", "moment_id");
-}
-
-function userId(purchase) {
-  return value(purchase, "userId", "user_id");
+function normalizedFulfillmentStatus(purchase) {
+  const status = fulfillmentStatus(purchase);
+  return status === "PAID" ? "AWAITING_ORDER" : status;
 }
 
 export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, analytics = null }) {
@@ -41,11 +38,11 @@ export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, 
     if (product.fulfillmentType !== FULFILLMENT_TYPE.PRINT) {
       throw new PrintFulfillmentError("PURCHASE_NOT_PRINT", "Purchase is not a print product");
     }
-    if (paymentStatus(purchase) !== "PAID") {
+    if (!paidState(purchase)) {
       throw new PrintFulfillmentError("PAYMENT_REQUIRED", "Print order requires verified paid purchase");
     }
 
-    const currentFulfillmentStatus = fulfillmentStatus(purchase);
+    const currentFulfillmentStatus = normalizedFulfillmentStatus(purchase);
     if (!["AWAITING_ORDER", "FULFILLING", "FULFILLED", "FULFILLMENT_FAILED"].includes(currentFulfillmentStatus)) {
       throw new PrintFulfillmentError(
         "PRINT_PURCHASE_NOT_READY",
