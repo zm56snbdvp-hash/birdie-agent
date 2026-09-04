@@ -35,10 +35,13 @@ CREATE TABLE IF NOT EXISTS affiliate_conversions (
   validation_at TEXT,
   transaction_type TEXT,
   last_seen_at TEXT NOT NULL,
-  PRIMARY KEY (network, network_transaction_id),
-  FOREIGN KEY (click_id) REFERENCES affiliate_clicks(id)
+  PRIMARY KEY (network, network_transaction_id)
 );
 
+-- click_id is deliberately not a foreign key. Network reports can contain valid
+-- transactions whose original local click record is unavailable (for example
+-- retention gaps, migration boundaries or pre-rollout traffic). Revenue data
+-- must still be persisted rather than rejected.
 CREATE INDEX IF NOT EXISTS ix_affiliate_conversions_click
   ON affiliate_conversions (click_id);
 
