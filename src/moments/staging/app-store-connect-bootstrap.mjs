@@ -1,35 +1,14 @@
 import { createPrivateKey, sign as cryptoSign } from "node:crypto";
+import { BIRDIE_IOS_APP } from "../commerce/apple-app-config.mjs";
+import { BIRDIE_MOMENTS_APP_STORE_PRODUCTS } from "../commerce/apple-products.mjs";
 
 const ASC_BASE_URL = "https://api.appstoreconnect.apple.com";
 
 export const BIRDIE_MOMENTS_APP_STORE_TARGET = Object.freeze({
-  bundleId: "de.birdieandbreakfast.birdie",
+  bundleId: BIRDIE_IOS_APP.bundleId,
   baseTerritory: "DEU",
   locale: "de-DE",
-  products: Object.freeze([
-    Object.freeze({
-      productType: "DIGITAL_ROUND",
-      referenceName: "Birdie Moment Round Digital v1",
-      productId: "de.birdieandbreakfast.birdie.moments.round.v1",
-      inAppPurchaseType: "CONSUMABLE",
-      targetCustomerPrice: "6.90",
-      localization: Object.freeze({
-        name: "Birdie Moment – Runde",
-        description: "Digitale Erinnerung an deine Golfrunde."
-      })
-    }),
-    Object.freeze({
-      productType: "DIGITAL_PERSONAL_BEST",
-      referenceName: "Birdie Moment Personal Best Digital v1",
-      productId: "de.birdieandbreakfast.birdie.moments.personalbest.v1",
-      inAppPurchaseType: "CONSUMABLE",
-      targetCustomerPrice: "9.90",
-      localization: Object.freeze({
-        name: "Birdie Moment – Personal Best",
-        description: "Digitale Edition deines neuen Bestscores."
-      })
-    })
-  ])
+  products: Object.freeze(Object.values(BIRDIE_MOMENTS_APP_STORE_PRODUCTS))
 });
 
 function requireText(value, name) {
@@ -185,9 +164,9 @@ async function listIaps(client, appId) {
   return (await client.request(`/v1/apps/${encodeURIComponent(appId)}/inAppPurchasesV2?${query}`))?.data ?? [];
 }
 
-async function findGermanPricePoint(client, iapId, product) {
+async function findGermanPricePoint(client, iapId, product, target) {
   const query = new URLSearchParams({
-    "filter[territory]": BIRDIE_MOMENTS_APP_STORE_TARGET.baseTerritory,
+    "filter[territory]": target.baseTerritory,
     "fields[inAppPurchasePricePoints]": "customerPrice",
     limit: "8000"
   });
@@ -205,10 +184,10 @@ async function hasPriceSchedule(client, iapId) {
   }
 }
 
-async function hasGermanLocalization(client, iapId) {
+async function hasLocalization(client, iapId, locale) {
   const response = await client.request(`/v2/inAppPurchases/${encodeURIComponent(iapId)}?include=inAppPurchaseLocalizations&limit[inAppPurchaseLocalizations]=50`);
   const included = response?.included ?? [];
-  return included.some((item) => item?.type === "inAppPurchaseLocalizations" && item?.attributes?.locale === BIRDIE_MOMENTS_APP_STORE_TARGET.locale);
+  return included.some((item) => item?.type === "inAppPurchaseLocalizations" && item?.attributes?.locale === locale);
 }
 
 export async function planOrApplyAppStoreConnectBootstrap({
@@ -248,7 +227,7 @@ export async function planOrApplyAppStoreConnectBootstrap({
       continue;
     }
 
-    const pricePoint = await findGermanPricePoint(client, iap.id, product);
+    const pricePoint = await findGermanPricePoint(client, iap.id, product, target);
     if (!pricePoint.exact) {
       results.push({
         productType: product.productType,
@@ -261,8 +240,9 @@ export async function planOrApplyAppStoreConnectBootstrap({
       continue;
     }
 
+    const locale = product.localization?.locale || target.locale;
     const [localized, priced] = await Promise.all([
-      hasGermanLocalization(client, iap.id),
+      hasLocalization(client, iap.id, locale),
       hasPriceSchedule(client, iap.id)
     ]);
 
@@ -271,7 +251,7 @@ export async function planOrApplyAppStoreConnectBootstrap({
         method: "POST",
         body: buildCreateLocalizationRequest({
           iapId: iap.id,
-          locale: target.locale,
+          locale,
           localization: product.localization
         })
       });
