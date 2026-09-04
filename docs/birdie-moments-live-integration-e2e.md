@@ -4,7 +4,7 @@
 
 **BLOCKED**
 
-Birdie Moments Digital v1 now follows the Founder Delta baseline:
+Birdie Moments Digital v1 follows the Founder Delta baseline:
 
 ```text
 real BirdieWorld Scorecard
@@ -19,13 +19,13 @@ real BirdieWorld Scorecard
 
 There is **no Digital payment, paywall, purchase, or entitlement requirement in the Birdie Moments v1 user flow**.
 
-The digital core and recovered-app integration contracts are implemented and green. Production/live E2E remains blocked because the authoritative ChatGPT Sites server/runtime source is not available in the repository, recovery archives, file Library, or a connected Sites workspace in this session.
+The Digital domain, ownership boundaries, concrete D1 persistence for Birdie Moments-owned data, Collection, and free private download are implemented and green. Production/live E2E remains blocked because the authoritative ChatGPT Sites runtime that owns the real BirdieWorld round/session/router/storage boundaries is still unavailable.
 
 No production/live claim is made from recovered browser artifacts or contract tests.
 
-## Founder Delta — Digital monetization baseline
+## Founder Delta — Digital baseline
 
-For normal Birdie Moments Digital v1:
+For Birdie Moments Digital v1:
 
 - price: **free**
 - payment required: **no**
@@ -42,10 +42,12 @@ The retained Phase-4 payment/entitlement infrastructure is not deleted. It remai
 
 - Repository: `zm56snbdvp-hash/birdie-agent`
 - Integration branch: `feature/birdie-moments-live-integration-e2e`
-- Digital baseline lineage: `feature/birdie-moments-v1-phase4` at `9a58e361817f7d3e45d2dc6a33ad009114c4ac29`
+- Digital baseline lineage: `feature/birdie-moments-v1-phase4`
 - Recovered BirdieWorld checkpoint: `recovery/birdie-score-live-20260904`
+- Separate newer branch reviewed: `feature/birdie-moments-v1-live-integration`
 - Print Phase 5/6 remains separate and is not consumed by this branch.
-- `feature/birdie-moments-v1-founder-go` and Phase 4 are divergent; Print/Gelato changes were deliberately not merged.
+
+The newer live-integration branch contains useful concrete D1 and Scorecard-wrapper work, but its Digital path still follows the older paid/StoreKit baseline and includes Print concerns. It was **not merged wholesale**. Only free-Digital-safe persistence and ownership ideas were selectively brought into this branch.
 
 ## Recovered deployed BirdieWorld evidence
 
@@ -55,8 +57,6 @@ The original uploaded `index(4).html` and `index(5).html` resolve to the same re
 - app shell: `index-BiRW1UFt.js`
 - host: `birdie-score.wnrkgdmqfc.chatgpt.site`
 - scorecard bundle: `golf-scorecard-Dut-vRpH.js`
-
-The integration audit therefore is not mixing different deployment snapshots.
 
 ### Scorecard persistence contract
 
@@ -86,7 +86,7 @@ The browser POST body is:
 
 The browser does **not** send an authoritative `userId`, `status`, or `completed` value. The successful server response contains the persisted `round`; the client reads persisted `round.status` when restoring completed vs draft state.
 
-The safe trigger boundary therefore remains:
+The safe trigger boundary is therefore:
 
 ```text
 server-authenticated user
@@ -95,12 +95,17 @@ server-authenticated user
 → transaction commit
 → persisted server round
 → persisted status == completed
+→ persisted round owner == authenticated server user
 → Birdie Moments
 ```
 
 Request JSON and client UI state are never ownership or completion authority.
 
-An adversarial regression test proves that client-supplied foreign `user_id`, `status=completed`, and `completed=true` cannot trigger Moments when the server-persisted round is still `draft`.
+Regression coverage proves:
+
+- client-supplied foreign `user_id`, `status=completed`, and `completed=true` cannot trigger Moments when the persisted server round is `draft`;
+- a completed persisted round cannot trigger Moments when its persisted owner differs from the authenticated server user;
+- Moment failure never converts an already successful Scorecard save into failure.
 
 ### Authentication boundary
 
@@ -109,8 +114,6 @@ The recovered deployed Birdie Account UI uses:
 ```text
 /signin-with-chatgpt?return_to=%2F
 ```
-
-and states that BirdieWorld uses the user's ChatGPT access and creates the Birdie Account on first login.
 
 The auth mechanism is identified. What remains unavailable is the authoritative server-side **ChatGPT Site session → canonical BirdieWorld user id resolver**.
 
@@ -129,9 +132,7 @@ No `/moments` route is present in the recovered deployment map. Reveal, Detail, 
 
 ### Recovery boundary
 
-The full recovery ZIP and all three embedded recovery ZIPs were recursively inspected. They contain browser assets only: no authoritative Sites server/worker API source, no deployed D1/Drizzle schema/migration source, and no source maps that reconstruct that runtime.
-
-See `docs/birdie-moments-live-runtime-evidence.md` for the recovered runtime evidence boundary.
+The recovery ZIPs contain browser assets only. They do not reconstruct the authoritative Sites server/worker implementation, deployed BirdieWorld round-table layout, session resolver, or private asset signer.
 
 ## Current Digital v1 implementation
 
@@ -139,13 +140,44 @@ See `docs/birdie-moments-live-runtime-evidence.md` for the recovered runtime evi
 
 Maps persisted Scorecard data into the existing Moment round contract. Derived score/birdie statistics are produced only from complete real hole data; missing values are not invented.
 
-### `src/moments/live/repository-adapter.mjs`
-
-Adapts authoritative persistence/user callbacks to the existing Moments domain contract. PB history is restricted to the same user and same 9/18-hole class, excludes the current round, and requires completed comparable rounds.
-
 ### `src/moments/live/scorecard-save-adapter.mjs`
 
-Wraps the Core Scorecard save boundary. `afterRoundCommitted` runs only after the Core save returns a completed persisted server round. A downstream Moment failure never converts a successful Scorecard save into failure.
+Wraps the Core Scorecard save boundary and now requires all of the following before invoking Moments:
+
+1. Core save resolved successfully;
+2. persisted server round exists;
+3. persisted server round is completed;
+4. persisted round owner exists;
+5. authenticated server user exists;
+6. persisted round owner equals authenticated server user.
+
+Ownership uncertainty fails closed for Moments while preserving the successful Scorecard result.
+
+### `src/moments/persistence/d1-free-digital-repository.mjs`
+
+Concrete Cloudflare-D1-compatible persistence now exists for the free/private Digital path.
+
+It implements only Birdie Moments-owned persistence:
+
+- `getRound` through injected authoritative `roundSource`
+- `listPreviousComparableRounds` through injected authoritative `roundSource`
+- `ensureMoment`
+- `getMoment`
+- `listMomentsForRound`
+- `listMomentsForUser`
+- Moment status updates
+- Preview/Digital asset persistence
+- failure recording
+
+It deliberately implements **no** purchase, payment, StoreKit, entitlement, or Print methods.
+
+The `roundSource` remains injected because the recovered browser bundle proves the `/api/round` contract but not the private BirdieWorld round-table schema or real server repository.
+
+### `db/008_free_digital_moment_failures.sql`
+
+Adds a collision-safe failure ledger for the free Digital integration line without altering purchase or Print tables.
+
+The existing `db/001_birdie_moments.sql` remains the canonical Moment table/unique-index surface. The new D1 tests execute those schemas through a SQLite/D1-compatible test harness.
 
 ### `src/moments/ui/access.mjs`
 
@@ -156,11 +188,9 @@ Birdie Moments Digital v1 uses `getOwnedMomentForOwnedRound`:
 3. linked persisted source round must also belong to that user;
 4. ownership mismatches are hidden as `404 MOMENT_NOT_FOUND`.
 
-The older Moment-only helper remains because retained Phase-4 commerce code still imports it.
-
 ### `src/moments/ui/view-models.mjs`
 
-Moment Detail now exposes:
+Moment Detail exposes:
 
 ```text
 Digitaler Birdie Moment
@@ -169,20 +199,19 @@ paymentRequired = false
 entitlementRequired = false
 ```
 
-The primary Digital CTA points to the private free download route.
-
-The Collection is a private read model over existing `birdie_moments` rows. No new Collection persistence table is required. Collection selects one user-facing Moment per round, preserving the existing rule that `PERSONAL_BEST` wins over `ROUND` when both records exist and are ready.
+The Digital CTA points to the private free download route.
 
 ### `src/moments/ui/routes.mjs`
 
-- Reveal verifies the persisted source-round owner before returning an upsell.
-- Detail verifies both Moment ownership and source-round ownership.
-- Collection first filters by Moment owner and then verifies each linked persisted round owner.
-- A cross-linked Moment row that claims the current user but points at another user's round is excluded.
+- Reveal verifies source-round ownership.
+- Detail verifies Moment + source-round ownership.
+- Collection queries Moments by authenticated owner and then verifies every linked source-round owner.
+- A cross-linked Moment that points to another user's round is excluded.
+- Collection selects one user-facing Moment per round, with `PERSONAL_BEST` winning over `ROUND` when both are ready.
 
 ### `src/moments/digital/free-download.mjs`
 
-The active Birdie Moments v1 Digital download path:
+The active free Digital download path:
 
 - requires authenticated user;
 - verifies Moment ownership;
@@ -197,26 +226,9 @@ The active Birdie Moments v1 Digital download path:
 
 Binds Reveal, Detail, Collection, and free Download to an injected authoritative `resolveAuthenticatedUserId(request)` callback.
 
-The old `handleLiveDigitalCheckoutRequest` remains explicitly marked as retained legacy Phase-4 commerce. Birdie Moments Digital v1 does not call it.
-
-## Collection persistence choice
-
-The existing `birdie_moments` schema already contains:
-
-- `user_id`
-- `round_id`
-- Moment type/status
-- render data
-- preview asset
-- Digital asset
-- created/updated timestamps
-- a user-created index
-
-Therefore v1 Collection is implemented as an ownership-scoped read view over existing Moment rows rather than adding a duplicate Collection table or entitlement record.
+The old Digital checkout adapter remains retained legacy infrastructure only.
 
 ## PB semantics preserved
-
-The proven rules remain unchanged:
 
 - first comparable round → no PB claim
 - worse round → no PB
@@ -227,7 +239,7 @@ The proven rules remain unchanged:
 
 A PB round may persist both `ROUND` and `PERSONAL_BEST` internal records because uniqueness remains per `(round_id, moment_type, template_version)`.
 
-For the user-facing Reveal and Collection, exactly one primary Moment is selected for that round; `PERSONAL_BEST` wins when ready. A normal non-PB round still creates exactly one `ROUND` Moment.
+For Reveal and Collection, exactly one primary user-facing Moment is selected; `PERSONAL_BEST` wins when ready. A normal non-PB round creates exactly one `ROUND` Moment.
 
 ## Physical CTA boundary
 
@@ -238,14 +250,12 @@ A4 Birdie Moment Print
 Zielpreis: 19,90 € inkl. Versand Deutschland
 ```
 
-Current state is intentionally:
+Current state remains:
 
 - `economicsStatus = UNPROVEN`
 - `availability = PREPARATION`
 - `productionClaim = false`
 - purchase CTA disabled
-
-No claim is made that the A4 product can currently be produced at 19,90 € delivered. Prodigi/provider economics must be proven separately before enabling a real physical checkout.
 
 Physical economics are **not a blocker for the free Digital v1 flow**.
 
@@ -260,88 +270,77 @@ The following infrastructure remains in the repository and remains tested:
 - `src/moments/commerce/routes.mjs`
 - purchase/payment/entitlement contracts and tests
 
-This infrastructure is retained for future Birdie products or later commercial use. It is no longer part of the Birdie Moments Digital v1 Definition of Done.
+It is not part of the Birdie Moments Digital v1 Definition of Done.
 
 ## Test evidence
 
-### Previous recovered/local evidence
+### Current GitHub Actions evidence
 
-- recovered Moments evidence suite: **77/77 PASS**
-- original live Scorecard adapter suite: **7/7 PASS** locally
+Current branch suite on Node 22: **77/77 PASS**.
 
-### Current Founder-Delta GitHub Actions evidence
+The suite now additionally proves concrete D1 behavior:
 
-Current branch suite on Node 22: **71/71 PASS**.
+- `INSERT OR IGNORE` + unique `(round_id, moment_type, template_version)` idempotency;
+- private preview and Digital master refs persist to D1-compatible storage;
+- Collection reads real D1 rows and PB wins without a purchase table;
+- D1 owner query excludes another user's Moments;
+- Moment failures persist independently of purchase/payment infrastructure.
 
-The current suite proves, at contract/component level:
+It also proves:
 
-- recovered Scorecard mapping without synthetic values
-- persisted-server completion authority
-- client completion/ownership manipulation cannot trigger a persisted draft
-- PB first/worse/tie/better behavior
-- 9/18-hole separation
-- other-user PB exclusion
-- normal round exactly one `ROUND` Moment
-- duplicate trigger idempotency contract
-- Moment failure isolation from successful Scorecard save
-- private Reveal with source-round ownership
-- PB preferred as the single user-facing hero
-- private Detail with Moment + Round ownership
-- Digital Detail shows `Kostenlos` and no paywall
-- private Collection selects one user-facing Moment per owned round
-- cross-linked foreign-round Moment excluded from Collection
-- free Digital download performs zero purchase/entitlement lookups
-- foreign user blocked
-- manipulated/unknown Moment id hidden as 404
-- Moment-owner/source-round-owner mismatch blocked
-- logged-out Collection/download fail before repo/asset access
-- not-ready/failed Moment cannot expose a stale Digital master
-- raw private Digital master reference is never returned
-- only short-lived signed URL is exposed
-- A4 19,90 € target is labeled `UNPROVEN/PREPARATION` with no production claim
-- deterministic rendering and render-failure fail-closed behavior
-- retained Phase-4 payment/entitlement infrastructure still passes its legacy tests
+- persisted-server completion authority;
+- authenticated server user must equal persisted round owner before trigger;
+- client ownership/completion manipulation cannot force a Moment;
+- PB first/worse/tie/better behavior and 9/18 separation;
+- duplicate trigger idempotency;
+- Scorecard failure isolation;
+- Reveal/Detail/Collection/Download ownership boundaries;
+- logged-out and foreign-user denial;
+- manipulated Moment-ID denial;
+- free download with zero purchase/entitlement reads;
+- private signed URL behavior;
+- deterministic rendering and render-failure fail-closed behavior;
+- retained Phase-4 commerce still passes its legacy tests.
 
-A previous intermediate CI run produced 69/70 because a Phase-3 test stub had not yet supplied the newly required authoritative `repo.getRound()` callback for Reveal. The stub was corrected and a negative foreign-round Reveal test was added; the current head then passed **71/71**. Product access code was not weakened to satisfy that test.
-
-The known repository-wide `package.json`/`package-lock.json` mismatch remains unrelated. The Moments CI continues to execute the dependency-free Node test surface directly.
+One intermediate run exposed a bug in the newly added Scorecard ownership helper: it accidentally read `round.id` as an owner identifier. The helper was split into `roundOwnerId()` and `authenticatedUserId()`, and the corrected head passed **77/77**. This was a newly introduced integration bug, not a live-app or D1 failure.
 
 ## Mandatory Founder-Delta E2E matrix
 
-`UNPROVEN` means the contract is green but the authoritative live Sites runtime has not executed that case. Contract PASS is not promoted to live E2E PASS.
+`UNPROVEN` means the contract/component is green but the authoritative live Sites runtime has not executed that case.
 
 | # | Required case | Live E2E status | Contract/component evidence |
 |---|---|---|---|
-| 1 | echte normale Round | UNPROVEN | Recovered POST contract + normal ROUND tests PASS; authoritative `/api/round` server hook unavailable. |
-| 2 | echte PB Round | UNPROVEN | PB domain tests PASS; real persisted history repository not wired. |
-| 3 | erste Round | UNPROVEN | First-round no-PB behavior PASS; real runtime persistence path unavailable. |
-| 4 | 9-Loch | UNPROVEN | 9/18 separation PASS; real runtime path unavailable. |
-| 5 | 18-Loch | UNPROVEN | 18-hole mapping/PB tests PASS; real runtime path unavailable. |
-| 6 | duplicate trigger / retry | UNPROVEN | Domain idempotency PASS; deployed DB unique/retry path not exercised. |
-| 7 | korrektes Render | PASS | Deterministic renderer and protected asset generation are directly tested. |
-| 8 | Reveal | UNPROVEN | Session + Moment + source-round ownership contract PASS; live `/moments` mount absent. |
-| 9 | Moment Detail | UNPROVEN | Free/private Detail contract PASS; live Moment route absent. |
-| 10 | „Später“ | UNPROVEN | Dismissible view model PASS; real app interaction not mounted/exercised. |
-| 11 | private Collection | UNPROVEN | Collection ownership/PB selection/cross-link rejection PASS; real app route absent. |
-| 12 | Moment erneut finden / reload | UNPROVEN | Collection read model exists; actual deployed navigation/reload not exercisable. |
-| 13 | kostenloser Owner-Download | UNPROVEN | Free download contract PASS with zero purchase/entitlement reads; real storage signer unavailable. |
-| 14 | fremder User blockiert | UNPROVEN | Foreign Moment/round access returns 404 in tests; authoritative Site resolver not wired. |
-| 15 | manipulierte Moment-ID blockiert | UNPROVEN | Unknown/manipulated id returns 404 before asset access; live route not mounted. |
-| 16 | Round-Ownership mismatch blockiert | UNPROVEN | Reveal, Detail, Collection, and Download ownership checks PASS; live DB/session path not wired. |
-| 17 | ausgeloggter User blockiert | UNPROVEN | 401 occurs before repo/asset access; live Moment routes not mounted. |
-| 18 | private Master Assets | UNPROVEN | Raw private ref never returned and stale/not-ready assets blocked; real signer/storage unavailable. |
-| 19 | kein Digital Payment / keine Paywall | UNPROVEN | v1 Detail/download require no payment, purchase, or entitlement in tests; live UI route not mounted. |
-| 20 | Moment Failure lässt Scorecard intakt | PASS | Post-commit failure isolation is directly tested: successful Core save remains successful. |
+| 1 | echte normale Round | UNPROVEN | Recovered POST contract + normal ROUND + concrete Moment D1 persistence PASS; authoritative `/api/round` implementation unavailable. |
+| 2 | echte PB Round | UNPROVEN | PB logic + D1 persistence PASS; authoritative real round-history source not wired. |
+| 3 | erste Round | UNPROVEN | First-round no-PB behavior PASS; real runtime round source unavailable. |
+| 4 | 9-Loch | UNPROVEN | 9/18 separation PASS; real runtime round source unavailable. |
+| 5 | 18-Loch | UNPROVEN | Mapping/PB tests PASS; real runtime round source unavailable. |
+| 6 | duplicate trigger / retry | UNPROVEN | Domain + concrete D1 unique-key idempotency PASS; deployed D1 migration/runtime not exercised. |
+| 7 | korrektes Render | PASS | Deterministic renderer and protected asset generation directly tested. |
+| 8 | Reveal | UNPROVEN | Session + Moment + round ownership PASS; live route mount absent. |
+| 9 | Moment Detail | UNPROVEN | Free/private Detail PASS; live route absent. |
+| 10 | „Später“ | UNPROVEN | Dismissible view model PASS; deployed interaction not mounted/exercised. |
+| 11 | private Collection | UNPROVEN | D1-backed Collection + ownership + PB selection PASS; live route absent. |
+| 12 | Moment erneut finden / reload | UNPROVEN | D1 Collection read model exists; deployed navigation/reload not exercisable. |
+| 13 | kostenloser Owner-Download | UNPROVEN | Free download PASS with zero purchase/entitlement reads; real storage signer unavailable. |
+| 14 | fremder User blockiert | UNPROVEN | Foreign access returns 404 in tests; authoritative Site resolver not wired. |
+| 15 | manipulierte Moment-ID blockiert | UNPROVEN | Manipulated/unknown id returns 404 before asset access; live route not mounted. |
+| 16 | Round-Ownership mismatch blockiert | UNPROVEN | Trigger, Reveal, Detail, Collection, Download checks PASS; live round/session source not wired. |
+| 17 | ausgeloggter User blockiert | UNPROVEN | 401 before repo/asset access; live routes not mounted. |
+| 18 | private Master Assets | UNPROVEN | Raw ref never returned and stale/not-ready asset blocked; real signer/storage unavailable. |
+| 19 | kein Digital Payment / keine Paywall | UNPROVEN | v1 D1/Detail/download path contains no payment/entitlement gate; live UI not mounted. |
+| 20 | Moment Failure lässt Scorecard intakt | PASS | Post-commit failure isolation directly tested. |
 
 ## New Definition of Done
 
-Birdie Moments Digital v1 is done only when the authoritative app proves this complete path:
+Birdie Moments Digital v1 is done only when the authoritative app proves:
 
 ```text
 real authenticated BirdieWorld user
 → real Scorecard
 → real persisted completed round
 → automatic Moment evaluation
+→ concrete D1 Moment persistence
 → exactly one user-facing Moment for that round
 → correct render / preview
 → Reveal
@@ -356,38 +355,47 @@ No payment event or entitlement grant belongs inside this Digital v1 Definition 
 
 ## Mobile integration
 
-Integrated 390×844, 768×1024, and 1440×900 validation remains **UNPROVEN** because the recovered deployment contains no Moment route to exercise inside the actual app. No production-responsive claim is made.
+Integrated 390×844, 768×1024, and 1440×900 validation remains **UNPROVEN** because the recovered deployment contains no Moment route to exercise inside the actual app.
 
-## Real Digital v1 blockers
+## Real Digital v1 blockers — narrowed
 
-1. **Authoritative BirdieWorld `POST /api/round` server implementation / transaction hook** is missing.
-2. **ChatGPT Site session → canonical BirdieWorld user resolver** is missing. The auth mechanism itself is known.
-3. **Real round/Moments DB repository and deployed Moment uniqueness migration** cannot be exercised.
-4. **Moment routes are absent from the recovered deployed app route map** and must be mounted in the authoritative app/router: Reveal, Detail, Collection, Download.
-5. **Real private Digital-master storage / signed-read adapter** is not recovered.
-6. Therefore real-device/mobile execution of the complete free Digital flow remains unproven.
+1. **Authoritative BirdieWorld `POST /api/round` server implementation / transaction hook** is still unavailable. The client contract and the integration wrapper are known; the actual live owner is not patchable from recovered browser code.
+2. **Authoritative BirdieWorld round source** is still unavailable: the real server repository/table shape that powers `getRound` and comparable round history must be bound to the now-concrete D1 Moments repository.
+3. **ChatGPT Site session → canonical BirdieWorld user resolver** is still unavailable. The login mechanism itself is known.
+4. **Deployment binding is unproven:** `db/001_birdie_moments.sql` plus `db/008_free_digital_moment_failures.sql` and the concrete D1 repository have not been applied/exercised against the actual BirdieWorld Sites D1 binding.
+5. **Moment routes are absent from the recovered deployed app route map** and must be mounted: Reveal, Detail, Collection, Download.
+6. **Real private Digital-master storage / signed-read adapter** is still unavailable.
+7. Therefore real-device/mobile execution of the complete free Digital flow remains unproven.
 
-The real-money payment provider is **no longer a Birdie Moments Digital v1 blocker** under the Founder Delta.
+The following are **no longer code-level blockers**:
+
+- Birdie Moments D1 repository implementation;
+- Collection query/persistence model;
+- Digital purchase/entitlement logic (not required under Founder Delta);
+- server-side persisted-round owner equality contract.
+
+The real-money payment provider is **not a Birdie Moments Digital v1 blocker**.
 
 ## Physical blocker, separate from Digital
 
-Before enabling the A4 physical CTA as a real order path, the target economics of **19,90 € incl. Germany shipping** must be proven against the actual provider/Prodigi quote and fulfillment setup. Until then the UI remains preparation-only and makes no production claim.
+Before enabling the A4 physical CTA as a real order path, the target economics of **19,90 € incl. Germany shipping** must be proven against the actual provider quote and fulfillment setup. Until then the UI remains preparation-only and makes no production claim.
 
 ## Conflict boundaries
 
 - Print Birdie: no Print provider/order implementation changed.
 - Karten Birdie: no card taxonomy/artwork/deck/booster code changed.
 - Gameplay Birdie: no gameplay/power-bar code changed.
-- Legacy Digital Commerce: retained rather than removed; Birdie Moments v1 simply bypasses it.
+- Legacy Digital Commerce: retained rather than removed; Birdie Moments v1 bypasses it.
 
-## Next operation when Sites runtime source is accessible
+## Next operation when authoritative Sites runtime is accessible
 
-1. bind the authoritative `/api/round` post-commit path to `scorecard-save-adapter.mjs`;
-2. bind the Site session resolver to `session-route-adapter.mjs`;
-3. bind real DB callbacks (`getRound`, Moment queries/ensure) to the existing adapters;
-4. mount `/moments`, `/moments/:momentId`, and `/moments/:momentId/download` plus post-round Reveal in the real app/router;
-5. bind the real private asset storage signer to the free download route;
-6. execute the Founder-Delta matrix against the real runtime and real devices.
+1. bind the real `/api/round` post-commit path to `scorecard-save-adapter.mjs`;
+2. bind the real BirdieWorld round repository/history source into `d1-free-digital-repository.mjs`;
+3. bind the Site session resolver to `session-route-adapter.mjs`;
+4. apply/verify the Moment D1 migrations against the actual Sites D1 binding;
+5. mount Reveal, Detail, Collection, and free Download routes in the real app/router;
+6. bind the real private asset storage signer;
+7. execute the Founder-Delta matrix on the authoritative runtime and real devices.
 
 Until those runtime functions are accessible, final status remains exactly:
 
