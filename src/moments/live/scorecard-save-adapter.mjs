@@ -7,7 +7,8 @@ import { afterRoundCommitted } from "../round-completion.mjs";
  * Invariants:
  * - core save completes first;
  * - completion is decided from the server persistence result, never request JSON;
- * - only completed persisted rounds owned by the authenticated server user trigger Moments;
+ * - only persisted rounds with the canonical exact status "completed" may trigger Moments;
+ * - the completed persisted round must be owned by the authenticated server user;
  * - missing/mismatched server ownership fails closed for Moments without failing Scorecard;
  * - Moments failures never roll back or replace the successful Scorecard result.
  */
@@ -70,9 +71,7 @@ export function summarizeMomentResult(result) {
 }
 
 function isCompletedPersistedRound(round) {
-  return String(round?.status ?? "").toLowerCase() === "completed"
-    || round?.isCompleted === true
-    || round?.is_completed === true;
+  return round?.status === "completed";
 }
 
 function roundOwnerId(round) {
