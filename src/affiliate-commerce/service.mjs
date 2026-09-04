@@ -1,6 +1,10 @@
 import { buildAffiliateClick, buildCommerceDisclosure } from "./click.mjs";
 import { recommendAffiliateProducts } from "./recommend.mjs";
 import { validateAffiliateProduct } from "./contracts.mjs";
+import {
+  awinAdvertiserIdFromProvider,
+  buildAwinAttributedDestination
+} from "./providers/awin-attribution.mjs";
 
 function defaultClickIdFactory() {
   return globalThis.crypto?.randomUUID?.() ?? `click-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -25,6 +29,7 @@ function publicRecommendation(product, placement) {
 export function createAffiliateCommerceService({
   catalogProvider,
   playerContextProvider,
+  consentProvider = null,
   clickSink = null,
   clickIdFactory = defaultClickIdFactory,
   locale = "de-DE"
@@ -71,16 +76,48 @@ export function createAffiliateCommerceService({
     const clickId = await clickIdFactory({ authUserId, productId, placement });
     if (typeof clickId !== "string" || !clickId) throw commerceError("CLICK_ID_UNAVAILABLE", 503);
 
-    const event = buildAffiliateClick({ product, userId: authUserId, placement, clickId });
+    const advertiserId = awinAdvertiserIdFromProvider(product.provider);
+    const trackingConsent = advertiserId
+      ? await resolveAwinConsent(consentProvider, authUserId)
+      : null;
+    const destinationUrl = advertiserId
+      ? buildAwinAttributedDestination({
+          affiliateUrl: product.affiliateUrl,
+          clickId,
+          trackingConsent
+        })
+      : product.affiliateUrl;
+
+    const event = {
+      ...buildAffiliateClick({
+        product: { ...product, affiliateUrl: destinationUrl },
+        userId: authUserId,
+        placement,
+        clickId
+      }),
+      network: advertiserId ? "AWIN" : "DIRECT",
+      advertiserId,
+      networkClickRef: advertiserId ? clickId : null,
+      trackingConsent
+    };
     if (clickSink?.record) await clickSink.record(event);
 
     return {
       clickId,
-      destinationUrl: event.destinationUrl
+      destinationUrl
     };
   }
 
   return { getRecommendations, createOutboundClick };
+}
+
+async function resolveAwinConsent(consentProvider, authUserId) {
+  if (!consentProvider || typeof consentProvider.getAwinTrackingConsent !== "function") return false;
+  try {
+    return (await consentProvider.getAwinTrackingConsent(authUserId)) === true;
+  } catch {
+    return false;
+  }
 }
 
 function commerceError(code, status) {
