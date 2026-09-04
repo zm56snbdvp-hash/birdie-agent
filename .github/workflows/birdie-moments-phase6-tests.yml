@@ -1,0 +1,33 @@
+name: Birdie Moments Phase 6 Tests
+
+on:
+  push:
+    branches:
+      - feature/birdie-moments-v1-phase6
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    if: github.event_name != 'pull_request' || github.head_ref == 'feature/birdie-moments-v1-phase6'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run full test suite
+        run: npm test
