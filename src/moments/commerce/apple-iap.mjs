@@ -125,6 +125,13 @@ export async function confirmAppStoreDigitalPurchase({
   const product = resolveAppStoreProduct(catalog, purchase.productType);
   const intent = await repo.getAppStorePurchaseIntent(purchase.id);
   if (!intent) throw new MomentCommerceError("APPLE_PURCHASE_INTENT_MISSING", "App Store purchase intent not found", 409);
+  if (
+    String(intent.userId) !== String(authUserId) ||
+    String(intent.momentId) !== String(moment.id) ||
+    String(intent.appStoreProductId) !== String(product.appStoreProductId)
+  ) {
+    throw new MomentCommerceError("APPLE_PURCHASE_INTENT_MISMATCH", "Stored App Store purchase intent does not match purchase", 409);
+  }
 
   const transaction = await appleVerifier.verifyAndDecodeTransaction(signedTransactionInfo);
   const transactionId = transaction?.transactionId;
