@@ -17,7 +17,11 @@
 - client API contract inventory
 - fail-safe artwork resolver contract
 - deterministic Node test suite
-- deployed bundle identity + SHA-256 manifest
+- CardVault collection + booster client flow
+- DeckBuilder client flow + canonical family validator
+- GameApp card-layer state and UI shell
+- shared fail-safe CardArtwork component
+- explicit all-unverified deployed artwork manifest
 
 ## UNPROVEN / still missing
 
@@ -28,7 +32,8 @@
 - server-side booster randomization and persistence implementation
 - verified current 96-card artwork set
 - exact deployment configuration required to reproduce the ChatGPT Site
+- maintainable full shot simulation/physics layer
 
 ## Status
 
-`BLOCKED` for a production replacement. `READY_TO_REVIEW` for the recovered card-domain checkpoint itself.
+`BLOCKED` for a production replacement. `READY_TO_REVIEW` for the recovered client card layer itself.

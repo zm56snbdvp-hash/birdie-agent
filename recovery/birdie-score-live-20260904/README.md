@@ -57,10 +57,6 @@ This makes all 18 current `CLUB` cards point at legacy `COMMUNITY` / person artw
 
 A UI integrating this contract must render a neutral text/family fallback for `MISSING`, `MISMATCH`, or `UNVERIFIED`. It must never guess another family or blindly build an image path from a number.
 
-## Recovered browser modules
-
-The exact deployed bundle identities and SHA-256 values are preserved in `recovered/bundle-manifest.json`; the downloadable recovery pack retains the immutable browser-bundle evidence. These browser chunks are evidence snapshots, not hand-authored maintainable source.
-
 ## API surface recovered from client behavior
 
 Known client calls are recorded in `src/contracts/live-api-contracts.json`, including:
@@ -74,15 +70,25 @@ Known client calls are recorded in `src/contracts/live-api-contracts.json`, incl
 
 Server implementations, authentication internals, D1 schema/migrations and secret configuration are **not recoverable from browser bundles** and remain UNPROVEN until another source artifact is obtained.
 
-## Validation
+## Recovery Phase 2 — maintainable client card layer
 
-Run:
+The first maintainable React/TypeScript reconstruction now exists under `src/features/`:
+
+- `card-vault/CardVault.tsx` — collection, starter-set claim and digital booster client flow;
+- `deck-builder/DeckBuilder.tsx` — deployed 1 PLAYER + 24-card deck composition flow;
+- `game/GameApp.tsx` — recovered GameApp **card layer** (player, equipment install, five-card action hand and hole-start draw);
+- `game/card-state.ts` — pure, testable equipment/action draw semantics recovered from the deployed GameApp;
+- `components/CardArtwork.tsx` — shared fail-safe card face renderer.
+
+All three reconstructed feature surfaces route card faces through `CardArtwork`. None constructs a front-artwork URL from `physicalNumber`.
+
+The complete shot simulator / physics rendering is **not yet claimed as decompiled maintainable source**. Its immutable production bundle evidence remains part of the external recovery archive and is the next recovery boundary.
+
+Validation:
 
 ```bash
-npm test
+npm run verify
 ```
-
-The tests pin catalog cardinality, family ranges, starter deck composition and the proven unsafe number-only artwork resolver contract.
 
 ## Release state
 
