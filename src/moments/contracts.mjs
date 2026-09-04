@@ -34,10 +34,12 @@ export function validateCompletedRound(round) {
 
 export function buildRenderData(round, momentType, pbData = null) {
   const data = {
+    internalRoundId: round.id,
     playerName: round.displayName,
     courseName: round.courseName,
     playedAt: round.playedAt,
     totalScore: round.totalScore,
+    holesPlayed: round.holesPlayed,
     birdieCount: round.birdieCount,
     momentType,
     templateVersion:
