@@ -7,7 +7,8 @@ import { afterRoundCommitted } from "../round-completion.mjs";
  * Invariants:
  * - core save completes first;
  * - completion is decided from the server persistence result, never request JSON;
- * - only completed persisted rounds trigger Moments;
+ * - only completed persisted rounds owned by the authenticated server user trigger Moments;
+ * - missing/mismatched server ownership fails closed for Moments without failing Scorecard;
  * - Moments failures never roll back or replace the successful Scorecard result.
  */
 export function createRoundSaveWithMoments({
@@ -25,6 +26,17 @@ export function createRoundSaveWithMoments({
     const roundId = persistedRound?.id ?? persistedRound?.round_id;
 
     if (!roundId || !isCompletedPersistedRound(persistedRound)) return saved;
+
+    const persistedOwnerId = userIdOf(persistedRound);
+    const authenticatedOwnerId = userIdOf(context?.authenticatedUser ?? context?.authUserId);
+    if (!persistedOwnerId || !authenticatedOwnerId || persistedOwnerId !== authenticatedOwnerId) {
+      logger.error?.("birdie_moments_round_owner_unproven", {
+        roundId,
+        hasPersistedOwner: Boolean(persistedOwnerId),
+        hasAuthenticatedOwner: Boolean(authenticatedOwnerId)
+      });
+      return saved;
+    }
 
     const momentResult = await afterRoundCommittedFn({
       roundId,
@@ -61,4 +73,10 @@ function isCompletedPersistedRound(round) {
   return String(round?.status ?? "").toLowerCase() === "completed"
     || round?.isCompleted === true
     || round?.is_completed === true;
+}
+
+function userIdOf(value) {
+  if (typeof value === "string") return value.trim() || null;
+  const candidate = value?.id ?? value?.userId ?? value?.user_id ?? null;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 }
