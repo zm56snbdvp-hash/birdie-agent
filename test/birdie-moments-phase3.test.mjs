@@ -66,7 +66,7 @@ test("PB is preferred over ROUND for the same post-round upsell", () => {
       ...renderData,
       momentType: MOMENT_TYPE.PERSONAL_BEST,
       templateVersion: "birdie-moment-pb-v1",
-      personalBestData: { previousBestScore: 86, newBestScore: 82, improvement: -4 }
+      personalBestData: { previousBestScore: 86, newBestScore: 82, strokesImproved: 4 }
     }
   });
   assert.equal(selectPrimaryPostRoundMoment([round, pb]).id, "pb-moment");
@@ -125,20 +125,20 @@ test("detail exposes A4 physical upsell only as an unproven target", () => {
   assert.equal(vm.physicalUpsell.ctaEnabled, false);
 });
 
-test("PB detail exposes proven comparison data", () => {
+test("PB detail exposes proven positive comparison data", () => {
   const vm = buildMomentDetailViewModel(moment({
     momentType: MOMENT_TYPE.PERSONAL_BEST,
     renderData: {
       ...renderData,
       momentType: MOMENT_TYPE.PERSONAL_BEST,
       templateVersion: "birdie-moment-pb-v1",
-      personalBestData: { previousBestScore: 86, newBestScore: 82, improvement: -4 }
+      personalBestData: { previousBestScore: 86, newBestScore: 82, strokesImproved: 4 }
     }
   }));
   assert.deepEqual(vm.personalBest, {
     previousBestScore: 86,
     newBestScore: 82,
-    improvement: -4
+    strokesImproved: 4
   });
 });
 
@@ -147,9 +147,7 @@ test("post-round lookup only uses the authenticated user's Moments and owned rou
     roundId: "round-1",
     authUserId: "user-1",
     repo: {
-      async getRound(id) {
-        return { id, userId: "user-1", status: "completed" };
-      },
+      async getRound(id) { return { id, userId: "user-1", status: "completed" }; },
       async listMomentsForRound() {
         return [
           moment({ id: "foreign", userId: "user-2", momentType: MOMENT_TYPE.PERSONAL_BEST }),
@@ -167,16 +165,10 @@ test("post-round reveal is hidden when the persisted source round belongs to ano
     roundId: "round-1",
     authUserId: "user-1",
     repo: {
-      async getRound() {
-        return { id: "round-1", userId: "user-2", status: "completed" };
-      },
-      async listMomentsForRound() {
-        momentsQueried = true;
-        return [moment()];
-      }
+      async getRound() { return { id: "round-1", userId: "user-2", status: "completed" }; },
+      async listMomentsForRound() { momentsQueried = true; return [moment()]; }
     }
   });
-
   assert.equal(vm, null);
   assert.equal(momentsQueried, false);
 });
