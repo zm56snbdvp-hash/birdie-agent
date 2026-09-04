@@ -1,4 +1,6 @@
 import { MOMENT_STATUS } from "../contracts.mjs";
+import { MOMENT_ANALYTICS_EVENT, emitMomentAnalytics } from "../analytics/events.mjs";
+import { MOMENT_FAILURE_STAGE, recordMomentFailureSafely } from "../failures.mjs";
 import { MomentRenderError } from "./contracts.mjs";
 import { renderMomentAssets } from "./svg-renderer.mjs";
 
@@ -10,12 +12,18 @@ import { renderMomentAssets } from "./svg-renderer.mjs";
  *
  * Optional:
  * - markMomentFailed({ momentId, error })
+ * - recordMomentFailure(failure)
  *
  * Required storage contract:
  * - putAsset({ momentId, target, fileName, mimeType, content, width, height, metadata })
  *   -> persistent, non-public asset reference
  */
-export async function renderMomentForStorage(momentId, { repo, storage, now = () => new Date().toISOString() }) {
+export async function renderMomentForStorage(momentId, {
+  repo,
+  storage,
+  analytics,
+  now = () => new Date().toISOString()
+}) {
   const moment = await repo.getMoment(momentId);
   if (!moment) {
     throw new MomentRenderError("MOMENT_NOT_FOUND", `Moment ${momentId} not found`);
@@ -56,6 +64,15 @@ export async function renderMomentForStorage(momentId, { repo, storage, now = ()
       printAsset: stored.print
     });
 
+    await emitMomentAnalytics(analytics, MOMENT_ANALYTICS_EVENT.MOMENT_GENERATED, {
+      userId: moment.userId,
+      roundId: moment.roundId,
+      momentId,
+      momentType: moment.momentType,
+      templateVersion: moment.templateVersion,
+      status: MOMENT_STATUS.PREVIEW_READY
+    });
+
     return {
       ok: true,
       momentId,
@@ -65,6 +82,13 @@ export async function renderMomentForStorage(momentId, { repo, storage, now = ()
     };
   } catch (error) {
     await repo.markMomentFailed?.({ momentId, error });
+    await recordMomentFailureSafely({
+      repo,
+      analytics,
+      stage: MOMENT_FAILURE_STAGE.RENDERING,
+      error,
+      context: { roundId: moment.roundId, momentId }
+    });
     return {
       ok: false,
       momentId,
