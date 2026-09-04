@@ -13,6 +13,7 @@
     "src/domain/*.ts",
     "src/features/card-vault/model.ts",
     "src/features/deck-builder/model.ts",
-    "src/features/game/card-state.ts"
+    "src/features/game/card-state.ts",
+    "src/features/game/shot-engine.ts"
   ]
 }
