@@ -2,38 +2,45 @@
 
 ## Proven
 
-- 96-card canonical live catalog recovered.
-- Canonical family typing is internally consistent.
-- Deckbuilder uses `family` for CLUB/BALL/SPIN/TACTIC composition checks.
-- Collection, Deckbuilder, GameApp and LocalDuel all consume the shared deployed artwork component.
-- Artwork component resolves by physical-number suffix only.
-- 96 deployed JPGs belong to an incompatible legacy category system.
-- All 18 CLUB cards resolve to legacy COMMUNITY/person-number artwork.
+- 96-card canonical live catalog recovered and internally consistent.
+- Deckbuilder uses canonical `family` for CLUB/BALL/SPIN/TACTIC composition.
+- Production Collection, Deckbuilder, GameApp and LocalDuel consume the shared unsafe number-only artwork resolver.
+- Deployed 96 JPG fronts belong to an incompatible legacy category system.
+- All 18 current CLUB cards resolve to legacy COMMUNITY/person-number artwork.
+- Deployed six-hole shot-engine constants and simulation behavior recovered from the browser bundle.
 
 ## Reconstructed / safe replacement
 
-- typed canonical catalog source
-- starter-deck source
-- client API contract inventory
-- fail-safe artwork resolver contract
-- deterministic Node test suite
+- typed canonical catalog + starter deck
+- fail-safe artwork resolver and CardArtwork fallback
 - CardVault collection + booster client flow
-- DeckBuilder client flow + canonical family validator
-- GameApp card-layer state and UI shell
-- shared fail-safe CardArtwork component
-- explicit all-unverified deployed artwork manifest
+- DeckBuilder client flow + canonical-family validator
+- GameApp card-state layer
+- pure GameCardState draw/install semantics
+- pure TypeScript shot engine
+- six-hole course/hazard constants
+- deterministic production-output shot fixtures
+- client API contract inventory
+
+## Validation
+
+- strict TypeScript: PASS
+- local Node contract/equivalence suite: **34/34 PASS**
+- shot equivalence covers all six hazards, putts, Lee-Ann signature and action filtering/modifiers
 
 ## UNPROVEN / still missing
 
-- original Next/Vinext page source files and component names before bundling
+- original Next/Vinext page source before bundling
 - server API implementations
 - authentication/session source
 - D1/Drizzle schema and migrations
-- server-side booster randomization and persistence implementation
+- server-side booster randomization/persistence implementation
 - verified current 96-card artwork set
-- exact deployment configuration required to reproduce the ChatGPT Site
-- maintainable full shot simulation/physics layer
+- exact ChatGPT Site deployment configuration
+- full maintainable visual shot-simulator interaction layer (pure simulation core recovered)
 
 ## Status
 
-`BLOCKED` for a production replacement. `READY_TO_REVIEW` for the recovered client card layer itself.
+`READY_TO_REVIEW` — recovered client card layer + pure shot engine.
+
+`BLOCKED` — production replacement/release until server/runtime source and verified current artwork are available.
