@@ -14,13 +14,16 @@ export function computeBirdieMomentsKpis({ completedRounds = 0, events = [] } = 
   const previewEvents = byName(MOMENT_ANALYTICS_EVENT.MOMENT_PREVIEW_VIEWED);
   const digitalEvents = byName(MOMENT_ANALYTICS_EVENT.DIGITAL_PURCHASE_COMPLETED);
   const printEvents = byName(MOMENT_ANALYTICS_EVENT.PRINT_PURCHASE_COMPLETED);
+  const purchaseEvents = [...digitalEvents, ...printEvents];
 
   const generatedRoundIds = distinctNonEmpty(generatedEvents.map((event) => event?.payload?.roundId));
   const generatedMomentIds = distinctNonEmpty(generatedEvents.map((event) => event?.payload?.momentId));
   const previewMomentIds = distinctNonEmpty(previewEvents.map((event) => event?.payload?.momentId));
-  const purchases = digitalEvents.length + printEvents.length;
+  const purchasedMomentIds = distinctNonEmpty(purchaseEvents.map((event) => event?.payload?.momentId));
+  const buyerIds = distinctNonEmpty(purchaseEvents.map((event) => event?.payload?.userId));
+  const printBuyerIds = distinctNonEmpty(printEvents.map((event) => event?.payload?.userId));
 
-  const revenueMinor = [...digitalEvents, ...printEvents]
+  const revenueMinor = purchaseEvents
     .reduce((sum, event) => sum + (Number.isInteger(event?.payload?.amountMinor) ? event.payload.amountMinor : 0), 0);
 
   return Object.freeze({
@@ -29,14 +32,16 @@ export function computeBirdieMomentsKpis({ completedRounds = 0, events = [] } = 
     generatedMoments: generatedEvents.length,
     previewedMoments: previewMomentIds.size,
     previewViews: previewEvents.length,
-    purchases,
+    purchasedMoments: purchasedMomentIds.size,
+    buyers: buyerIds.size,
+    purchases: purchaseEvents.length,
     digitalPurchases: digitalEvents.length,
     printPurchases: printEvents.length,
     revenueMinor,
     generationRate: safeDivide(generatedRoundIds.size, completedRounds),
     previewRate: safeDivide(previewMomentIds.size, generatedMomentIds.size),
-    purchaseConversion: safeDivide(purchases, previewEvents.length),
+    purchaseConversion: safeDivide(purchasedMomentIds.size, previewMomentIds.size),
     revenuePerCompletedRoundMinor: safeDivide(revenueMinor, completedRounds),
-    printAttachRate: safeDivide(printEvents.length, purchases)
+    printAttachRate: safeDivide(printBuyerIds.size, buyerIds.size)
   });
 }
