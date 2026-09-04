@@ -1,0 +1,23 @@
+name: Birdie Moments live integration tests
+
+on:
+  push:
+    branches:
+      - feature/birdie-moments-live-integration-e2e
+  pull_request:
+    paths:
+      - "src/moments/**"
+      - "test/birdie-moments-*.test.mjs"
+      - ".github/workflows/birdie-moments-live-integration-tests.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
