@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.mjs",
     "smoke": "node scripts/smoke-test.mjs",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "moments:staging:check": "node scripts/birdie-moments-staging-bootstrap.mjs",
+    "moments:staging:apply-app-store": "node scripts/birdie-moments-staging-bootstrap.mjs --apply-app-store"
   },
   "engines": {
     "node": ">=22"
