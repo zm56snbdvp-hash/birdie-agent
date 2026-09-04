@@ -1,4 +1,4 @@
--- Birdie Moments v1 purchases + exactly-once print intent.
+-- Birdie Moments v1 — checkout, payment, entitlement and exactly-once print intent.
 
 CREATE TABLE IF NOT EXISTS moment_purchases (
   id TEXT PRIMARY KEY,
@@ -10,26 +10,48 @@ CREATE TABLE IF NOT EXISTS moment_purchases (
     'BM-ROUND-A3-V1',
     'BM-PB-A3-V1'
   )),
-  payment_reference TEXT NOT NULL,
+  payment_provider TEXT NOT NULL,
+  checkout_reference TEXT,
+  payment_reference TEXT,
+  payment_status TEXT NOT NULL CHECK (
+    payment_status IN ('PENDING', 'PAID', 'FAILED', 'REFUNDED')
+  ),
   amount INTEGER NOT NULL CHECK (amount >= 0),
   currency TEXT NOT NULL,
   fulfillment_type TEXT NOT NULL CHECK (fulfillment_type IN ('DIGITAL', 'PRINT')),
   fulfillment_status TEXT NOT NULL CHECK (fulfillment_status IN (
-    'PAID', 'FULFILLING', 'FULFILLED', 'FULFILLMENT_FAILED'
+    'PENDING', 'AWAITING_ORDER', 'FULFILLING', 'FULFILLED', 'FULFILLMENT_FAILED'
   )),
   fulfillment_reference TEXT,
   shipping_address TEXT,
+  idempotency_key TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   FOREIGN KEY(moment_id) REFERENCES birdie_moments(id)
 );
 
+CREATE UNIQUE INDEX IF NOT EXISTS ux_moment_purchases_idempotency
+  ON moment_purchases (user_id, idempotency_key);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_moment_purchases_checkout_reference
+  ON moment_purchases (payment_provider, checkout_reference)
+  WHERE checkout_reference IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS ux_moment_purchases_payment_reference
-  ON moment_purchases (payment_reference);
+  ON moment_purchases (payment_provider, payment_reference)
+  WHERE payment_reference IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_moment_purchases_user_created
   ON moment_purchases (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS ix_moment_purchases_moment
-  ON moment_purchases (moment_id);
+  ON moment_purchases (moment_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS moment_payment_events (
+  provider TEXT NOT NULL,
+  event_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  purchase_id TEXT,
+  processed_at TEXT NOT NULL,
+  PRIMARY KEY (provider, event_id),
+  FOREIGN KEY(purchase_id) REFERENCES moment_purchases(id)
+);
 
 CREATE TABLE IF NOT EXISTS moment_print_orders (
   id TEXT PRIMARY KEY,
