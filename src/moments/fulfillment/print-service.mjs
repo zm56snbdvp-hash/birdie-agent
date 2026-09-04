@@ -2,9 +2,17 @@ import { FULFILLMENT_TYPE, getProduct } from "../commerce/catalog.mjs";
 import { MOMENT_STATUS } from "../contracts.mjs";
 import { PrintFulfillmentError } from "./gelato-provider.mjs";
 
-function value(record, camel, snake) {
-  return record?.[camel] ?? record?.[snake] ?? null;
-}
+const PRINT_ORDER_STATUS = Object.freeze({
+  PENDING_SUBMISSION: "PENDING_SUBMISSION",
+  SUBMITTED: "SUBMITTED",
+  IN_PRODUCTION: "IN_PRODUCTION",
+  SHIPPED: "SHIPPED",
+  DELIVERED: "DELIVERED",
+  FULFILLMENT_FAILED: "FULFILLMENT_FAILED",
+  CANCELLED: "CANCELLED"
+});
+
+function value(record, camel, snake) { return record?.[camel] ?? record?.[snake] ?? null; }
 function paymentStatus(purchase) { return value(purchase, "paymentStatus", "payment_status"); }
 function fulfillmentStatus(purchase) { return value(purchase, "fulfillmentStatus", "fulfillment_status"); }
 function productType(purchase) { return value(purchase, "productType", "product_type"); }
@@ -15,10 +23,7 @@ function userId(purchase) { return value(purchase, "userId", "user_id"); }
 function paidState(purchase) {
   const explicit = paymentStatus(purchase);
   if (explicit) return explicit === "PAID";
-
-  // Transitional compatibility only: the pre-integration in-memory/store
-  // contract used fulfillmentStatus=PAID and then FULFILLING/FULFILLED as the
-  // sole lifecycle field. New persisted rows always use payment_status.
+  // Transitional compatibility for pre-integration test/storage rows only.
   return ["PAID", "FULFILLING", "FULFILLED", "FULFILLMENT_FAILED"].includes(fulfillmentStatus(purchase));
 }
 
@@ -27,7 +32,49 @@ function normalizedFulfillmentStatus(purchase) {
   return status === "PAID" ? "AWAITING_ORDER" : status;
 }
 
-export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, analytics = null }) {
+function mapProviderStatus(status) {
+  switch (String(status ?? "").toLowerCase()) {
+    case "created":
+    case "uploading":
+    case "passed":
+    case "draft":
+    case "pending_approval":
+    case "pending_personalization":
+    case "digitizing":
+    case "not_connected":
+    case "on_hold":
+      return PRINT_ORDER_STATUS.SUBMITTED;
+    case "in_production":
+    case "printed":
+      return PRINT_ORDER_STATUS.IN_PRODUCTION;
+    case "shipped":
+    case "in_transit":
+      return PRINT_ORDER_STATUS.SHIPPED;
+    case "delivered":
+      return PRINT_ORDER_STATUS.DELIVERED;
+    case "failed":
+    case "refused":
+    case "returned":
+      return PRINT_ORDER_STATUS.FULFILLMENT_FAILED;
+    case "canceled":
+    case "cancelled":
+      return PRINT_ORDER_STATUS.CANCELLED;
+    default:
+      return PRINT_ORDER_STATUS.SUBMITTED;
+  }
+}
+
+function isTerminalFailure(status) {
+  return status === PRINT_ORDER_STATUS.FULFILLMENT_FAILED || status === PRINT_ORDER_STATUS.CANCELLED;
+}
+
+export function createPrintFulfillmentService({
+  provider,
+  repo,
+  assetUrlSigner,
+  analytics = null,
+  now = () => new Date().toISOString()
+}) {
   if (!provider || !repo || !assetUrlSigner) throw new Error("provider, repo and assetUrlSigner are required");
 
   async function createOrderForPaidPurchase(purchaseId) {
@@ -63,32 +110,56 @@ export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, 
     const address = shippingAddress(purchase);
     if (!address?.country) throw new PrintFulfillmentError("SHIPPING_ADDRESS_REQUIRED", "Shipping address is required");
 
-    await provider.validateProduct({ country: address.country });
-
     const claim = await repo.claimPrintOrder({
       purchaseId: purchase.id,
+      userId: ownedUserId,
       momentId: moment.id,
       provider: provider.name,
-      idempotencyKey: `birdie-moments:print:${purchase.id}`
+      status: PRINT_ORDER_STATUS.PENDING_SUBMISSION,
+      idempotencyKey: `birdie-moments:print:${purchase.id}`,
+      createdAt: now(),
+      updatedAt: now()
     });
     const printOrder = claim.order;
+    if (!printOrder?.id) throw new PrintFulfillmentError("PRINT_ORDER_CLAIM_FAILED", "Print order claim failed");
 
-    if (!claim.created && printOrder.providerOrderReference) {
+    const existingProviderRef = printOrder.providerOrderReference ?? printOrder.provider_order_reference;
+    if (!claim.created && existingProviderRef) {
       return { ok: true, duplicatePrevented: true, printOrder };
     }
 
-    // A retry after FULFILLMENT_FAILED intentionally reuses the exact same
-    // internal print-order claim. The provider adapter performs a remote
-    // orderReferenceId lookup before any create call, covering crash/retry gaps.
+    // A UNIQUE purchase row prevents duplicate internal orders but not two workers
+    // racing between provider search and provider create. Canonical runtime adapters
+    // therefore provide claimPrintSubmission(), an atomic short lease. Direct legacy
+    // unit fixtures without it retain backward compatibility; the production runtime
+    // explicitly refuses to initialize without the lease capability.
+    if (typeof repo.claimPrintSubmission === "function") {
+      const lease = await repo.claimPrintSubmission({
+        printOrderId: printOrder.id,
+        purchaseId: purchase.id,
+        leaseKey: `birdie-moments:print-submit:${printOrder.id}`,
+        now: now(),
+        leaseSeconds: 90
+      });
+      const acquired = lease === true || lease?.acquired === true;
+      if (!acquired) {
+        return { ok: true, duplicatePrevented: true, inProgress: true, printOrder };
+      }
+    }
+
     await repo.markPurchaseFulfillment({ purchaseId: purchase.id, status: "FULFILLING" });
 
     try {
+      await provider.validateProduct({ country: address.country });
       const printAssetUrl = await assetUrlSigner.signProviderAsset({
         assetReference: printAsset,
         provider: provider.name,
         purchaseId: purchase.id,
         momentId: moment.id
       });
+      if (!printAssetUrl) {
+        throw new PrintFulfillmentError("PRINT_ASSET_URL_UNAVAILABLE", "Provider asset URL is unavailable");
+      }
 
       const created = await provider.createOrder({
         internalOrderId: printOrder.id,
@@ -99,21 +170,30 @@ export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, 
         recipient: address
       });
 
+      const orderStatus = mapProviderStatus(created.status);
       const saved = await repo.attachProviderOrder({
         printOrderId: printOrder.id,
         providerOrderReference: created.providerOrderReference,
-        status: created.status || "created"
+        status: orderStatus,
+        updatedAt: now()
       });
       await repo.markPurchaseFulfillment({
         purchaseId: purchase.id,
         status: "FULFILLING",
         reference: created.providerOrderReference
       });
-      return { ok: true, duplicatePrevented: created.recovered === true, printOrder: saved };
+      return {
+        ok: true,
+        duplicatePrevented: created.recovered === true,
+        recoveredProviderOrder: created.recovered === true,
+        printOrder: saved ?? printOrder
+      };
     } catch (error) {
       await repo.markPrintOrderFailed?.({
         printOrderId: printOrder.id,
-        reason: error?.code || "PROVIDER_CREATE_FAILED"
+        purchaseId: purchase.id,
+        reason: error?.code || "PROVIDER_CREATE_FAILED",
+        updatedAt: now()
       });
       await repo.markPurchaseFulfillment({ purchaseId: purchase.id, status: "FULFILLMENT_FAILED" });
       await analytics?.track?.("fulfillment_failed", {
@@ -136,43 +216,83 @@ export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, 
     }
 
     const printOrder = await repo.getPrintOrder(event.internalOrderId);
-    if (!printOrder) throw new PrintFulfillmentError("PRINT_ORDER_NOT_FOUND", "Print order not found");
+    if (!printOrder || (printOrder.provider ?? printOrder.provider_name) !== provider.name) {
+      throw new PrintFulfillmentError("PRINT_ORDER_NOT_FOUND", "Print order not found");
+    }
 
+    const providerRef = printOrder.providerOrderReference
+      ?? printOrder.provider_order_reference
+      ?? event.providerOrderReference;
+    if (!providerRef) {
+      throw new PrintFulfillmentError("PRINT_PROVIDER_REFERENCE_MISSING", "Provider order reference is missing");
+    }
+
+    // Provider webhook is a signal, not fulfillment authority. Canonical runtime
+    // requires getOrderStatus(); legacy direct fixtures may fall back to the event.
+    let providerStatus;
+    let verifiedProviderReference = providerRef;
+    if (typeof provider.getOrderStatus === "function") {
+      const verified = await provider.getOrderStatus(providerRef);
+      if (verified.orderReferenceId && verified.orderReferenceId !== printOrder.id) {
+        throw new PrintFulfillmentError(
+          "PRINT_PROVIDER_INTEGRITY_MISMATCH",
+          "Provider order belongs to a different internal order"
+        );
+      }
+      providerStatus = verified.fulfillmentStatus;
+      verifiedProviderReference = verified.providerOrderReference ?? providerRef;
+    } else {
+      providerStatus = event.claimedStatus ?? event.fulfillmentStatus;
+    }
+
+    const status = mapProviderStatus(providerStatus);
     await repo.updatePrintOrderFromWebhook({
       printOrderId: printOrder.id,
-      providerOrderReference: event.providerOrderReference,
-      status: event.fulfillmentStatus,
-      eventId: event.eventId
+      providerOrderReference: verifiedProviderReference,
+      status,
+      providerStatus,
+      eventId: event.eventId,
+      updatedAt: now()
     });
     await repo.recordProcessedWebhook({
       provider: provider.name,
       eventId: event.eventId,
-      printOrderId: printOrder.id
+      printOrderId: printOrder.id,
+      processedAt: now()
     });
 
-    if (["failed", "canceled"].includes(event.fulfillmentStatus)) {
+    if (isTerminalFailure(status)) {
       await repo.markPurchaseFulfillment({
         purchaseId: printOrder.purchaseId,
         status: "FULFILLMENT_FAILED",
-        reference: event.providerOrderReference
+        reference: verifiedProviderReference
       });
       await analytics?.track?.("fulfillment_failed", {
         purchaseId: printOrder.purchaseId,
         provider: provider.name,
-        reason: event.fulfillmentStatus
+        reason: providerStatus ?? status
       });
-    }
-
-    if (["printed", "shipped", "delivered"].includes(event.fulfillmentStatus)) {
+    } else if ([PRINT_ORDER_STATUS.SUBMITTED, PRINT_ORDER_STATUS.IN_PRODUCTION, PRINT_ORDER_STATUS.SHIPPED].includes(status)) {
+      await repo.markPurchaseFulfillment({
+        purchaseId: printOrder.purchaseId,
+        status: "FULFILLING",
+        reference: verifiedProviderReference
+      });
+    } else if (status === PRINT_ORDER_STATUS.DELIVERED) {
       await repo.markPurchaseFulfillment({
         purchaseId: printOrder.purchaseId,
         status: "FULFILLED",
-        reference: event.providerOrderReference
+        reference: verifiedProviderReference
       });
       await repo.setMomentStatus?.(printOrder.momentId, MOMENT_STATUS.FULFILLED);
     }
 
-    return { ok: true, duplicatePrevented: false, status: event.fulfillmentStatus };
+    return {
+      ok: true,
+      duplicatePrevented: false,
+      status,
+      verifiedProviderStatus: providerStatus
+    };
   }
 
   return Object.freeze({ createOrderForPaidPurchase, handleWebhook });
