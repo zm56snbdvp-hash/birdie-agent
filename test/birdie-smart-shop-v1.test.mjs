@@ -7,6 +7,11 @@ import {
 } from "../src/affiliate-commerce/contracts.mjs";
 import { recommendAffiliateProducts } from "../src/affiliate-commerce/recommend.mjs";
 import { buildAffiliateClick, buildCommerceDisclosure } from "../src/affiliate-commerce/click.mjs";
+import { createAffiliateCommerceService } from "../src/affiliate-commerce/service.mjs";
+import {
+  createCommerceRecommendationsHttpHandler,
+  createCommerceOutboundHttpHandler
+} from "../src/affiliate-commerce/integration/live-routes.mjs";
 
 function product(overrides = {}) {
   return {
@@ -108,4 +113,72 @@ test("click event keeps attribution data internal and returns the provider desti
 test("German disclosure clearly identifies the commercial relationship", () => {
   assert.match(buildCommerceDisclosure("de-DE"), /Provision/);
   assert.match(buildCommerceDisclosure("de-DE"), /Preis nicht/);
+});
+
+test("service hides raw affiliate URL from recommendation payload", async () => {
+  const commerce = createAffiliateCommerceService({
+    catalogProvider: { async listProducts() { return [product()]; } },
+    playerContextProvider: { async getContext() { return { region: "DE", focuses: [PLAYER_FOCUS.ESSENTIALS] }; } }
+  });
+  const result = await commerce.getRecommendations({ authUserId: "u-1" });
+  assert.equal(result.items.length, 1);
+  assert.equal("affiliateUrl" in result.items[0], false);
+  assert.match(result.items[0].outboundPath, /^\/api\/commerce\/out\//);
+});
+
+test("outbound click resolves product server-side and records attribution before redirect", async () => {
+  const recorded = [];
+  const commerce = createAffiliateCommerceService({
+    catalogProvider: { async listProducts() { return [product()]; } },
+    playerContextProvider: { async getContext() { return { region: "DE" }; } },
+    clickIdFactory: async () => "click-fixed",
+    clickSink: { async record(event) { recorded.push(event); } }
+  });
+  const result = await commerce.createOutboundClick({ authUserId: "u-1", productId: "balls-1", placement: "post-round" });
+  assert.equal(result.destinationUrl, "https://example.com/affiliate/balls");
+  assert.equal(recorded.length, 1);
+  assert.equal(recorded[0].clickId, "click-fixed");
+  assert.equal(recorded[0].placement, "post-round");
+});
+
+test("outbound click fails closed for a product outside player region", async () => {
+  const commerce = createAffiliateCommerceService({
+    catalogProvider: { async listProducts() { return [product({ regions: ["US"] })]; } },
+    playerContextProvider: { async getContext() { return { region: "DE" }; } }
+  });
+  await assert.rejects(
+    commerce.createOutboundClick({ authUserId: "u-1", productId: "balls-1" }),
+    (error) => error.code === "PRODUCT_NOT_AVAILABLE" && error.status === 404
+  );
+});
+
+test("recommendations HTTP handler requires authenticated app user", async () => {
+  const handler = createCommerceRecommendationsHttpHandler({
+    authenticate: async () => null,
+    service: {},
+    json(_res, status, body) { return { status, body }; }
+  });
+  const result = await handler({ url: "/api/commerce/recommendations" }, {});
+  assert.deepEqual(result, { status: 401, body: { error: "AUTH_REQUIRED" } });
+});
+
+test("outbound HTTP handler records then returns 302 to provider", async () => {
+  const commerce = createAffiliateCommerceService({
+    catalogProvider: { async listProducts() { return [product()]; } },
+    playerContextProvider: { async getContext() { return { region: "DE" }; } },
+    clickIdFactory: async () => "click-fixed"
+  });
+  const headers = {};
+  const res = {
+    setHeader(name, value) { headers[name] = value; },
+    end() { return "ended"; }
+  };
+  const handler = createCommerceOutboundHttpHandler({
+    authenticate: async () => ({ id: "u-1" }),
+    service: commerce
+  });
+  await handler({ url: "/api/commerce/out/balls-1?placement=for-your-game" }, res, { productId: "balls-1" });
+  assert.equal(res.statusCode, 302);
+  assert.equal(headers.Location, "https://example.com/affiliate/balls");
+  assert.equal(headers["Cache-Control"], "private, no-store");
 });
