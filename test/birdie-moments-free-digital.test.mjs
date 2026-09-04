@@ -4,7 +4,8 @@ import { MOMENT_STATUS, MOMENT_TYPE } from "../src/moments/contracts.mjs";
 import { getFreePrivateMomentDownload } from "../src/moments/digital/free-download.mjs";
 import {
   handleLiveDigitalDownloadRequest,
-  handleLiveMomentCollectionRequest
+  handleLiveMomentCollectionRequest,
+  handleLiveMomentDetailRequest
 } from "../src/moments/live/session-route-adapter.mjs";
 
 function makeMoment(overrides = {}) {
@@ -56,7 +57,7 @@ const ownerSession = async () => "user-1";
 const foreignSession = async () => "user-2";
 const noSession = async () => null;
 
-test("private Collection exposes one user-facing Moment per round and PB wins", async () => {
+test("private Collection exposes one user-facing Moment per owned round and PB wins", async () => {
   const round = makeMoment({ id: "round-card" });
   const pb = makeMoment({
     id: "pb-card",
@@ -73,7 +74,8 @@ test("private Collection exposes one user-facing Moment per round and PB wins", 
     createdAt: "2026-09-03T10:00:00Z"
   });
   const foreign = makeMoment({ id: "foreign", userId: "user-2", roundId: "round-x" });
-  const repo = freeRepo([round, pb, otherRound, foreign], {
+  const crossLinked = makeMoment({ id: "cross-linked", userId: "user-1", roundId: "round-x" });
+  const repo = freeRepo([round, pb, otherRound, foreign, crossLinked], {
     "round-1": "user-1",
     "round-2": "user-1",
     "round-x": "user-2"
@@ -93,6 +95,7 @@ test("private Collection exposes one user-facing Moment per round and PB wins", 
   assert.equal(response.body.items[0].roundId, "round-1");
   assert.equal(response.body.items.some((item) => item.momentId === "round-card"), false);
   assert.equal(response.body.items.some((item) => item.momentId === "foreign"), false);
+  assert.equal(response.body.items.some((item) => item.momentId === "cross-linked"), false);
 });
 
 test("owner downloads the private Digital master for free without purchase or entitlement lookup", async () => {
@@ -142,6 +145,18 @@ test("Moment owner cannot download when the persisted source round belongs to an
   );
 
   assert.equal(signerCalled, false);
+});
+
+test("Moment Detail also blocks a Moment whose source round belongs to another user", async () => {
+  const response = await handleLiveMomentDetailRequest({
+    request: {},
+    momentId: "moment-1",
+    resolveAuthenticatedUserId: ownerSession,
+    repo: freeRepo([makeMoment()], { "round-1": "user-2" })
+  });
+
+  assert.equal(response.status, 404);
+  assert.equal(response.body.error, "MOMENT_NOT_FOUND");
 });
 
 test("foreign Site user cannot download another owner's free Moment", async () => {
