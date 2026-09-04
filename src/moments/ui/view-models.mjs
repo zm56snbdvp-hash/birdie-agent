@@ -1,4 +1,5 @@
 import { MOMENT_STATUS, MOMENT_TYPE } from "../contracts.mjs";
+import { FULFILLMENT_TYPE, PRODUCT_TYPE } from "../commerce/contracts.mjs";
 
 const MOMENT_LABEL = Object.freeze({
   [MOMENT_TYPE.ROUND]: "Round Card",
@@ -86,15 +87,17 @@ export function buildMomentDetailViewModel(moment, pricing = {}) {
       : null,
     products: [
       {
-        productType: momentType === MOMENT_TYPE.PERSONAL_BEST ? "PERSONAL_BEST_DIGITAL" : "ROUND_CARD_DIGITAL",
-        fulfillmentType: "DIGITAL",
+        productType: momentType === MOMENT_TYPE.PERSONAL_BEST
+          ? PRODUCT_TYPE.DIGITAL_PERSONAL_BEST
+          : PRODUCT_TYPE.DIGITAL_ROUND,
+        fulfillmentType: FULFILLMENT_TYPE.DIGITAL,
         title: "Digitale Edition",
         price: euro(momentType === MOMENT_TYPE.PERSONAL_BEST ? pricing.personalBestDigital : pricing.roundDigital),
         ctaLabel: "Digitale Edition kaufen"
       },
       {
-        productType: "PREMIUM_A3_PRINT",
-        fulfillmentType: "PRINT",
+        productType: PRODUCT_TYPE.PRINT_A3,
+        fulfillmentType: FULFILLMENT_TYPE.PRINT,
         title: "Premium A3 Print",
         price: euro(pricing.premiumA3Print),
         ctaLabel: "Als Premium Print bestellen"
