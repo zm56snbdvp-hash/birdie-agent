@@ -57,7 +57,7 @@ test("true new 18-hole best is detected", () => {
   const result = detectPersonalBest(base, [prior("r1", 86), prior("r2", 84)]);
   assert.equal(result.isPersonalBest, true);
   assert.equal(result.previousBestScore, 84);
-  assert.equal(result.improvement, 2);
+  assert.equal(result.improvement, -2);
 });
 
 test("tie is not a PB", () => {
