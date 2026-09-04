@@ -6,7 +6,9 @@ on:
       - "clients/apple/**"
       - ".github/workflows/apple-build.yml"
   push:
-    branches: [main]
+    branches:
+      - main
+      - feature/birdie-moments-v1-ios-storekit
     paths:
       - "clients/apple/**"
       - ".github/workflows/apple-build.yml"
