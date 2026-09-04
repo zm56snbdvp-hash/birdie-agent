@@ -26,10 +26,10 @@ jobs:
       cancel-in-progress: false
 
     steps:
-      - name: Checkout tested Moments integration branch
+      - name: Checkout tested Moments integration commit
         uses: actions/checkout@v4
         with:
-          ref: feature/birdie-moments-v1-live-integration
+          ref: 0fe0cf7a39733af45d767e243e143c2e28de9be0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -68,7 +68,7 @@ jobs:
           const summary = {
             schemaVersion: input.schemaVersion,
             mode: input.mode,
-            sourceRef: 'feature/birdie-moments-v1-live-integration',
+            sourceRef: '0fe0cf7a39733af45d767e243e143c2e28de9be0',
             appStore: {
               status: input.appStore?.status ?? null,
               missing: input.appStore?.missing ?? [],
