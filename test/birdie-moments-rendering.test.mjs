@@ -116,37 +116,40 @@ test("all three canonical outputs are generated from one render input", () => {
 test("render job stores three private assets then marks PREVIEW_READY", async () => {
   const stored = [];
   let readyPayload = null;
-  const result = await renderMomentForStorage({
-    moment: { id: "moment-1", renderData: roundRenderData },
+  let status = null;
+  const result = await renderMomentForStorage("moment-1", {
     repo: {
-      async markMomentGenerating() {},
+      async getMoment() { return { id: "moment-1", renderData: roundRenderData }; },
+      async setMomentStatus(_id, value) { status = value; },
       async markMomentPreviewReady(payload) { readyPayload = payload; },
       async markMomentFailed() { throw new Error("unexpected failure"); }
     },
-    assetStore: {
-      async putPrivateAsset(asset) {
+    storage: {
+      async putAsset(asset) {
         stored.push(asset);
         return `private://${asset.fileName}`;
       }
     },
     now: () => "2026-09-04T11:00:00Z"
   });
+  assert.equal(status, "GENERATING");
   assert.equal(result.status, "PREVIEW_READY");
   assert.equal(stored.length, 3);
   assert.equal(readyPayload.previewAsset.startsWith("private://"), true);
   assert.equal(readyPayload.digitalAsset.startsWith("private://"), true);
+  assert.equal(readyPayload.printAsset.startsWith("private://"), true);
 });
 
 test("render failure marks Moment FAILED instead of exposing partial success", async () => {
   let failed = null;
-  const result = await renderMomentForStorage({
-    moment: { id: "moment-1", renderData: roundRenderData },
+  const result = await renderMomentForStorage("moment-1", {
     repo: {
-      async markMomentGenerating() {},
+      async getMoment() { return { id: "moment-1", renderData: roundRenderData }; },
+      async setMomentStatus() {},
       async markMomentPreviewReady() { throw new Error("should not be ready"); },
       async markMomentFailed(payload) { failed = payload; }
     },
-    assetStore: { async putPrivateAsset() { throw new Error("store down"); } }
+    storage: { async putAsset() { throw new Error("store down"); } }
   });
   assert.equal(result.status, "FAILED");
   assert.equal(failed.momentId, "moment-1");
