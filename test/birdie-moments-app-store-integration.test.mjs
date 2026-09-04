@@ -174,12 +174,12 @@ test("non-consumable and revoked transactions fail closed", async () => {
   }
 });
 
-test("native start route gets appAccountToken from server provider, never request body", async () => {
+test("native start route creates server-only per-purchase appAccountToken and ignores request body", async () => {
   const repo = makeRepo();
   let jsonBody;
   const handler = createAppStoreDigitalPurchaseStartHandler({
     authenticate: async () => ({ id: "u1" }),
-    accountTokenProvider: { async getOrCreateForUser() { return TOKEN; } },
+    purchaseTokenFactory: async () => TOKEN,
     repo,
     catalog,
     json(_res, _status, body) { jsonBody = body; return body; }
@@ -189,7 +189,7 @@ test("native start route gets appAccountToken from server provider, never reques
   assert.equal(repo.intent.appAccountToken, TOKEN);
 });
 
-test("official Apple server-library adapter delegates to SignedDataVerifier", async () => {
+test("official Apple server-library adapter delegates to SignedDataVerifier for BirdiePhone bundle", async () => {
   const captured = {};
   class FakeVerifier {
     constructor(...args) { captured.args = args; }
@@ -198,7 +198,7 @@ test("official Apple server-library adapter delegates to SignedDataVerifier", as
   const verifier = await createAppleSignedTransactionVerifier({
     appleRootCertificates: [Buffer.from("root")],
     environment: "SANDBOX",
-    bundleId: "com.birdieworld.app",
+    bundleId: "de.birdieandbreakfast.birdie",
     libraryLoader: async () => ({
       SignedDataVerifier: FakeVerifier,
       Environment: { SANDBOX: "Sandbox", PRODUCTION: "Production" }
@@ -207,5 +207,5 @@ test("official Apple server-library adapter delegates to SignedDataVerifier", as
   const decoded = await verifier.verifyAndDecodeTransaction("signed-jws");
   assert.equal(decoded.transactionId, "tx-1");
   assert.equal(captured.jws, "signed-jws");
-  assert.equal(captured.args[3], "com.birdieworld.app");
+  assert.equal(captured.args[3], "de.birdieandbreakfast.birdie");
 });
