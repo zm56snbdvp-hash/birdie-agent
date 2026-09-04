@@ -1,9 +1,24 @@
 import { MOMENT_STATUS, MOMENT_TYPE } from "../contracts.mjs";
-import { FULFILLMENT_TYPE, PRODUCT_TYPE } from "../commerce/contracts.mjs";
 
 const MOMENT_LABEL = Object.freeze({
   [MOMENT_TYPE.ROUND]: "Round Card",
   [MOMENT_TYPE.PERSONAL_BEST]: "Personal Best"
+});
+
+const COLLECTION_VISIBLE_STATUS = new Set([
+  MOMENT_STATUS.PREVIEW_READY,
+  MOMENT_STATUS.PURCHASED,
+  MOMENT_STATUS.FULFILLED
+]);
+
+export const BIRDIE_MOMENT_A4_PRINT_TARGET = Object.freeze({
+  productType: "PRINT_A4_BIRDIE_MOMENT",
+  title: "A4 Birdie Moment Print",
+  targetPriceEur: 19.9,
+  shippingScope: "Deutschland",
+  shippingIncluded: true,
+  economicsStatus: "UNPROVEN",
+  availability: "PREPARATION"
 });
 
 function euro(amount) {
@@ -22,22 +37,34 @@ function previewAsset(moment) {
   return moment?.previewAsset ?? moment?.preview_asset ?? null;
 }
 
+function momentTypeOf(moment) {
+  return moment?.momentType ?? moment?.moment_type;
+}
+
+function roundIdOf(moment) {
+  return moment?.roundId ?? moment?.round_id;
+}
+
+function createdAtOf(moment) {
+  return moment?.createdAt ?? moment?.created_at ?? renderData(moment)?.playedAt ?? "";
+}
+
 export function selectPrimaryPostRoundMoment(moments = []) {
   const ready = moments.filter((moment) =>
     moment &&
-    moment.status === MOMENT_STATUS.PREVIEW_READY &&
+    COLLECTION_VISIBLE_STATUS.has(moment.status) &&
     previewAsset(moment)
   );
 
-  return ready.find((moment) => moment.momentType === MOMENT_TYPE.PERSONAL_BEST || moment.moment_type === MOMENT_TYPE.PERSONAL_BEST)
-    ?? ready.find((moment) => moment.momentType === MOMENT_TYPE.ROUND || moment.moment_type === MOMENT_TYPE.ROUND)
+  return ready.find((moment) => momentTypeOf(moment) === MOMENT_TYPE.PERSONAL_BEST)
+    ?? ready.find((moment) => momentTypeOf(moment) === MOMENT_TYPE.ROUND)
     ?? null;
 }
 
 export function buildPostRoundUpsellViewModel(moment) {
-  if (!moment || moment.status !== MOMENT_STATUS.PREVIEW_READY || !previewAsset(moment)) return null;
+  if (!moment || !COLLECTION_VISIBLE_STATUS.has(moment.status) || !previewAsset(moment)) return null;
   const data = renderData(moment);
-  const momentType = moment.momentType ?? moment.moment_type;
+  const momentType = momentTypeOf(moment);
 
   return Object.freeze({
     kind: "BIRDIE_MOMENT_UPSELL",
@@ -59,9 +86,9 @@ export function buildPostRoundUpsellViewModel(moment) {
   });
 }
 
-export function buildMomentDetailViewModel(moment, pricing = {}) {
+export function buildMomentDetailViewModel(moment) {
   const data = renderData(moment);
-  const momentType = moment.momentType ?? moment.moment_type;
+  const momentType = momentTypeOf(moment);
   const preview = previewAsset(moment);
 
   return Object.freeze({
@@ -85,27 +112,74 @@ export function buildMomentDetailViewModel(moment, pricing = {}) {
           improvement: data.personalBestData.improvement
         }
       : null,
-    products: [
-      {
-        productType: momentType === MOMENT_TYPE.PERSONAL_BEST
-          ? PRODUCT_TYPE.DIGITAL_PERSONAL_BEST
-          : PRODUCT_TYPE.DIGITAL_ROUND,
-        fulfillmentType: FULFILLMENT_TYPE.DIGITAL,
-        title: "Digitale Edition",
-        price: euro(momentType === MOMENT_TYPE.PERSONAL_BEST ? pricing.personalBestDigital : pricing.roundDigital),
-        ctaLabel: "Digitale Edition kaufen"
-      },
-      {
-        productType: PRODUCT_TYPE.PRINT_A3,
-        fulfillmentType: FULFILLMENT_TYPE.PRINT,
-        title: "Premium A3 Print",
-        price: euro(pricing.premiumA3Print),
-        ctaLabel: "Als Premium Print bestellen"
-      }
-    ],
+    digital: {
+      access: "FREE_PRIVATE",
+      title: "Digitaler Birdie Moment",
+      price: "Kostenlos",
+      collectionHref: "/moments",
+      downloadHref: `/moments/${encodeURIComponent(moment.id)}/download`,
+      ctaLabel: "Kostenlos herunterladen",
+      paymentRequired: false,
+      entitlementRequired: false
+    },
+    physicalUpsell: {
+      productType: BIRDIE_MOMENT_A4_PRINT_TARGET.productType,
+      title: BIRDIE_MOMENT_A4_PRINT_TARGET.title,
+      targetPrice: `${euro(BIRDIE_MOMENT_A4_PRINT_TARGET.targetPriceEur)} inkl. Versand Deutschland`,
+      shippingScope: BIRDIE_MOMENT_A4_PRINT_TARGET.shippingScope,
+      shippingIncluded: true,
+      economicsStatus: BIRDIE_MOMENT_A4_PRINT_TARGET.economicsStatus,
+      availability: BIRDIE_MOMENT_A4_PRINT_TARGET.availability,
+      productionClaim: false,
+      ctaEnabled: false,
+      ctaLabel: "Print in Vorbereitung"
+    },
     backAction: {
-      label: "Zurück",
-      href: "/"
+      label: "Zur Collection",
+      href: "/moments"
     }
+  });
+}
+
+function buildCollectionItem(moment) {
+  const data = renderData(moment);
+  const momentType = momentTypeOf(moment);
+  return Object.freeze({
+    momentId: moment.id,
+    roundId: roundIdOf(moment),
+    momentType,
+    momentLabel: MOMENT_LABEL[momentType] ?? "Birdie Moment",
+    previewAsset: previewAsset(moment),
+    courseName: data.courseName,
+    playedAt: data.playedAt,
+    totalScore: data.totalScore,
+    holesPlayed: data.holesPlayed,
+    detailHref: `/moments/${encodeURIComponent(moment.id)}`,
+    downloadHref: `/moments/${encodeURIComponent(moment.id)}/download`
+  });
+}
+
+export function buildMomentCollectionViewModel(moments = []) {
+  const byRound = new Map();
+
+  for (const moment of moments) {
+    if (!moment || !COLLECTION_VISIBLE_STATUS.has(moment.status) || !previewAsset(moment)) continue;
+    const roundId = roundIdOf(moment);
+    if (!roundId) continue;
+    const group = byRound.get(roundId) ?? [];
+    group.push(moment);
+    byRound.set(roundId, group);
+  }
+
+  const selected = [...byRound.values()]
+    .map((group) => selectPrimaryPostRoundMoment(group))
+    .filter(Boolean)
+    .sort((a, b) => String(createdAtOf(b)).localeCompare(String(createdAtOf(a))));
+
+  return Object.freeze({
+    kind: "BIRDIE_MOMENT_COLLECTION",
+    title: "Deine Birdie Moments",
+    access: "PRIVATE_OWNER_ONLY",
+    items: selected.map(buildCollectionItem)
   });
 }
