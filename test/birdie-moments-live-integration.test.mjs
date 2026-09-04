@@ -101,6 +101,34 @@ test("Scorecard save is authoritative and Moments runs strictly after completed 
   assert.deepEqual(result.birdieMoment.momentIds, ["moment-1"]);
 });
 
+test("client-supplied ownership and completion flags cannot trigger Moments for a persisted draft", async () => {
+  let momentCalls = 0;
+  const persistedDraft = eighteenHoleRound({ id: "round-draft", userId: "server-owner", status: "draft" });
+  const save = createRoundSaveWithMoments({
+    momentsRepo: {},
+    async saveRound(context) {
+      assert.equal(context.input.user_id, "attacker");
+      assert.equal(context.input.status, "completed");
+      assert.equal(context.input.completed, true);
+      return { round: persistedDraft };
+    },
+    async afterRoundCommittedFn() {
+      momentCalls += 1;
+      return { accepted: true };
+    }
+  });
+
+  const result = await save({
+    authenticatedUser: { id: "server-owner" },
+    input: { user_id: "attacker", status: "completed", completed: true }
+  });
+
+  assert.equal(result.round.status, "draft");
+  assert.equal(result.round.user_id, "server-owner");
+  assert.equal(result.birdieMoment, undefined);
+  assert.equal(momentCalls, 0);
+});
+
 test("draft persistence never emits ROUND_COMPLETED", async () => {
   let momentCalls = 0;
   const save = createRoundSaveWithMoments({
