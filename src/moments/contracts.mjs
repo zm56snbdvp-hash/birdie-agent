@@ -61,7 +61,7 @@ export function buildRenderData(round, momentType, pbData = null) {
     data.personalBestData = {
       previousBestScore: pbData.previousBestScore,
       newBestScore: pbData.newBestScore,
-      improvement: pbData.improvement
+      strokesImproved: pbData.strokesImproved ?? pbData.improvement
     };
   }
 
