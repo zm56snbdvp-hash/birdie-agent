@@ -10,19 +10,20 @@ export function createAwinTransactionClient({
   if (!/^\d+$/.test(String(publisherId || ""))) throw new TypeError("publisherId is required");
   if (typeof accessToken !== "string" || !accessToken) throw new TypeError("accessToken is required");
   if (typeof fetchImpl !== "function") throw new TypeError("fetchImpl is required");
+  assertTimeZone(timezone);
 
   return {
     async listTransactions({ startDate, endDate, advertiserIds = [], status = null, dateType = "transaction" }) {
       const start = normalizeDate(startDate);
       const end = normalizeDate(endDate);
-      if (new Date(end).getTime() < new Date(start).getTime()) throw awinTxError("AWIN_TRANSACTION_WINDOW_INVALID", 400);
-      if (new Date(end).getTime() - new Date(start).getTime() > 31 * 24 * 60 * 60 * 1000) {
+      if (end.getTime() < start.getTime()) throw awinTxError("AWIN_TRANSACTION_WINDOW_INVALID", 400);
+      if (end.getTime() - start.getTime() > 31 * 24 * 60 * 60 * 1000) {
         throw awinTxError("AWIN_TRANSACTION_WINDOW_EXCEEDS_31_DAYS", 400);
       }
 
       const url = new URL(`/publishers/${publisherId}/transactions/`, AWIN_API_BASE);
-      url.searchParams.set("startDate", apiDate(start));
-      url.searchParams.set("endDate", apiDate(end));
+      url.searchParams.set("startDate", apiDate(start, timezone));
+      url.searchParams.set("endDate", apiDate(end, timezone));
       url.searchParams.set("timezone", timezone);
       url.searchParams.set("dateType", dateType);
       if (advertiserIds.length > 0) url.searchParams.set("advertiserId", advertiserIds.map(String).join(","));
@@ -100,7 +101,7 @@ export async function reconcileAwinTransactions({
 
   return {
     seen: byKey.size,
-    matchedClicks: [...byKey.values()].filter((transaction) => Boolean(transaction.clickId)).length
+    withClickRef: [...byKey.values()].filter((transaction) => Boolean(transaction.clickId)).length
   };
 }
 
@@ -124,13 +125,32 @@ function numericString(value) {
 }
 
 function normalizeDate(value) {
-  const date = value instanceof Date ? value : new Date(value);
+  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
   if (!Number.isFinite(date.getTime())) throw awinTxError("AWIN_TRANSACTION_DATE_INVALID", 400);
-  return date.toISOString();
+  return date;
 }
 
-function apiDate(iso) {
-  return iso.slice(0, 19);
+function apiDate(date, timezone) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}:${values.second}`;
+}
+
+function assertTimeZone(timezone) {
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: timezone }).format(new Date(0));
+  } catch {
+    throw new TypeError("timezone must be a valid IANA time zone");
+  }
 }
 
 function clean(value) {
