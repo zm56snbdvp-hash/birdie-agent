@@ -9,8 +9,12 @@ import {
   selectPrimaryPostRoundMoment
 } from "./view-models.mjs";
 
-function userIdOf(moment) {
-  return moment?.userId ?? moment?.user_id ?? null;
+function userIdOf(value) {
+  return value?.userId ?? value?.user_id ?? null;
+}
+
+function roundIdOf(moment) {
+  return moment?.roundId ?? moment?.round_id ?? null;
 }
 
 export async function getPostRoundUpsell({ roundId, authUserId, repo }) {
@@ -50,6 +54,7 @@ export async function handleMomentDetailRequest({ momentId, authUserId, repo }) 
  *
  * Required repo contract:
  * - listMomentsForUser(authUserId): ownership-scoped query over Birdie Moments
+ * - getRound(roundId): authoritative persisted source-round lookup
  */
 export async function handleMomentCollectionRequest({ authUserId, repo }) {
   if (!authUserId) {
@@ -63,13 +68,26 @@ export async function handleMomentCollectionRequest({ authUserId, repo }) {
   if (typeof repo?.listMomentsForUser !== "function") {
     throw new TypeError("repo.listMomentsForUser is required for the Moments collection");
   }
+  if (typeof repo?.getRound !== "function") {
+    throw new TypeError("repo.getRound is required for Collection round-ownership verification");
+  }
 
   const moments = await repo.listMomentsForUser(authUserId);
-  const owned = (moments ?? []).filter((moment) => userIdOf(moment) === authUserId);
+  const momentOwned = (moments ?? []).filter((moment) => userIdOf(moment) === authUserId);
+  const roundOwnership = new Map();
+
+  for (const moment of momentOwned) {
+    const roundId = roundIdOf(moment);
+    if (!roundId || roundOwnership.has(roundId)) continue;
+    const round = await repo.getRound(roundId);
+    roundOwnership.set(roundId, Boolean(round && userIdOf(round) === authUserId));
+  }
+
+  const fullyOwned = momentOwned.filter((moment) => roundOwnership.get(roundIdOf(moment)) === true);
 
   return {
     status: 200,
     cacheControl: "private, no-store",
-    body: buildMomentCollectionViewModel(owned)
+    body: buildMomentCollectionViewModel(fullyOwned)
   };
 }
