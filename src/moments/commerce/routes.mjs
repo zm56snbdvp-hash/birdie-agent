@@ -5,6 +5,7 @@ import {
   handleMomentPaymentWebhook,
   startMomentCheckout
 } from "./checkout-service.mjs";
+import { MomentAuthorizationError } from "./security.mjs";
 
 function decode(value) {
   try { return decodeURIComponent(value); }
@@ -99,6 +100,11 @@ export async function routeMomentCommerceRequest({
   } catch (error) {
     if (error instanceof MomentCheckoutError) {
       json(error.status, { success: false, error: error.code });
+      return true;
+    }
+    if (error instanceof MomentAuthorizationError) {
+      const status = error.code === "UNAUTHENTICATED" ? 401 : 404;
+      json(status, { success: false, error: error.code });
       return true;
     }
     throw error;
