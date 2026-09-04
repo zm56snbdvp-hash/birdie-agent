@@ -1,0 +1,11 @@
+[
+  {"file":"card-artwork-Bc7-dFuR.js","sha256":"7a989fa71ec3f36d6b796aa8e39766b72f1b521097df5bdfb2861545240a23ac","bytes":37323},
+  {"file":"card-vault-pf6kGtpX.js","sha256":"d0147a556f0235bc538d50aa12a0174d9459e1a4020323496fc9f4ad9c3733a2","bytes":17033},
+  {"file":"deck-builder-Jl9Gz9Z9.js","sha256":"33c1840eb929767d44d6b4b7a1b74677a2a7777cc1d5ad0e174008c26b6aba34","bytes":6327},
+  {"file":"game-app-D-PPPVPB.js","sha256":"1a3efa0dc9a03ac597b8856fc9c2692071fbbb917b56cae1d3d8f8cb0f42981c","bytes":59338},
+  {"file":"game-engine-BHNViZ1-.js","sha256":"ad735b5f4c93573505257cd55ba86355f9d5c8c22f8c3721ce5db608cba9e42b","bytes":51984},
+  {"file":"golf-scorecard-Dut-vRpH.js","sha256":"0de3290a8a9a7e1d7fe29fc9422c65f6f5f113855302a02b51410f7b3d919bf6","bytes":12166},
+  {"file":"index-BiRW1UFt.js","sha256":"ed1745b6181b7a27f0c6850db9db334ceab40e13272c240c39324673c18551e5","bytes":82948},
+  {"file":"local-duel-app-DE1tqxHU.js","sha256":"7eb9586fe5b9ebee8be8ffe38c9b76d153b030249621820930be445d22e2220c","bytes":16940},
+  {"file":"starter-deck-h1eKIYcl.js","sha256":"e1b21552405ed1836ca59e8a6b7ba105fba5ca66aa47aeddaf3d5043f3389d78","bytes":888}
+]
