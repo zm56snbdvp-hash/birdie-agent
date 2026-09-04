@@ -81,13 +81,14 @@ export function validateMomentRenderData(data) {
       !pb ||
       !Number.isFinite(pb.previousBestScore) ||
       !Number.isFinite(pb.newBestScore) ||
-      !Number.isFinite(pb.improvement) ||
+      !Number.isFinite(pb.strokesImproved) ||
       pb.newBestScore >= pb.previousBestScore ||
-      pb.improvement !== pb.newBestScore - pb.previousBestScore
+      pb.strokesImproved <= 0 ||
+      pb.strokesImproved !== pb.previousBestScore - pb.newBestScore
     ) {
       throw new MomentRenderError(
         "INVALID_PERSONAL_BEST_DATA",
-        "Personal Best render data must contain a proven lower score and exact improvement"
+        "Personal Best render data must contain a proven lower score and positive exact strokesImproved"
       );
     }
   }
