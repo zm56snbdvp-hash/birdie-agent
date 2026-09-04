@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createAffiliateCommerceService } from "../src/affiliate-commerce/service.mjs";
 import {
   buildAwinAttributedDestination,
@@ -110,6 +111,26 @@ test("Awin transaction client keeps token out of URL and enforces 31-day window"
   );
 });
 
+test("Awin transaction window converts UTC instants into the declared Europe/Berlin timezone", async () => {
+  let requestedUrl = null;
+  const client = createAwinTransactionClient({
+    publisherId: "123",
+    accessToken: "secret-token",
+    timezone: "Europe/Berlin",
+    fetchImpl: async (url) => {
+      requestedUrl = new URL(url);
+      return { ok: true, async json() { return []; } };
+    }
+  });
+  await client.listTransactions({
+    startDate: "2026-09-04T00:00:00Z",
+    endDate: "2026-09-04T01:00:00Z"
+  });
+  assert.equal(requestedUrl.searchParams.get("timezone"), "Europe/Berlin");
+  assert.equal(requestedUrl.searchParams.get("startDate"), "2026-09-04T02:00:00");
+  assert.equal(requestedUrl.searchParams.get("endDate"), "2026-09-04T03:00:00");
+});
+
 test("reconciler deduplicates transaction ids and persists latest view", async () => {
   const upserts = [];
   const client = {
@@ -131,7 +152,7 @@ test("reconciler deduplicates transaction ids and persists latest view", async (
     statuses: ["pending", "approved"]
   });
   assert.equal(result.seen, 1);
-  assert.equal(result.matchedClicks, 1);
+  assert.equal(result.withClickRef, 1);
   assert.equal(upserts.length, 1);
   assert.equal(upserts[0].status, "approved");
 });
@@ -176,4 +197,11 @@ test("D1 store binds click and conversion data without persisting destination UR
   });
   assert.equal(calls.length, 2);
   assert.equal(calls[0].params.includes("https://www.awin1.com/secret"), false);
+});
+
+test("affiliate conversion schema preserves network transactions even without a local click row", async () => {
+  const sql = await readFile(new URL("../db/009_affiliate_commerce.sql", import.meta.url), "utf8");
+  const conversionTable = sql.slice(sql.indexOf("CREATE TABLE IF NOT EXISTS affiliate_conversions"));
+  assert.equal(/FOREIGN KEY\s*\(click_id\)/i.test(conversionTable), false);
+  assert.match(conversionTable, /click_id TEXT/);
 });
