@@ -9,15 +9,17 @@ import {
   selectPrimaryPostRoundMoment
 } from "./view-models.mjs";
 
-function userIdOf(value) {
-  return value?.userId ?? value?.user_id ?? null;
+function userIdOf(value) { return value?.userId ?? value?.user_id ?? null; }
+function roundIdOf(moment) { return moment?.roundId ?? moment?.round_id ?? null; }
+function previewAssetOf(moment) { return moment?.previewAsset ?? moment?.preview_asset ?? null; }
+
+async function authorizedPreviewUrl(moment, assetGateway) {
+  const previewAsset = previewAssetOf(moment);
+  if (!previewAsset || typeof assetGateway?.getAuthorizedPreviewUrl !== "function") return null;
+  return assetGateway.getAuthorizedPreviewUrl({ momentId: moment.id, previewAsset });
 }
 
-function roundIdOf(moment) {
-  return moment?.roundId ?? moment?.round_id ?? null;
-}
-
-export async function getPostRoundUpsell({ roundId, authUserId, repo }) {
+export async function getPostRoundUpsell({ roundId, authUserId, repo, assetGateway }) {
   if (!authUserId) return null;
   if (typeof repo?.getRound !== "function") {
     throw new TypeError("repo.getRound is required for Reveal round-ownership verification");
@@ -28,20 +30,20 @@ export async function getPostRoundUpsell({ roundId, authUserId, repo }) {
 
   const moments = await repo.listMomentsForRound(roundId);
   const owned = (moments ?? []).filter((moment) => userIdOf(moment) === authUserId);
-  return buildPostRoundUpsellViewModel(selectPrimaryPostRoundMoment(owned));
+  const selected = selectPrimaryPostRoundMoment(owned);
+  if (!selected) return null;
+  const previewUrl = await authorizedPreviewUrl(selected, assetGateway);
+  return buildPostRoundUpsellViewModel(selected, { previewUrl });
 }
 
-export async function handleMomentDetailRequest({ momentId, authUserId, repo }) {
+export async function handleMomentDetailRequest({ momentId, authUserId, repo, assetGateway }) {
   try {
-    const { moment } = await getOwnedMomentForOwnedRound({
-      momentId,
-      authUserId,
-      repo
-    });
+    const { moment } = await getOwnedMomentForOwnedRound({ momentId, authUserId, repo });
+    const previewUrl = await authorizedPreviewUrl(moment, assetGateway);
     return {
       status: 200,
       cacheControl: "private, no-store",
-      body: buildMomentDetailViewModel(moment)
+      body: buildMomentDetailViewModel(moment, { previewUrl })
     };
   } catch (error) {
     if (error instanceof MomentAccessError) {
@@ -58,20 +60,11 @@ export async function handleMomentDetailRequest({ momentId, authUserId, repo }) 
 /**
  * Collection is a private read model over existing Birdie Moment rows.
  * No purchase/entitlement record is created for Digital v1.
- *
- * Required repo contract:
- * - listMomentsForUser(authUserId): ownership-scoped query over Birdie Moments
- * - getRound(roundId): authoritative persisted source-round lookup
  */
-export async function handleMomentCollectionRequest({ authUserId, repo }) {
+export async function handleMomentCollectionRequest({ authUserId, repo, assetGateway }) {
   if (!authUserId) {
-    return {
-      status: 401,
-      cacheControl: "private, no-store",
-      body: { error: "AUTH_REQUIRED" }
-    };
+    return { status: 401, cacheControl: "private, no-store", body: { error: "AUTH_REQUIRED" } };
   }
-
   if (typeof repo?.listMomentsForUser !== "function") {
     throw new TypeError("repo.listMomentsForUser is required for the Moments collection");
   }
@@ -91,10 +84,15 @@ export async function handleMomentCollectionRequest({ authUserId, repo }) {
   }
 
   const fullyOwned = momentOwned.filter((moment) => roundOwnership.get(roundIdOf(moment)) === true);
+  const previewUrlsByMomentId = new Map();
+  for (const moment of fullyOwned) {
+    const previewUrl = await authorizedPreviewUrl(moment, assetGateway);
+    if (previewUrl) previewUrlsByMomentId.set(moment.id, previewUrl);
+  }
 
   return {
     status: 200,
     cacheControl: "private, no-store",
-    body: buildMomentCollectionViewModel(fullyOwned)
+    body: buildMomentCollectionViewModel(fullyOwned, { previewUrlsByMomentId })
   };
 }
