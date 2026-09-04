@@ -16,21 +16,12 @@ const base = {
   isCompleted: true
 };
 
-function round(overrides = {}) {
-  return { ...base, ...overrides };
-}
-
+function round(overrides = {}) { return { ...base, ...overrides }; }
 function prior(id, totalScore, holesPlayed = 18, userId = "u-1") {
   return {
-    id,
-    userId,
-    displayName: "Kevin",
-    courseName: "Old Course",
-    playedAt: "2026-08-01T10:00:00+02:00",
-    holesPlayed,
-    totalScore,
-    birdieCount: 1,
-    isCompleted: true
+    id, userId, displayName: "Kevin", courseName: "Old Course",
+    playedAt: "2026-08-01T10:00:00+02:00", holesPlayed, totalScore,
+    birdieCount: 1, isCompleted: true
   };
 }
 
@@ -53,11 +44,11 @@ function memoryRepo(currentRound, previous = []) {
   };
 }
 
-test("true new 18-hole best is detected", () => {
+test("true new 18-hole best is detected with positive strokes-better delta", () => {
   const result = detectPersonalBest(base, [prior("r1", 86), prior("r2", 84)]);
   assert.equal(result.isPersonalBest, true);
   assert.equal(result.previousBestScore, 84);
-  assert.equal(result.improvement, -2);
+  assert.equal(result.improvement, 2);
 });
 
 test("tie is not a PB", () => {
@@ -144,16 +135,12 @@ test("pipeline failure is swallowed by post-commit adapter", async () => {
   assert.equal(result.reason, "MOMENT_PIPELINE_FAILED");
 });
 
-test("historical sandbox round is completed before Moments evaluation and remains completed on failure", async () => {
+test("sandbox round remains completed if Moments evaluation fails", async () => {
   let completed = false;
-  const roundMode = {
-    endRound(roundId) {
-      completed = true;
-      return { roundId, status: "COMPLETED" };
-    }
-  };
   const result = await endSandboxRoundAndEvaluateMoments({
-    roundMode,
+    roundMode: {
+      endRound(roundId) { completed = true; return { roundId, status: "COMPLETED" }; }
+    },
     roundId: "ROUND-0001",
     momentsRepo: { async getRound() { throw new Error("moments unavailable"); } },
     logger: { error() {} }
