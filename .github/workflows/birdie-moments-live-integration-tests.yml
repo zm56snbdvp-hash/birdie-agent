@@ -30,4 +30,17 @@ jobs:
         run: npm install --ignore-scripts --no-audit --no-fund
 
       - name: Run complete repository test suite
-        run: npm test
+        run: |
+          set +e
+          npm test > birdie-moments-test-output.txt 2>&1
+          status=$?
+          cat birdie-moments-test-output.txt
+          exit $status
+
+      - name: Upload test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: birdie-moments-test-output
+          path: birdie-moments-test-output.txt
+          if-no-files-found: error
