@@ -33,11 +33,24 @@ export function createBirdieMomentsRuntime({
     throw new TypeError("Birdie Moments runtime adapters are incomplete");
   }
 
+  // Production exactly-once boundary: one internal order row is insufficient
+  // when two workers can race between provider search and provider create.
+  if (typeof repo.claimPrintSubmission !== "function") {
+    throw new TypeError("Birdie Moments repo must implement atomic claimPrintSubmission()");
+  }
+  if (typeof printProvider.getOrderStatus !== "function") {
+    throw new TypeError("Print provider must implement server-to-server getOrderStatus()");
+  }
+  if (typeof assetUrlSigner.signProviderAsset !== "function") {
+    throw new TypeError("Print asset signer must implement signProviderAsset()");
+  }
+
   const printFulfillment = createPrintFulfillmentService({
     provider: printProvider,
     repo,
     assetUrlSigner,
-    analytics
+    analytics,
+    now
   });
 
   return Object.freeze({
