@@ -101,6 +101,25 @@ test("Scorecard save is authoritative and Moments runs strictly after completed 
   assert.deepEqual(result.birdieMoment.momentIds, ["moment-1"]);
 });
 
+test("completed persisted round does not trigger Moments when authenticated owner mismatches", async () => {
+  let momentCalls = 0;
+  const persisted = eighteenHoleRound({ id: "round-owned", userId: "real-owner" });
+  const save = createRoundSaveWithMoments({
+    momentsRepo: {},
+    logger: { error() {} },
+    async saveRound() { return { round: persisted }; },
+    async afterRoundCommittedFn() {
+      momentCalls += 1;
+      return { accepted: true };
+    }
+  });
+
+  const result = await save({ authenticatedUser: { id: "attacker" } });
+  assert.equal(result.round.id, "round-owned");
+  assert.equal(result.birdieMoment, undefined);
+  assert.equal(momentCalls, 0);
+});
+
 test("client-supplied ownership and completion flags cannot trigger Moments for a persisted draft", async () => {
   let momentCalls = 0;
   const persistedDraft = eighteenHoleRound({ id: "round-draft", userId: "server-owner", status: "draft" });
@@ -143,7 +162,7 @@ test("draft persistence never emits ROUND_COMPLETED", async () => {
 });
 
 test("Moments failure remains downstream of a successful Scorecard save", async () => {
-  const persisted = eighteenHoleRound({ id: "round-safe" });
+  const persisted = eighteenHoleRound({ id: "round-safe", userId: "u1" });
   const save = createRoundSaveWithMoments({
     momentsRepo: {},
     logger: { error() {} },
@@ -152,7 +171,7 @@ test("Moments failure remains downstream of a successful Scorecard save", async 
       return { accepted: false, roundId, reason: "MOMENT_PIPELINE_FAILED" };
     }
   });
-  const result = await save({});
+  const result = await save({ authenticatedUser: { id: "u1" } });
   assert.equal(result.round.id, "round-safe");
   assert.equal(result.birdieMoment.evaluated, false);
   assert.equal(result.birdieMoment.reason, "MOMENT_PIPELINE_FAILED");
@@ -165,6 +184,6 @@ test("failed core persistence prevents Moments entirely", async () => {
     async saveRound() { throw new Error("round persistence failed"); },
     async afterRoundCommittedFn() { momentCalls += 1; }
   });
-  await assert.rejects(() => save({}), /round persistence failed/);
+  await assert.rejects(() => save({ authenticatedUser: { id: "u1" } }), /round persistence failed/);
   assert.equal(momentCalls, 0);
 });
