@@ -4,9 +4,13 @@ function authUserId(user) {
   return user?.id ?? user?.userId ?? null;
 }
 
+function defaultPurchaseTokenFactory() {
+  return globalThis.crypto?.randomUUID?.() ?? null;
+}
+
 export function createAppStoreDigitalPurchaseStartHandler({
   authenticate,
-  accountTokenProvider,
+  purchaseTokenFactory = defaultPurchaseTokenFactory,
   repo,
   catalog,
   analytics,
@@ -16,12 +20,16 @@ export function createAppStoreDigitalPurchaseStartHandler({
     const user = await authenticate(req);
     const userId = authUserId(user);
     if (!userId) return json(res, 401, { error: "AUTH_REQUIRED" });
-    if (!accountTokenProvider || typeof accountTokenProvider.getOrCreateForUser !== "function") {
-      return json(res, 503, { error: "APPLE_ACCOUNT_TOKEN_PROVIDER_NOT_CONFIGURED" });
+    if (typeof purchaseTokenFactory !== "function") {
+      return json(res, 503, { error: "APPLE_PURCHASE_TOKEN_FACTORY_NOT_CONFIGURED" });
     }
 
     const momentId = params.momentId ?? req?.params?.momentId;
-    const appAccountToken = await accountTokenProvider.getOrCreateForUser(user);
+    const appAccountToken = await purchaseTokenFactory({ user, userId, momentId });
+    if (typeof appAccountToken !== "string" || !appAccountToken) {
+      return json(res, 503, { error: "APPLE_PURCHASE_TOKEN_FACTORY_NOT_CONFIGURED" });
+    }
+
     const result = await startAppStoreDigitalPurchase({
       authUserId: userId,
       momentId,
