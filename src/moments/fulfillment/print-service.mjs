@@ -12,7 +12,7 @@ export function createPrintFulfillmentService({ provider, repo, assetUrlSigner, 
     if (product.fulfillmentType !== FULFILLMENT_TYPE.PRINT) {
       throw new PrintFulfillmentError("PURCHASE_NOT_PRINT", "Purchase is not a print product");
     }
-    if (!["PAID", "FULFILLING", "FULFILLED"].includes(purchase.fulfillmentStatus)) {
+    if (!["PAID", "FULFILLING", "FULFILLED", "FULFILLMENT_FAILED"].includes(purchase.fulfillmentStatus)) {
       throw new PrintFulfillmentError("PAYMENT_REQUIRED", "Print order requires verified paid purchase");
     }
 
