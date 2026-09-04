@@ -33,6 +33,15 @@ function momentFromRow(row) {
   };
 }
 
+function safeFailureSummary(failure) {
+  const raw = String(failure?.summary ?? failure?.message ?? "Unknown error").slice(0, 200);
+  return raw
+    .replace(/https?:\/\/\S+/gi, "[url]")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]")
+    .replace(/\b(?:sk|pk|whsec|Bearer)[-_A-Za-z0-9]{8,}\b/g, "[secret]")
+    .replace(/\b[A-Za-z0-9_-]{40,}\b/g, "[token]");
+}
+
 /**
  * Minimal Cloudflare D1 repository for the Founder-Delta Birdie Moments Digital v1 flow.
  *
@@ -42,6 +51,10 @@ function momentFromRow(row) {
  *
  * No purchase, payment, StoreKit or entitlement method is implemented here because
  * the active Digital v1 flow is free/private rather than commerce-gated.
+ *
+ * Failure persistence is intentionally aligned with the canonical TASK-142
+ * db/004_moment_telemetry.sql schema (summary + occurred_at). TASK-143 must not
+ * create a second moment_failures table shape.
  */
 export function createD1FreeDigitalMomentsRepository({
   db,
@@ -148,7 +161,8 @@ export function createD1FreeDigitalMomentsRepository({
         stage: "RENDERING",
         code: error?.code ?? error?.name ?? "RENDER_FAILED",
         message: String(error?.message ?? error),
-        momentId
+        momentId,
+        at: timestamp
       });
       return repo.getMoment(momentId);
     },
@@ -164,18 +178,22 @@ export function createD1FreeDigitalMomentsRepository({
 
     async recordMomentFailure(failure) {
       const id = idFactory();
+      const occurredAt = failure.at ?? failure.occurredAt ?? now();
       await db.prepare(`
         INSERT INTO moment_failures (
-          id,stage,code,message,round_id,moment_id,created_at
-        ) VALUES (?1,?2,?3,?4,?5,?6,?7)
+          id,stage,code,summary,round_id,moment_id,purchase_id,product_type,fulfillment_type,occurred_at
+        ) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)
       `).bind(
         id,
         failure.stage ?? "UNKNOWN",
         failure.code ?? "UNKNOWN_ERROR",
-        failure.message ?? "Unknown error",
+        safeFailureSummary(failure),
         failure.roundId ?? null,
         failure.momentId ?? null,
-        now()
+        failure.purchaseId ?? null,
+        failure.productType ?? null,
+        failure.fulfillmentType ?? null,
+        occurredAt
       ).run();
       return id;
     }
