@@ -45,6 +45,7 @@ export function renderMomentSvg(renderData, target = RENDER_TARGET.PREVIEW) {
   const right = width - left;
   const dividerY = Math.round(height * 0.205);
   const scoreY = Math.round(height * (target === RENDER_TARGET.PRINT_A3 ? 0.42 : 0.44));
+  const finalScoreLabelY = dividerY + px(64, width);
   const metricsY = Math.round(height * (target === RENDER_TARGET.PRINT_A3 ? 0.61 : 0.64));
   const footerY = height - Math.max(safe, Math.round(height * 0.065));
   const pbPanelY = Math.round(height * (target === RENDER_TARGET.PRINT_A3 ? 0.73 : 0.76));
@@ -103,7 +104,7 @@ export function renderMomentSvg(renderData, target = RENDER_TARGET.PREVIEW) {
   <text x="${left}" y="${Math.round(height * 0.175)}" fill="#A8B9AF" font-family="Arial, Helvetica, sans-serif" font-size="${px(25, width)}" font-weight="600">${escapeXml(courseName)}  ·  ${escapeXml(playedAt)}</text>
   <line x1="${left}" y1="${dividerY}" x2="${right}" y2="${dividerY}" stroke="${accent}" stroke-opacity="0.28" stroke-width="${px(2, width)}"/>
 
-  <text x="${left}" y="${Math.round(scoreY - px(112, width))}" fill="#8FA99B" font-family="Arial, Helvetica, sans-serif" font-size="${px(20, width)}" font-weight="800" letter-spacing="${px(5, width)}">FINAL SCORE</text>
+  <text x="${left}" y="${finalScoreLabelY}" fill="#8FA99B" font-family="Arial, Helvetica, sans-serif" font-size="${px(20, width)}" font-weight="800" letter-spacing="${px(5, width)}">FINAL SCORE</text>
   <text x="${left}" y="${scoreY}" fill="#F7F2E8" font-family="Georgia, 'Times New Roman', serif" font-size="${px(245, width)}" font-weight="700" letter-spacing="${px(-10, width)}">${escapeXml(renderData.totalScore)}</text>
   <text x="${right}" y="${scoreY - px(18, width)}" fill="${accent}" text-anchor="end" font-family="Georgia, 'Times New Roman', serif" font-size="${px(58, width)}" font-style="italic">${escapeXml(renderData.holesPlayed)} holes</text>
 
