@@ -11,29 +11,24 @@ function defaultPurchaseTokenFactory() {
 
 export function createAppStoreDigitalPurchaseStartHandler({
   authenticate,
-  purchaseTokenFactory,
-  accountTokenProvider,
+  purchaseTokenFactory = defaultPurchaseTokenFactory,
   repo,
   catalog,
   analytics,
   json
 }) {
-  const tokenFactory = typeof purchaseTokenFactory === "function"
-    ? purchaseTokenFactory
-    : accountTokenProvider && typeof accountTokenProvider.getOrCreateForUser === "function"
-      ? ({ user }) => accountTokenProvider.getOrCreateForUser(user)
-      : defaultPurchaseTokenFactory;
-
   return async function startHandler(req, res, params = {}) {
     const user = await authenticate(req);
     const userId = authUserId(user);
     if (!userId) return json(res, 401, { error: "AUTH_REQUIRED" });
-    if (typeof tokenFactory !== "function") {
+    if (typeof purchaseTokenFactory !== "function") {
       return json(res, 503, { error: "APPLE_PURCHASE_TOKEN_FACTORY_NOT_CONFIGURED" });
     }
 
     const momentId = params.momentId ?? req?.params?.momentId;
-    const appAccountToken = await tokenFactory({ user, userId, momentId });
+    // A unique token per purchase intent makes unfinished StoreKit recovery unambiguous.
+    // Identity remains server-authoritative through the stored intent's user_id.
+    const appAccountToken = await purchaseTokenFactory({ user, userId, momentId });
     if (typeof appAccountToken !== "string" || !appAccountToken) {
       return json(res, 503, { error: "APPLE_PURCHASE_TOKEN_FACTORY_NOT_CONFIGURED" });
     }
