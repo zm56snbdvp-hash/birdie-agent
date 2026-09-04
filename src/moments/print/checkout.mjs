@@ -5,6 +5,7 @@ import { printCatalogPrice, printCheckoutMetadata, validateShippingAddress } fro
 
 export async function startPrintCheckout({
   authUserId,
+  contactEmail,
   momentId,
   shippingAddress,
   repo,
@@ -15,7 +16,10 @@ export async function startPrintCheckout({
   cancelUrl
 }) {
   const moment = await getOwnedMoment({ momentId, authUserId, repo });
-  const address = validateShippingAddress(shippingAddress);
+  const address = validateShippingAddress({
+    ...shippingAddress,
+    email: shippingAddress?.email ?? contactEmail ?? null
+  });
   const price = printCatalogPrice(catalog);
 
   const purchase = await repo.ensurePurchase({
