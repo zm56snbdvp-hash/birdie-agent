@@ -109,8 +109,8 @@ actor BirdieMomentsAPI {
     private func perform<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
         let (data, response) = try await send(request)
         guard (200..<300).contains(response.statusCode) else {
-            let code = try? decoder.decode(ErrorEnvelope.self, from: data).error
-            throw BirdieMomentsAPIError.http(status: response.statusCode, code: code ?? nil)
+            let code = (try? decoder.decode(ErrorEnvelope.self, from: data))?.error
+            throw BirdieMomentsAPIError.http(status: response.statusCode, code: code)
         }
         do {
             return try decoder.decode(T.self, from: data)
