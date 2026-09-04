@@ -10,7 +10,8 @@ const migrations = [
   "003_moment_print_orders.sql",
   "004_expand_purchase_fulfillment_status.sql",
   "005_moment_app_store_iap.sql",
-  "006_purchase_shipping_and_failures.sql"
+  "006_purchase_shipping_and_failures.sql",
+  "008_unique_app_store_purchase_tokens.sql"
 ];
 
 function migrate(db) {
