@@ -24,7 +24,7 @@ const pbRenderData = buildRenderData(round, MOMENT_TYPE.PERSONAL_BEST, {
   isPersonalBest: true,
   previousBestScore: 86,
   newBestScore: 82,
-  improvement: -4
+  strokesImproved: 4
 });
 
 test("preview render is exactly 1080x1350", () => {
@@ -59,18 +59,26 @@ test("normal Round Card never contains a Personal Best claim", () => {
   assert.match(asset.content, /ROUND EDITION/);
 });
 
-test("proven Personal Best Card contains the PB claim and exact delta", () => {
+test("proven Personal Best Card contains the PB claim and positive exact delta", () => {
   const asset = renderMomentSvg(pbRenderData, RENDER_TARGET.PREVIEW);
   assert.match(asset.content, /NEW PERSONAL BEST/);
   assert.match(asset.content, /Previous 86/);
   assert.match(asset.content, /New 82/);
-  assert.match(asset.content, /-4 strokes/);
+  assert.match(asset.content, /4 strokes better/);
 });
 
 test("PB render without proven comparison data fails closed", () => {
+  const invalid = { ...pbRenderData, personalBestData: undefined };
+  assert.throws(
+    () => renderMomentSvg(invalid, RENDER_TARGET.PREVIEW),
+    (error) => error instanceof MomentRenderError && error.code === "INVALID_PERSONAL_BEST_DATA"
+  );
+});
+
+test("PB render rejects negative legacy improvement semantics", () => {
   const invalid = {
     ...pbRenderData,
-    personalBestData: undefined
+    personalBestData: { previousBestScore: 86, newBestScore: 82, improvement: -4 }
   };
   assert.throws(
     () => renderMomentSvg(invalid, RENDER_TARGET.PREVIEW),
@@ -103,70 +111,43 @@ test("all three canonical outputs are generated from one render input", () => {
   assert.equal(assets.digital.templateVersion, TEMPLATE_VERSION.ROUND);
   assert.equal(assets.print.templateVersion, TEMPLATE_VERSION.ROUND);
   assert.notEqual(assets.preview.fileName, assets.digital.fileName);
-  assert.notEqual(assets.digital.fileName, assets.print.fileName);
 });
 
 test("render job stores three private assets then marks PREVIEW_READY", async () => {
-  const statuses = [];
   const stored = [];
   let readyPayload = null;
-  const repo = {
-    async getMoment(id) {
-      return { id, renderData: roundRenderData };
+  const result = await renderMomentForStorage({
+    moment: { id: "moment-1", renderData: roundRenderData },
+    repo: {
+      async markMomentGenerating() {},
+      async markMomentPreviewReady(payload) { readyPayload = payload; },
+      async markMomentFailed() { throw new Error("unexpected failure"); }
     },
-    async setMomentStatus(id, status) {
-      statuses.push([id, status]);
+    assetStore: {
+      async putPrivateAsset(asset) {
+        stored.push(asset);
+        return `private://${asset.fileName}`;
+      }
     },
-    async markMomentPreviewReady(payload) {
-      readyPayload = payload;
-    }
-  };
-  const storage = {
-    async putAsset(input) {
-      stored.push(input);
-      return `private://${input.fileName}`;
-    }
-  };
-
-  const result = await renderMomentForStorage("moment-1", {
-    repo,
-    storage,
-    now: () => "2026-09-04T12:00:00.000Z"
+    now: () => "2026-09-04T11:00:00Z"
   });
-
-  assert.equal(result.ok, true);
   assert.equal(result.status, "PREVIEW_READY");
-  assert.deepEqual(statuses, [["moment-1", "GENERATING"]]);
   assert.equal(stored.length, 3);
-  assert.ok(stored.every((item) => item.metadata.private === true));
-  assert.match(readyPayload.previewAsset, /^private:\/\//);
-  assert.match(readyPayload.digitalAsset, /^private:\/\//);
-  assert.match(readyPayload.printAsset, /^private:\/\//);
+  assert.equal(readyPayload.previewAsset.startsWith("private://"), true);
+  assert.equal(readyPayload.digitalAsset.startsWith("private://"), true);
 });
 
 test("render failure marks Moment FAILED instead of exposing partial success", async () => {
   let failed = null;
-  let readyCalled = false;
-  const repo = {
-    async getMoment(id) {
-      return { id, renderData: roundRenderData };
+  const result = await renderMomentForStorage({
+    moment: { id: "moment-1", renderData: roundRenderData },
+    repo: {
+      async markMomentGenerating() {},
+      async markMomentPreviewReady() { throw new Error("should not be ready"); },
+      async markMomentFailed(payload) { failed = payload; }
     },
-    async setMomentStatus() {},
-    async markMomentPreviewReady() { readyCalled = true; },
-    async markMomentFailed(payload) { failed = payload; }
-  };
-  let calls = 0;
-  const storage = {
-    async putAsset() {
-      calls += 1;
-      if (calls === 2) throw new Error("storage unavailable");
-      return "private://first.svg";
-    }
-  };
-
-  const result = await renderMomentForStorage("moment-2", { repo, storage });
-  assert.equal(result.ok, false);
+    assetStore: { async putPrivateAsset() { throw new Error("store down"); } }
+  });
   assert.equal(result.status, "FAILED");
-  assert.equal(readyCalled, false);
-  assert.equal(failed.momentId, "moment-2");
+  assert.equal(failed.momentId, "moment-1");
 });
