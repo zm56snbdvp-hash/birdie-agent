@@ -1,0 +1,13 @@
+{
+  "knownProductRoutes": ["/deck","/duell","/fortschritt","/karten","/scorecard","/spiel"],
+  "recoveredFeatureBundles": {
+    "localDuel": "local-duel-app-DE1tqxHU.js",
+    "collectionAndBooster": "card-vault-pf6kGtpX.js",
+    "game": "game-app-D-PPPVPB.js",
+    "gameEngine": "game-engine-BHNViZ1-.js",
+    "scorecard": "golf-scorecard-Dut-vRpH.js",
+    "deckBuilder": "deck-builder-Jl9Gz9Z9.js",
+    "cardCatalogAndArtwork": "card-artwork-Bc7-dFuR.js",
+    "starterDeck": "starter-deck-h1eKIYcl.js"
+  }
+}
