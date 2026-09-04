@@ -1,0 +1,24 @@
+{
+  "deploymentVersion": "a19bcfc2-99f0-46c4-8fb1-892a368f6e73",
+  "catalogBundle": "card-artwork-Bc7-dFuR.js",
+  "unsafeResolver": {
+    "regex": "/(?:BW1-|BW-E01-)?(\\d{3})$/",
+    "pathTemplate": "/assets/cards/edition-01/BW-E01-${physicalNumberSuffix}-standard.jpg",
+    "validatedFields": [],
+    "finding": "physical-number-only lookup; no cardId/family/name/artworkVersion validation"
+  },
+  "sharedArtworkConsumers": [
+    "card-vault-pf6kGtpX.js",
+    "deck-builder-Jl9Gz9Z9.js",
+    "game-app-D-PPPVPB.js",
+    "local-duel-app-DE1tqxHU.js"
+  ],
+  "deckBuilderFamilyChecks": ["CLUB","BALL","SPIN","TACTIC"],
+  "legacyArtworkRanges": [
+    {"first":1,"last":48,"category":"COMMUNITY"},
+    {"first":49,"last":64,"category":"PLACES"},
+    {"first":65,"last":80,"category":"GEAR"},
+    {"first":81,"last":92,"category":"MOMENTS"},
+    {"first":93,"last":96,"category":"SIGNATURE"}
+  ]
+}
