@@ -4,7 +4,7 @@
  */
 
 function finiteScore(value) {
-  return Number.isFinite(value) && value > 0;
+  return Number.isInteger(value) && value > 0;
 }
 
 export function detectPersonalBest(currentRound, previousRounds) {
@@ -30,9 +30,7 @@ export function detectPersonalBest(currentRound, previousRounds) {
   }
 
   const previousBestScore = Math.min(...comparable.map((round) => round.totalScore));
-  const isPersonalBest = currentRound.totalScore < previousBestScore;
-
-  if (!isPersonalBest) {
+  if (currentRound.totalScore >= previousBestScore) {
     return {
       isPersonalBest: false,
       reason: currentRound.totalScore === previousBestScore ? "TIED_BEST" : "NOT_BETTER",
@@ -45,8 +43,7 @@ export function detectPersonalBest(currentRound, previousRounds) {
     reason: "NEW_PERSONAL_BEST",
     previousBestScore,
     newBestScore: currentRound.totalScore,
-    // Canonical v1 convention: improvement is the score delta.
-    // Example: 86 -> 82 = -4 strokes.
-    improvement: currentRound.totalScore - previousBestScore
+    // Founder-Go contract: positive strokes better. Example 82 -> 78 = 4.
+    improvement: previousBestScore - currentRound.totalScore
   };
 }
