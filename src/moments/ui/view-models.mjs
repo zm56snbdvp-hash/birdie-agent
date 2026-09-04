@@ -23,78 +23,49 @@ export const BIRDIE_MOMENT_A4_PRINT_TARGET = Object.freeze({
 
 function euro(amount) {
   if (!Number.isFinite(amount) || amount < 0) return null;
-  return new Intl.NumberFormat("de-DE", {
-    style: "currency",
-    currency: "EUR"
-  }).format(amount);
+  return new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(amount);
 }
 
-function renderData(moment) {
-  return moment?.renderData ?? moment?.render_data ?? {};
-}
-
-function previewAsset(moment) {
-  return moment?.previewAsset ?? moment?.preview_asset ?? null;
-}
-
-function momentTypeOf(moment) {
-  return moment?.momentType ?? moment?.moment_type;
-}
-
-function roundIdOf(moment) {
-  return moment?.roundId ?? moment?.round_id;
-}
-
-function createdAtOf(moment) {
-  return moment?.createdAt ?? moment?.created_at ?? renderData(moment)?.playedAt ?? "";
-}
+function renderData(moment) { return moment?.renderData ?? moment?.render_data ?? {}; }
+function previewAsset(moment) { return moment?.previewAsset ?? moment?.preview_asset ?? null; }
+function momentTypeOf(moment) { return moment?.momentType ?? moment?.moment_type; }
+function roundIdOf(moment) { return moment?.roundId ?? moment?.round_id; }
+function createdAtOf(moment) { return moment?.createdAt ?? moment?.created_at ?? renderData(moment)?.playedAt ?? ""; }
 
 export function selectPrimaryPostRoundMoment(moments = []) {
   const ready = moments.filter((moment) =>
-    moment &&
-    COLLECTION_VISIBLE_STATUS.has(moment.status) &&
-    previewAsset(moment)
+    moment && COLLECTION_VISIBLE_STATUS.has(moment.status) && previewAsset(moment)
   );
-
   return ready.find((moment) => momentTypeOf(moment) === MOMENT_TYPE.PERSONAL_BEST)
     ?? ready.find((moment) => momentTypeOf(moment) === MOMENT_TYPE.ROUND)
     ?? null;
 }
 
-export function buildPostRoundUpsellViewModel(moment) {
+export function buildPostRoundUpsellViewModel(moment, { previewUrl = null } = {}) {
   if (!moment || !COLLECTION_VISIBLE_STATUS.has(moment.status) || !previewAsset(moment)) return null;
   const data = renderData(moment);
   const momentType = momentTypeOf(moment);
-
   return Object.freeze({
     kind: "BIRDIE_MOMENT_UPSELL",
     title: "Dein Birdie Moment ist fertig.",
-    previewAsset: previewAsset(moment),
+    previewUrl,
     courseName: data.courseName,
     totalScore: data.totalScore,
     momentType,
     momentLabel: MOMENT_LABEL[momentType] ?? "Birdie Moment",
-    primaryAction: {
-      label: "Moment ansehen",
-      href: `/moments/${encodeURIComponent(moment.id)}`
-    },
-    secondaryAction: {
-      label: "Später",
-      action: "DISMISS"
-    },
+    primaryAction: { label: "Moment ansehen", href: `/moments/${encodeURIComponent(moment.id)}` },
+    secondaryAction: { label: "Später", action: "DISMISS" },
     dismissible: true
   });
 }
 
-export function buildMomentDetailViewModel(moment) {
+export function buildMomentDetailViewModel(moment, { previewUrl = null } = {}) {
   const data = renderData(moment);
   const momentType = momentTypeOf(moment);
-  const preview = previewAsset(moment);
-
   return Object.freeze({
     kind: "BIRDIE_MOMENT_DETAIL",
     momentId: moment.id,
-    previewAsset: preview,
+    previewUrl,
     momentType,
     momentLabel: MOMENT_LABEL[momentType] ?? "Birdie Moment",
     round: {
@@ -109,7 +80,7 @@ export function buildMomentDetailViewModel(moment) {
       ? {
           previousBestScore: data.personalBestData.previousBestScore,
           newBestScore: data.personalBestData.newBestScore,
-          improvement: data.personalBestData.improvement
+          strokesImproved: data.personalBestData.strokesImproved
         }
       : null,
     digital: {
@@ -134,14 +105,11 @@ export function buildMomentDetailViewModel(moment) {
       ctaEnabled: false,
       ctaLabel: "Print in Vorbereitung"
     },
-    backAction: {
-      label: "Zur Collection",
-      href: "/moments"
-    }
+    backAction: { label: "Zur Collection", href: "/moments" }
   });
 }
 
-function buildCollectionItem(moment) {
+function buildCollectionItem(moment, previewUrl) {
   const data = renderData(moment);
   const momentType = momentTypeOf(moment);
   return Object.freeze({
@@ -149,7 +117,7 @@ function buildCollectionItem(moment) {
     roundId: roundIdOf(moment),
     momentType,
     momentLabel: MOMENT_LABEL[momentType] ?? "Birdie Moment",
-    previewAsset: previewAsset(moment),
+    previewUrl: previewUrl ?? null,
     courseName: data.courseName,
     playedAt: data.playedAt,
     totalScore: data.totalScore,
@@ -159,9 +127,8 @@ function buildCollectionItem(moment) {
   });
 }
 
-export function buildMomentCollectionViewModel(moments = []) {
+export function buildMomentCollectionViewModel(moments = [], { previewUrlsByMomentId = new Map() } = {}) {
   const byRound = new Map();
-
   for (const moment of moments) {
     if (!moment || !COLLECTION_VISIBLE_STATUS.has(moment.status) || !previewAsset(moment)) continue;
     const roundId = roundIdOf(moment);
@@ -180,6 +147,6 @@ export function buildMomentCollectionViewModel(moments = []) {
     kind: "BIRDIE_MOMENT_COLLECTION",
     title: "Deine Birdie Moments",
     access: "PRIVATE_OWNER_ONLY",
-    items: selected.map(buildCollectionItem)
+    items: selected.map((moment) => buildCollectionItem(moment, previewUrlsByMomentId.get(moment.id)))
   });
 }
