@@ -1,4 +1,5 @@
 import { COMMERCE_CATEGORY, isSafeHttpsUrl } from "../contracts.mjs";
+import { isTrustedAwinTrackingUrl } from "./awin-attribution.mjs";
 
 const CATEGORY_RULES = [
   { category: COMMERCE_CATEGORY.RANGEFINDER, patterns: [/range\s?finder/i, /golf\s?gps/i, /distance\s?finder/i] },
@@ -32,7 +33,7 @@ export function mapAwinProduct(row, { region = "DE", priority = 0, categoryResol
   const merchantId = clean(row?.merchant_id) || "unknown";
   const awinProductId = clean(row?.aw_product_id) || clean(row?.merchant_product_id);
 
-  if (!category || !awinProductId || !isSafeHttpsUrl(affiliateUrl) || price === null) return null;
+  if (!category || !awinProductId || !isTrustedAwinTrackingUrl(affiliateUrl) || price === null) return null;
 
   return {
     id: `awin:${merchantId}:${awinProductId}`,
