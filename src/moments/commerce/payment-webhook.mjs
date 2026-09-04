@@ -4,12 +4,14 @@ import {
   MomentCommerceError,
   assertPaidEventMatchesPurchase
 } from "./contracts.mjs";
+import { MOMENT_ANALYTICS_EVENT, emitMomentAnalytics } from "../analytics/events.mjs";
 
 export async function handlePaymentWebhook({
   rawBody,
   signature,
   paymentProvider,
   repo,
+  analytics,
   now = () => new Date().toISOString()
 }) {
   const event = await paymentProvider.verifyWebhook({ rawBody, signature });
@@ -70,6 +72,23 @@ export async function handlePaymentWebhook({
   if (result?.duplicate === true) {
     return { processed: true, duplicate: true, status: PAYMENT_STATUS.PAID, purchaseId: purchase.id };
   }
+
+  const eventName = purchase.fulfillmentType === FULFILLMENT_TYPE.DIGITAL
+    ? MOMENT_ANALYTICS_EVENT.DIGITAL_PURCHASE_COMPLETED
+    : MOMENT_ANALYTICS_EVENT.PRINT_PURCHASE_COMPLETED;
+
+  await emitMomentAnalytics(analytics, eventName, {
+    userId: purchase.userId,
+    roundId: moment.roundId,
+    momentId: moment.id,
+    momentType: moment.momentType,
+    productType: purchase.productType,
+    fulfillmentType: purchase.fulfillmentType,
+    purchaseId: purchase.id,
+    amountMinor: purchase.amountMinor,
+    currency: purchase.currency,
+    status: PAYMENT_STATUS.PAID
+  });
 
   return {
     processed: true,
