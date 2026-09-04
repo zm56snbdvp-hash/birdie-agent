@@ -1,4 +1,5 @@
 import { getOwnedMoment } from "../ui/access.mjs";
+import { MOMENT_ANALYTICS_EVENT, emitMomentAnalytics } from "../analytics/events.mjs";
 import {
   FULFILLMENT_TYPE,
   PAYMENT_STATUS,
@@ -23,6 +24,7 @@ export async function startDigitalCheckout({
   repo,
   paymentProvider,
   catalog,
+  analytics,
   successUrl,
   cancelUrl
 }) {
@@ -71,6 +73,19 @@ export async function startDigitalCheckout({
   await repo.attachPaymentReference({
     purchaseId: purchase.id,
     paymentReference: session.paymentReference
+  });
+
+  await emitMomentAnalytics(analytics, MOMENT_ANALYTICS_EVENT.DIGITAL_PURCHASE_STARTED, {
+    userId: authUserId,
+    roundId: moment.roundId,
+    momentId: moment.id,
+    momentType: moment.momentType,
+    productType,
+    fulfillmentType: FULFILLMENT_TYPE.DIGITAL,
+    purchaseId: purchase.id,
+    amountMinor: price.amountMinor,
+    currency: price.currency,
+    status: "CHECKOUT_READY"
   });
 
   return {
