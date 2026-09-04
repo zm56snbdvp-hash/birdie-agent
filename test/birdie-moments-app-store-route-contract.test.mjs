@@ -8,21 +8,24 @@ import {
 test("App Store native route paths are stable and POST-only", () => {
   assert.equal(APP_STORE_MOMENTS_ROUTES.START_DIGITAL_PURCHASE, "/api/moments/:momentId/app-store/start");
   assert.equal(APP_STORE_MOMENTS_ROUTES.CONFIRM_DIGITAL_PURCHASE, "/api/moment-purchases/:purchaseId/app-store/confirm");
+  assert.equal(APP_STORE_MOMENTS_ROUTES.RECOVER_DIGITAL_PURCHASE, "/api/moment-purchases/app-store/recover");
 
   const noop = async () => null;
   const routes = createAppStoreMomentsRouteDefinitions({
     authenticate: noop,
-    accountTokenProvider: { getOrCreateForUser: noop },
+    purchaseTokenFactory: () => "00000000-0000-4000-8000-000000000001",
     repo: {},
     catalog: {},
     analytics: null,
     parseBody: noop,
     appleVerifier: {},
+    intentLookup: {},
     json: noop
   });
 
   assert.deepEqual(routes.map(({ method, path }) => ({ method, path })), [
     { method: "POST", path: "/api/moments/:momentId/app-store/start" },
-    { method: "POST", path: "/api/moment-purchases/:purchaseId/app-store/confirm" }
+    { method: "POST", path: "/api/moment-purchases/:purchaseId/app-store/confirm" },
+    { method: "POST", path: "/api/moment-purchases/app-store/recover" }
   ]);
 });
