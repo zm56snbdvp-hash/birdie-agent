@@ -42,7 +42,7 @@ jobs:
           GELATO_PRODUCT_UID: ${{ vars.GELATO_PRODUCT_UID }}
         run: |
           set -euo pipefail
-          npm run moments:staging:check > birdie-moments-staging-result.json
+          node scripts/birdie-moments-staging-bootstrap.mjs > birdie-moments-staging-result.json
 
       - name: Publish sanitized probe summary
         if: always()
