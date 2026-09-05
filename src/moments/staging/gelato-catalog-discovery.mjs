@@ -19,14 +19,34 @@ async function jsonOrThrow(response, label) {
   return body;
 }
 
+function catalogValueUids(values) {
+  const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+  const schemaError = () => new Error("Gelato catalog schema error");
+  if (!Array.isArray(values) && !isRecord(values)) throw schemaError();
+  const entries = Array.isArray(values) ? values.map((value) => [null, value]) : Object.entries(values);
+  const uids = new Set();
+  for (const [dictionaryKey, value] of entries) {
+    const uid = value?.productAttributeValueUid;
+    if (!isRecord(value) || typeof uid !== "string" || !uid.trim()
+      || (dictionaryKey !== null && dictionaryKey !== uid) || uids.has(uid)) {
+      throw schemaError();
+    }
+    uids.add(uid);
+  }
+  return uids;
+}
+
 export async function discoverGelatoA3PosterProducts({
   apiKey,
   fetchImpl = globalThis.fetch,
   target = BIRDIE_MOMENTS_GELATO_TARGET,
-  limit = 200
+  limit = 100
 }) {
   const key = requireText(apiKey, "Gelato API key");
   if (typeof fetchImpl !== "function") throw new Error("fetch implementation is required");
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
+    throw new Error("Gelato discovery limit must be an integer from 1 to 100");
+  }
 
   const headers = { "X-API-KEY": key, accept: "application/json" };
   const catalog = await jsonOrThrow(
@@ -36,15 +56,11 @@ export async function discoverGelatoA3PosterProducts({
     "Gelato catalog"
   );
 
-  const attributes = new Map(
-    (catalog?.productAttributes ?? []).map((entry) => [
-      entry.productAttributeUid,
-      new Set((entry.values ?? []).map((value) => value.productAttributeValueUid))
-    ])
-  );
-
+  if (!Array.isArray(catalog?.productAttributes)) throw new Error("Gelato catalog schema error");
   for (const [attribute, value] of Object.entries(target.requiredAttributes)) {
-    if (!attributes.get(attribute)?.has(value)) {
+    const entries = catalog.productAttributes.filter((entry) => entry?.productAttributeUid === attribute);
+    if (entries.length > 1) throw new Error("Gelato catalog schema error");
+    if (entries.length === 0 || !catalogValueUids(entries[0].values).has(value)) {
       throw new Error(`Gelato catalog ${target.catalogUid} does not expose ${attribute}=${value}`);
     }
   }
