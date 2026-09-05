@@ -88,12 +88,36 @@ jobs:
             node - <<'NODE'
           const fs = require('fs');
           const input = JSON.parse(fs.readFileSync('birdie-moments-staging-result.json', 'utf8'));
+          function safeError(result, provider) {
+            if (result?.status !== 'ERROR') return null;
+            const message = typeof result.message === 'string' ? result.message : '';
+            const httpMatch = message.match(provider === 'appStore'
+              ? /^App Store Connect HTTP ([45][0-9]{2})$/
+              : /^Gelato (?:catalog|product search|product validation) HTTP ([45][0-9]{2})$/);
+            const rawStatus = result.httpStatus;
+            const httpStatus = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599
+              ? rawStatus : (httpMatch ? Number(httpMatch[1]) : null);
+            let category = 'UNCLASSIFIED_ERROR';
+            if (httpStatus === 401) category = 'HTTP_UNAUTHORIZED';
+            else if (httpStatus === 403) category = 'HTTP_FORBIDDEN';
+            else if (httpStatus === 404) category = 'HTTP_NOT_FOUND';
+            else if (httpStatus === 429) category = 'HTTP_RATE_LIMITED';
+            else if (httpStatus >= 500) category = 'HTTP_SERVER_ERROR';
+            else if (httpStatus >= 400) category = 'HTTP_CLIENT_ERROR';
+            else if (message === 'fetch failed') category = 'NETWORK_ERROR';
+            else if (provider === 'appStore' && /^error:[0-9a-f]+:(?:DECODER|PEM|asn1 encoding|elliptic curve) routines:/i.test(message)) category = 'APPLE_KEY_ERROR';
+            else if (provider === 'appStore' && /^Expected exactly one App Store app for [^;\r\n]+; found [0-9]+$/.test(message)) category = 'APPLE_APP_LOOKUP_ERROR';
+            else if (provider === 'gelato' && /^Gelato catalog [^\s\r\n]+ does not expose (?:PaperFormat|Orientation)=[^\s\r\n]+$/.test(message)) category = 'GELATO_CATALOG_ATTRIBUTES_ERROR';
+            else if (provider === 'gelato' && /^Gelato product [^\r\n]+ is not a printable A3 portrait poster$/.test(message)) category = 'GELATO_PRODUCT_VALIDATION_ERROR';
+            return { category, httpStatus };
+          }
           const summary = {
             schemaVersion: input.schemaVersion,
             mode: input.mode,
             sourceRef: '0fe0cf7a39733af45d767e243e143c2e28de9be0',
             appStore: {
               status: input.appStore?.status ?? null,
+              error: safeError(input.appStore, 'appStore'),
               missing: input.appStore?.missing ?? [],
               bundleId: input.appStore?.app?.bundleId ?? input.appStore?.desired?.bundleId ?? 'de.birdieandbreakfast.birdie',
               products: (input.appStore?.products ?? input.appStore?.desired?.products ?? []).map((item) => ({
@@ -105,6 +129,7 @@ jobs:
             },
             gelato: {
               status: input.gelato?.status ?? null,
+              error: safeError(input.gelato, 'gelato'),
               missing: input.gelato?.missing ?? [],
               candidateCount: input.gelato?.candidateCount ?? null
             }
