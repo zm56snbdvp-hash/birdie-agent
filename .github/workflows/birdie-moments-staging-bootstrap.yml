@@ -51,9 +51,9 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "${{ inputs.action }}" == "apply-app-store" ]]; then
-            npm run moments:staging:apply-app-store > birdie-moments-staging-result.json
+            node scripts/birdie-moments-staging-bootstrap.mjs --apply-app-store > birdie-moments-staging-result.json
           else
-            npm run moments:staging:check > birdie-moments-staging-result.json
+            node scripts/birdie-moments-staging-bootstrap.mjs > birdie-moments-staging-result.json
           fi
 
       - name: Publish sanitized status summary
