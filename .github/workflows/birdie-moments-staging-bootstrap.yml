@@ -174,24 +174,33 @@ jobs:
             node - --catalog-shape <<'GELATO_DIAG'
           'use strict';
           const fs = require('node:fs');
-          const URL = 'https://product.gelatoapis.com/v3/catalogs/posters';
+          const GELATO_CATALOG_URL = 'https://product.gelatoapis.com/v3/catalogs/posters';
           const type = value => value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
           const types = values => [...new Set(values.map(type))].sort();
           const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+          const owns = (value, key) => object(value) && Object.prototype.hasOwnProperty.call(value, key);
+          const errorCategory = error => { const category = ({ TypeError: 'TYPE_ERROR', TimeoutError: 'TIMEOUT',
+            AbortError: 'ABORTED', SyntaxError: 'JSON_SYNTAX_ERROR' })[error?.name];
+            return typeof category === 'string' ? category : 'OTHER_ERROR'; };
+          const hasValue = (attribute, expected) => { const values = Array.isArray(attribute) ? attribute :
+            object(attribute) ? attribute.values : undefined; return owns(values, expected) ||
+            (Array.isArray(values) && values.some(value => value === expected || (object(value) && value.productAttributeValueUid === expected))); };
           async function diagnose({ apiKey = process.env.GELATO_API_KEY, probeCatalog = false,
             fetchImpl = globalThis.fetch } = {}) {
-            const output = { headerSyntaxValid: false, catalogHttpStatus: null,
+            const output = { headerSyntaxValid: false, catalogHttpStatus: null, requestErrorCategory: null,
               rootType: 'unavailable', productAttributesType: 'unavailable',
-              attrElementTypes: [], valuesTypes: [], valueElementTypes: [], hasProductAttributeUid: false };
+              attrElementTypes: [], attributeObjectValueTypes: [], valuesTypes: [], valueElementTypes: [],
+              valueObjectElementTypes: [], hasProductAttributeUid: false, hasPaperFormat: false, hasOrientation: false,
+              hasA3: false, hasVer: false };
             const key = typeof apiKey === 'string' ? apiKey.trim() : '';
             if (!key) return output;
             let headers;
             try { headers = new Headers({ 'X-API-KEY': key, accept: 'application/json' }); }
-            catch { return output; }
+            catch { output.requestErrorCategory = 'HEADER_CONSTRUCTION_ERROR'; return output; }
             output.headerSyntaxValid = true;
             if (!probeCatalog) return output;
             try {
-              const response = await fetchImpl(URL, { method: 'GET', headers,
+              const response = await fetchImpl(GELATO_CATALOG_URL, { method: 'GET', headers,
                 redirect: 'error', signal: AbortSignal.timeout(15000) });
               output.catalogHttpStatus = Number.isInteger(response.status) && response.status >= 100 &&
                 response.status <= 599 ? response.status : null;
@@ -200,14 +209,21 @@ jobs:
               output.rootType = type(body);
               const attributes = object(body) ? body.productAttributes : undefined;
               output.productAttributesType = type(attributes);
-              if (!Array.isArray(attributes)) return output;
-              output.attrElementTypes = types(attributes);
-              const values = attributes.map(entry => object(entry) ? entry.values : undefined);
+              const entries = Array.isArray(attributes) ? attributes : object(attributes) ? Object.values(attributes) : [];
+              output.attrElementTypes = Array.isArray(attributes) ? types(attributes) : [];
+              output.attributeObjectValueTypes = object(attributes) ? types(entries) : [];
+              const values = entries.map(entry => Array.isArray(entry) ? entry : object(entry) ? entry.values : undefined);
               output.valuesTypes = types(values);
               output.valueElementTypes = types(values.filter(Array.isArray).flat());
-              output.hasProductAttributeUid = attributes.some(entry => object(entry) &&
-                Object.prototype.hasOwnProperty.call(entry, 'productAttributeUid'));
-            } catch { /* Never serialize error messages, headers, response text, or values. */ }
+              output.valueObjectElementTypes = types(values.filter(object).flatMap(value => Object.values(value)));
+              output.hasProductAttributeUid = entries.some(entry => owns(entry, 'productAttributeUid'));
+              output.hasPaperFormat = owns(attributes, 'PaperFormat') || entries.some(entry => object(entry) && entry.productAttributeUid === 'PaperFormat');
+              output.hasOrientation = owns(attributes, 'Orientation') || entries.some(entry => object(entry) && entry.productAttributeUid === 'Orientation');
+              const paperFormat = owns(attributes, 'PaperFormat') ? attributes.PaperFormat : entries.find(entry => object(entry) && entry.productAttributeUid === 'PaperFormat');
+              const orientation = owns(attributes, 'Orientation') ? attributes.Orientation : entries.find(entry => object(entry) && entry.productAttributeUid === 'Orientation');
+              output.hasA3 = hasValue(paperFormat, 'A3');
+              output.hasVer = hasValue(orientation, 'ver');
+            } catch (error) { output.requestErrorCategory = errorCategory(error); }
             return output;
           }
           module.exports = { diagnose };
@@ -290,13 +306,20 @@ jobs:
               };
               if (name === 'birdie-moments-gelato-diagnostic.json') return {
                 headerSyntaxValid: boolean(data.headerSyntaxValid),
+                requestErrorCategory: choice(data.requestErrorCategory, [null, 'HEADER_CONSTRUCTION_ERROR', 'TYPE_ERROR', 'TIMEOUT', 'ABORTED', 'JSON_SYNTAX_ERROR', 'OTHER_ERROR']),
                 catalogHttpStatus: Number.isInteger(data.catalogHttpStatus) && data.catalogHttpStatus >= 100 && data.catalogHttpStatus <= 599 ? data.catalogHttpStatus : null,
                 rootType: choice(data.rootType, typeNames),
                 productAttributesType: choice(data.productAttributesType, typeNames),
                 attrElementTypes: typeList(data.attrElementTypes),
+                attributeObjectValueTypes: typeList(data.attributeObjectValueTypes),
                 valuesTypes: typeList(data.valuesTypes),
                 valueElementTypes: typeList(data.valueElementTypes),
-                hasProductAttributeUid: boolean(data.hasProductAttributeUid)
+                valueObjectElementTypes: typeList(data.valueObjectElementTypes),
+                hasProductAttributeUid: boolean(data.hasProductAttributeUid),
+                hasPaperFormat: boolean(data.hasPaperFormat),
+                hasOrientation: boolean(data.hasOrientation),
+                hasA3: boolean(data.hasA3),
+                hasVer: boolean(data.hasVer)
               };
               return null;
             }
