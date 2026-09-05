@@ -1,0 +1,91 @@
+name: Birdie Moments Staging Readonly Probe
+
+on:
+  push:
+    branches:
+      - probe/birdie-moments-staging-readonly-v2
+    paths:
+      - .github/workflows/birdie-moments-staging-readonly-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Read-only provider configuration probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: birdie-moments-staging
+
+    steps:
+      - name: Checkout tested Moments integration commit
+        uses: actions/checkout@v4
+        with:
+          ref: 0fe0cf7a39733af45d767e243e143c2e28de9be0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Run read-only staging check
+        shell: bash
+        env:
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
+          APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
+          GELATO_PRODUCT_UID: ${{ vars.GELATO_PRODUCT_UID }}
+        run: |
+          set -euo pipefail
+          npm run moments:staging:check > birdie-moments-staging-result.json
+
+      - name: Publish sanitized probe summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -f birdie-moments-staging-result.json ]]; then
+            node - <<'NODE'
+          const fs = require('fs');
+          const input = JSON.parse(fs.readFileSync('birdie-moments-staging-result.json', 'utf8'));
+          const summary = {
+            schemaVersion: input.schemaVersion,
+            mode: 'READ_ONLY_PROBE',
+            sourceRef: '0fe0cf7a39733af45d767e243e143c2e28de9be0',
+            appStore: {
+              status: input.appStore?.status ?? null,
+              missing: input.appStore?.missing ?? [],
+              bundleId: input.appStore?.app?.bundleId ?? input.appStore?.desired?.bundleId ?? 'de.birdieandbreakfast.birdie',
+              products: (input.appStore?.products ?? input.appStore?.desired?.products ?? []).map((item) => ({
+                productType: item.productType,
+                productId: item.productId,
+                status: item.status ?? null,
+                targetCustomerPriceEUR: item.targetCustomerPrice ?? item.targetCustomerPriceEUR ?? null
+              }))
+            },
+            gelato: {
+              status: input.gelato?.status ?? null,
+              missing: input.gelato?.missing ?? [],
+              candidateCount: input.gelato?.candidateCount ?? null
+            }
+          };
+          fs.writeFileSync('birdie-moments-staging-summary.json', JSON.stringify(summary, null, 2) + '\n');
+          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `## Birdie Moments staging read-only probe\n\n\`\`\`json\n${JSON.stringify(summary, null, 2)}\n\`\`\`\n`);
+          NODE
+          else
+            printf '## Birdie Moments staging read-only probe\n\nNo result file was produced.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload sanitized probe receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: birdie-moments-staging-readonly-probe
+          path: birdie-moments-staging-summary.json
+          if-no-files-found: ignore
+          retention-days: 7
