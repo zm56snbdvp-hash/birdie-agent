@@ -29,7 +29,7 @@ jobs:
       - name: Checkout tested Moments integration commit
         uses: actions/checkout@v4
         with:
-          ref: 0fe0cf7a39733af45d767e243e143c2e28de9be0
+          ref: 79199565a5f8f259559d2fedafdabeefcf341460
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -268,10 +268,12 @@ jobs:
             else if (message === 'fetch failed') category = 'NETWORK_ERROR';
             else if (provider === 'gelato' && (/^Headers\.(?:append|set): "[\s\S]*" is an invalid header value\.$/.test(message) || /^Cannot convert argument to a ByteString because the character at index [0-9]+ has a value of [0-9]+ which is greater than 255\.$/.test(message))) category = 'GELATO_HEADER_FORMAT_ERROR';
             else if (provider === 'gelato' && ([
+              'Gelato catalog schema error',
               '((intermediate value) ?? []).map is not a function',
               '(catalog?.productAttributes ?? []).map is not a function',
               '(entry.values ?? []).map is not a function'
             ].includes(message) || /^Cannot read properties of (?:null|undefined) \(reading 'productAttribute(?:Value)?Uid'\)$/.test(message))) category = 'GELATO_CATALOG_SCHEMA_ERROR';
+            else if (provider === 'gelato' && message === 'Gelato discovery limit must be an integer from 1 to 100') category = 'GELATO_SEARCH_LIMIT_ERROR';
             else if (provider === 'gelato' && [
               '((intermediate value) ?? []).filter is not a function',
               '(search?.products ?? []).filter is not a function'
@@ -332,7 +334,7 @@ jobs:
               appleKey: readDiagnostic('birdie-moments-apple-key-diagnostic.json'),
               gelatoCatalog: readDiagnostic('birdie-moments-gelato-diagnostic.json')
             },
-            sourceRef: '0fe0cf7a39733af45d767e243e143c2e28de9be0',
+            sourceRef: '79199565a5f8f259559d2fedafdabeefcf341460',
             appStore: {
               status: input.appStore?.status ?? null,
               error: safeError(input.appStore, 'appStore'),
