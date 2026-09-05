@@ -46,10 +46,33 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+          APP_STORE_CONNECT_KEY_B64: ${{ inputs.action == 'dry-run' && secrets.APP_STORE_CONNECT_KEY_B64 || '' }}
           GELATO_API_KEY: ${{ secrets.GELATO_API_KEY }}
           GELATO_PRODUCT_UID: ${{ vars.GELATO_PRODUCT_UID }}
         run: |
           set -euo pipefail
+          birdie_asc_key_path=''
+          trap 'if [[ -n "${birdie_asc_key_path:-}" ]]; then rm -f -- "$birdie_asc_key_path"; fi' EXIT
+          if [[ "${{ inputs.action }}" == "dry-run" && -z "${APP_STORE_CONNECT_PRIVATE_KEY//[[:space:]]/}" && -n "${APP_STORE_CONNECT_KEY_B64//[[:space:]]/}" ]]; then
+            birdie_asc_key_path="$(mktemp "$RUNNER_TEMP/birdie-moments-asc-key.XXXXXX")"
+            chmod 600 "$birdie_asc_key_path"
+            export APP_STORE_CONNECT_PRIVATE_KEY_PATH="$birdie_asc_key_path"
+            python3 - <<'PY'
+          import base64
+          import binascii
+          import os
+          from pathlib import Path
+
+          try:
+              key_bytes = base64.b64decode(os.environ["APP_STORE_CONNECT_KEY_B64"], validate=True)
+          except (binascii.Error, ValueError):
+              raise SystemExit("Invalid APP_STORE_CONNECT_KEY_B64 encoding") from None
+          if not key_bytes:
+              raise SystemExit("APP_STORE_CONNECT_KEY_B64 decoded to empty content")
+          Path(os.environ["APP_STORE_CONNECT_PRIVATE_KEY_PATH"]).write_bytes(key_bytes)
+          PY
+          fi
+          unset APP_STORE_CONNECT_KEY_B64
           if [[ "${{ inputs.action }}" == "apply-app-store" ]]; then
             node scripts/birdie-moments-staging-bootstrap.mjs --apply-app-store > birdie-moments-staging-result.json
           else
