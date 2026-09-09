@@ -6,6 +6,8 @@
   "scripts": {
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "typecheck": "tsc -p tsconfig.recovery.json",
-    "verify": "npm run typecheck && npm test"
+    "verify": "npm run typecheck && npm test",
+    "verify:course": "tsc -p tsconfig.course.json && node --experimental-strip-types --test tests/course-flight.test.mjs",
+    "preview:course": "node tools/build-course-preview.mjs"
   }
 }

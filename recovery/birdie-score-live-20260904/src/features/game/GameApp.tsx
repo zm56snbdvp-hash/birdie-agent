@@ -4,6 +4,10 @@ import { CARD_BY_ID } from "../../domain/card-catalog";
 import { CardArtwork } from "../../components/CardArtwork";
 import { createInitialGameCardState, drawAtHoleStart, type GameCardState } from "./card-state";
 
+import { CourseScene } from "./CourseScene";
+import { COURSE_HOLES } from "./shot-engine";
+import type { CourseShot } from "./course-flight";
+
 export interface RecoveredGameLoadout {
   playerCardId: string;
   playerName: string;
@@ -31,7 +35,7 @@ function cardsFromIds(ids: readonly string[]): CanonicalCard[] {
  * The full shot simulator/physics UI is intentionally not claimed as fully
  * decompiled maintainable source in this checkpoint.
  */
-export function GameApp({ loadout }: { loadout: RecoveredGameLoadout }) {
+export function GameApp({ loadout, courseShot }: { loadout: RecoveredGameLoadout; courseShot?: CourseShot }) {
   const [cardState, setCardState] = useState<GameCardState>(() => createInitialGameCardState(loadout));
   const [hole, setHole] = useState(1);
   const [message, setMessage] = useState("Equipment liegt · 5er-Starthand bereit");
@@ -68,6 +72,7 @@ export function GameApp({ loadout }: { loadout: RecoveredGameLoadout }) {
 
   return <main className="min-h-screen bg-[#030a07] p-4 text-[#f5ecd5]" data-recovery-status="CARD_LAYER_RECOVERED"><div className="mx-auto max-w-[1200px]">
     <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#bea052]/20 pb-4"><div><p className="font-serif text-lg tracking-[.2em] text-[#dfc477]">BIRDIEWORLD</p><p className="text-xs text-[#8ea396]">First Edition · Recoverable Card Layer</p></div><div className="text-right"><strong>Loch {hole}/6</strong><p className="text-xs text-[#8ea396]">{message}</p></div></header>
+    <CourseScene hole={COURSE_HOLES[hole - 1]} shot={courseShot}/>
     <section className="mt-5 grid gap-5 lg:grid-cols-[220px_1fr]"><aside className="panel rounded-2xl p-4"><p className="eyebrow">Spieler</p><CardArtwork id={loadout.player.id} physicalNumber={loadout.player.physicalNumber} name={loadout.player.name} className="mt-3"/><h1 className="mt-3 font-serif text-xl">{loadout.playerName}</h1><p className="text-xs text-moss">{loadout.deckName}</p></aside>
       <div className="grid gap-5"><section className="panel rounded-2xl p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Aktives Bag</h2><span className="text-xs text-moss">{installedClubs.length} Schläger · {installedBalls.length} Bälle</span></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[...installedClubs, ...installedBalls].map((card) => <div key={card.id}><CardArtwork id={card.id} physicalNumber={card.physicalNumber} name={card.name} decorative/><p className="mt-1 truncate text-xs">{card.name}</p></div>)}</div></section>
       <section className="panel rounded-2xl p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Aktionshand</h2><span className="text-xs text-moss">{hand.length} Karten</span></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">{hand.map((card) => <div key={card.id}><CardArtwork id={card.id} physicalNumber={card.physicalNumber} name={card.name} decorative/><p className="mt-1 truncate text-xs">{card.name}</p></div>)}</div></section>

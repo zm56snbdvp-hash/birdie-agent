@@ -1,0 +1,128 @@
+{
+  "date": "2026-09-10",
+  "scope": "isolated recovered shot/card client source; not production",
+  "baseCommit": "6dc644372661ed4317227c6b332dc74fef8eb8e5",
+  "engineBlobUnchanged": "f73d2bb599b54e18023b9604f1b3a8de7259cb78",
+  "node": "22.16.0",
+  "typescript": "5.8.3",
+  "strictEngineFlightRendererTypecheck": "PASS",
+  "newNodeTests": {
+    "passed": 17,
+    "total": 17,
+    "holeTimingModeCombinations": 90
+  },
+  "tsxSyntaxTranspilation": {
+    "CourseScene.tsx": "PASS",
+    "GameApp.tsx": "PASS"
+  },
+  "browser": {
+    "scope": "local standalone preview; not a React host or live-device acceptance",
+    "browser": "Chromium (headless)",
+    "passed": 23,
+    "total": 23,
+    "checks": [
+      {
+        "name": "desktop initial idle has no animation loop",
+        "pass": true
+      },
+      {
+        "name": "shot begins with swing",
+        "pass": true
+      },
+      {
+        "name": "flight visible with one scheduled frame",
+        "pass": true
+      },
+      {
+        "name": "same snapshot ID cannot retrigger or allocate another loop",
+        "pass": true
+      },
+      {
+        "name": "settled shot stops its animation loop",
+        "pass": true
+      },
+      {
+        "name": "reset during flight cancels animation and returns idle",
+        "pass": true
+      },
+      {
+        "name": "simulated hidden document pauses time and RAF",
+        "pass": true
+      },
+      {
+        "name": "document visibility resumes one loop without large jump",
+        "pass": true
+      },
+      {
+        "name": "offscreen canvas pauses its animation",
+        "pass": true
+      },
+      {
+        "name": "manual reduced motion skips animation",
+        "pass": true
+      },
+      {
+        "name": "OS reduced motion preference is honored",
+        "pass": true
+      },
+      {
+        "name": "water miss shows penalty phase and engine penalty",
+        "pass": true
+      },
+      {
+        "name": "water drop returns to exact official starting spot",
+        "pass": true
+      },
+      {
+        "name": "putt enters ground roll without flight",
+        "pass": true
+      },
+      {
+        "name": "destroy is idempotent and prevents further playback",
+        "pass": true
+      },
+      {
+        "name": "remount is independently usable",
+        "pass": true
+      },
+      {
+        "name": "unsupported canvas fails with explicit error",
+        "pass": true
+      },
+      {
+        "name": "mobile 390px has no horizontal overflow",
+        "pass": true
+      },
+      {
+        "name": "mobile 390px shot animates",
+        "pass": true
+      },
+      {
+        "name": "mobile 320px has no horizontal overflow",
+        "pass": true
+      },
+      {
+        "name": "mobile 320px shot animates",
+        "pass": true
+      },
+      {
+        "name": "no JavaScript or console errors",
+        "pass": true
+      },
+      {
+        "name": "offline preview makes no network requests",
+        "pass": true
+      }
+    ],
+    "errors": [],
+    "requests": []
+  },
+  "notRun": [
+    "full React host build",
+    "original recovery regression suite",
+    "real phone hardware",
+    "Safari",
+    "original live shot-handler integration"
+  ],
+  "deployment": "NOT_REQUESTED_NOT_PERFORMED"
+}
