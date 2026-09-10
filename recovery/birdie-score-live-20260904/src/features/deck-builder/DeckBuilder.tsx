@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CanonicalCard, CardFamily } from "../../domain/card-catalog";
 import { CardArtwork } from "../../components/CardArtwork";
 import { EmeraldWorldSkin } from "../../components/EmeraldWorldSkin";
+import { EmeraldWorldNav } from "../../components/EmeraldWorldNav";
 import { DECK_RULES, validateDeckSelection } from "./model";
 
 export interface SavedDeck { playerCardId: string | null; cardIds: string[]; }
@@ -43,17 +44,20 @@ export function DeckBuilder({ cards, ownedCardIds, initialDeck }: DeckBuilderPro
   }
 
   if (available.length === 0) {
-    return <main className="bw-world score-shell min-h-dvh text-foreground" data-design-pass="emerald-world-pass-01">
+    return <main className="bw-world score-shell min-h-dvh text-foreground" data-design-pass="emerald-world-pass-02">
       <EmeraldWorldSkin/>
-      <section className="bw-panel mx-auto mt-10 max-w-xl p-7">
-        <p className="bw-kicker">BirdieWorld · Deckbau</p>
-        <h1 className="bw-title mt-3 text-4xl">Sichere erst dein Starter Set.</h1>
-        <a href="/karten" className="bw-gold-button mt-7">Starter Set sichern</a>
-      </section>
+      <div className="bw-page safe-page">
+        <section className="bw-panel mt-10 p-7">
+          <p className="bw-kicker">BirdieWorld · Deckbau</p>
+          <h1 className="bw-title mt-3 text-4xl">Sichere erst dein Starter Set.</h1>
+          <a href="/karten" className="bw-gold-button mt-7">Starter Set sichern</a>
+        </section>
+        <EmeraldWorldNav active="cards"/>
+      </div>
     </main>;
   }
 
-  return <main className="bw-world score-shell min-h-dvh text-foreground" data-design-pass="emerald-world-pass-01">
+  return <main className="bw-world score-shell min-h-dvh text-foreground" data-design-pass="emerald-world-pass-02">
     <EmeraldWorldSkin/>
     <div className="bw-page safe-page">
       <header className="bw-topbar">
@@ -89,10 +93,12 @@ export function DeckBuilder({ cards, ownedCardIds, initialDeck }: DeckBuilderPro
         })}</div>
       </section>)}</div>
 
-      <div className="bw-panel sticky bottom-3 mt-7 flex items-center justify-between gap-3 p-3">
+      <div className="bw-panel mt-7 flex items-center justify-between gap-3 p-3">
         <p className="text-sm text-moss">{message ?? (validation.valid ? "Deck ist spielbereit." : "Vervollständige dein 24-Karten-Deck.")}</p>
         <button type="button" className="bw-gold-button" disabled={saving || !validation.valid} onClick={saveDeck}>{saving ? "Speichert …" : "Deck speichern"}</button>
       </div>
+
+      <EmeraldWorldNav active="cards"/>
     </div>
   </main>;
 }
