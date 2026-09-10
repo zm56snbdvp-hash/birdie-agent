@@ -6,44 +6,56 @@ Stand: 10.09.2026
 
 Diese Ablage ist ausschließlich die Übergabe des BIRDIE-5-Integrations-Scouts für die echte BirdieWorld-Schlag/Karten/Score-App. Sie enthält keine Deployment- oder Produktionsänderung.
 
-## WICHTIG — ROUND 2
+## WICHTIG — NEUESTE REIHENFOLGE
 
-`ROUND2_RECOVERED_HANDLER.md` zuerst nach diesem README lesen.
+1. **`ROUND3_ORIGINAL_DEPLOYED_BUNDLE_MATCH.md` zuerst lesen.** Dort ist jetzt zusätzlich der ungepatchte 59.338-Byte-Gameplay-Bundle mit exakt dem SHA-256 aus dem Recovery-Deployment-Manifest belegt.
+2. Danach `ROUND2_RECOVERED_HANDLER.md` für den später gehärteten Founder-Test-Host und die zusätzliche Meter-/Input-Härtung lesen.
+3. `INTEGRATIONSPROTOKOLL.md` ist der ursprüngliche Scoutstand; Aussagen wie „v2 fehlt“ oder „Handler nicht identifiziert“ sind historisch und durch Round 2/3 superseded.
+4. `QUELLEN.md` bleibt Quellenregister des ersten Scoutlaufs.
 
-Seit dem ersten Scoutlauf ist ein zusätzliches gespeichertes Recovery-/Founder-Test-Artefakt gefunden und tatsächlich gelesen worden. Dadurch ist der **recovered compiled Shot-Handler** jetzt eindeutig lokalisiert: `GameApp` (`Xe`) → `On()` → genau ein Engine-Aufruf `o(...)` / Engine-Export `a` (`Vn`) → danach Result-/Shot-/Position-/Remaining-/Lie-State-Commit.
+## Aktueller Integrationsbefund
 
-Damit ist der alte Satz „Shot-Handler nicht identifiziert“ für den recovered compiled Host überholt. Weiterhin **nicht belegt** sind jedoch der originale lesbare Codex/Sites-Quellbaum und die Identität der heutigen Live-Revision. Daher bleibt jede direkte Produktionsintegration gesperrt.
+Der **historische recovered compiled Shot-Handler ist eindeutig identifiziert**:
+
+`/spiel` → `game-app-D-PPPVPB.js` → `GameApp` (`Xe`) → `kn()` bei `TIMING` → `On()` → genau ein tatsächlicher Engine-Resolve → vorhandene PICK-UP-Normalisierung → Result-/Position-/Stroke-/Remaining-/Lie-State-Commits.
+
+Der ungepatchte Gameplay-Bundle aus `birdie-score-full-recovery.zip` hat SHA-256 `1a3efa0dc9a03ac597b8856fc9c2692071fbbb917b56cae1d3d8f8cb0f42981c` und stimmt exakt mit dem GitHub-Recovery-Manifest überein. Die Engine `game-engine-BHNViZ1-.js` stimmt ebenfalls mit SHA-256 `ad735b5f4c93573505257cd55ba86355f9d5c8c22f8c3721ce5db608cba9e42b` überein.
+
+Wichtig: Während `PLAN` gibt es zusätzlich eine Engine-Berechnung mit festem Timing 50 für die Ziel-/Flugvorschau. **Diese ist nicht der akzeptierte Shot und darf keinen Canyon-Snapshot auslösen.** Der Canyon-Snapshot gehört nur in `On()` nach dem realen Resolve und der vorhandenen lokalen Result-Normalisierung.
+
+Am Resolve-Punkt sind aktuelle Lochdefinition und Setup-Restdistanz bereits gleichzeitig vorhanden. Eine bestehende autoritative Shot-ID ist dagegen im historischen Bundle nicht belegt; eine rein visuelle Sequence-ID darf nur als Presentation Identity ergänzt werden, sofern der echte Originalworkspace keine bessere Event-ID besitzt.
+
+## Was weiterhin fehlt
+
+Der originale lesbare Next/Vinext/Codex-Sites-Quellbaum und die heutige Live-Revision sind weiterhin **nicht belegt**. Deshalb kein Patch gegen minifiziertes Output und kein Deployment.
+
+Gesucht wird jetzt nur noch die Original-Quelldatei, die sich anhand folgender Strings wiedererkennen lässt:
+
+- `Timing läuft · im goldenen Fenster stoppen`
+- `Equipment liegt · 5er-Starthand + 1 Loch-Draw · 5 Aktionskarten bereit`
+- `Maximal 9 Schläge · Loch beendet`
+- Phasen `PLAN`, `TIMING`, `RESULT`, `HOLE_COMPLETE`
+
+Zusätzlich wird der statische Asset-Source-Ordner / die Vinext-Vite-Sites-Buildkonfiguration benötigt. Der historische Runtime-Host nutzt bereits absolute `/assets/...`-Course-URLs; `/assets/emerald-canyon-v2.webp` passt deshalb zur Runtime-Konvention, aber der maintainable Source-Pfad ist noch nicht belegt.
 
 ## Kanonische Ablagen
 
 ### Google Drive
 Ordner: `Emerald_Canyon_v2__Chat_Birdies / 03_ERGEBNISSE / BIRDIE_5_App_Integration`
 
+- Neuester Detailstand: `00_LATEST_STATUS_HANDLER_FOUND.md`
+  - https://drive.google.com/file/d/1snD8pqvnuXoviuTE9S8KYyAUv28s0gJo/view?usp=drivesdk
 - ZIP: https://drive.google.com/file/d/1fqjp9gqr5BTDdLIlq3DKe1BIIcPc3ej_/view?usp=drivesdk
-- Integrationsprotokoll: https://drive.google.com/file/d/11oHoDBSZJLai44D3z_B8x4Iy02w1ldKX/view?usp=drivesdk
+- ursprüngliches Integrationsprotokoll: https://drive.google.com/file/d/11oHoDBSZJLai44D3z_B8x4Iy02w1ldKX/view?usp=drivesdk
 - Quellenregister: https://drive.google.com/file/d/1B6xkGqKT2rL1My1QpUcmHdj-44am5mZY/view?usp=drivesdk
-- Handoff-README: https://drive.google.com/file/d/1PEbsr22d_sQWLhZRhBJx5-K7F5qH2eXq/view?usp=drivesdk
-- Zentraler Canyon-v2-Startpunkt: `00_START_HIER — CANYON V2 — CHAT BIRDIES`
 
 ### GitHub
 Repository: `zm56snbdvp-hash/birdie-agent`
-Handoff-Branch: `handoff/birdie5-canyon-v2-integration-20260910`
-Ursprüngliche Basis: `feature/birdieworld-course-flight-v1-20260910` @ `ba8c08e866d2633c7fb9e02e267ad52d38c1850c`
+Branch: `handoff/birdie5-canyon-v2-integration-20260910`
+Pfad: `integration/canyon-v2/`
 
-Pfad im Branch: `integration/canyon-v2/`
+Der Feature-Branch `feature/birdieworld-course-flight-v1-20260910` und Produktionscode bleiben unverändert.
 
-## Reihenfolge für die Fortsetzung
+## Status
 
-1. Dieses README lesen.
-2. `ROUND2_RECOVERED_HANDLER.md` lesen — neuester Stand zum recovered Host.
-3. `INTEGRATIONSPROTOKOLL.md` als ursprünglichen Scoutbefund lesen; dortige „v2 fehlt“- und „Handler nicht identifiziert“-Aussagen sind historischer Stand und werden durch Round 2 teilweise superseded.
-4. `QUELLEN.md` als fixiertes Quellenregister des ersten Scoutlaufs verwenden.
-5. Canyon v2 aus dem zentralen Drive-OS lesen; `README_CANYON_V2.md` ist dort inzwischen verfügbar.
-6. Nächster sicherer Build-Schritt: lokaler recovered-host integration candidate gegen den identifizierten `On()`-Slot. Keine zweite `simulateShot`-Auflösung und keine Progress-/Coinwrites bei Animationsende.
-7. Vor jeder echten App-/Live-Integration aktuelle Source-/Deployment-Identität erneut belegen. Einen historischen minifizierten Bundle niemals blind als aktuelle Produktion behandeln.
-
-## Statushinweis
-
-Die Aussage im ursprünglichen Scout-Protokoll, dass das Repository während der Untersuchung unverändert blieb und keine Pushes erfolgten, beschreibt den ersten Scout-Lauf selbst. Danach wurde auf ausdrückliche Nutzeranweisung ausschließlich Handoff-Dokumentation auf diesen separaten Branch geschrieben. Der untersuchte Feature-Branch und Produktcode wurden dadurch nicht verändert.
-
-**Aktueller Stand:** `RECOVERED_HANDLER_IDENTIFIED`; `ORIGINAL_SOURCE_UNPROVEN`; `CURRENT_LIVE_REVISION_UNPROVEN`; `NO_DEPLOYMENT`.
+`HISTORICAL_DEPLOYED_BUNDLE_MATCHED` · `RECOVERED_HANDLER_IDENTIFIED` · `ORIGINAL_MAINTAINABLE_SOURCE_UNPROVEN` · `CURRENT_LIVE_REVISION_UNPROVEN` · `NO_DEPLOYMENT`.
