@@ -1,63 +1,72 @@
-# BIRDIE 5 — Canyon v2 Integration Handoff
+# BIRDIE 5 — Canyon Integration Handoff
 
 Stand: 10.09.2026
 
-## Zweck
+## WICHTIG — zuerst lesen
 
-Übergabe des BIRDIE-5-Integrations-Scouts für die echte BirdieWorld-Schlag/Karten/Score-App. Keine Deployment- oder Produktionsänderung.
+1. **`ROUND5_BRIDGE_AUDIT_AND_R2.md`** — aktueller kanonischer BIRDIE-5-Stand.
+2. `ROUND3_ORIGINAL_DEPLOYED_BUNDLE_MATCH.md` — historischer ungepatchter 59.338-Byte-Gameplay-Bundle und Recovery-Fingerprint.
+3. `ROUND2_RECOVERED_HANDLER.md` — exakter recovered Shot-Handler `On()` und Integrationsslot.
+4. `ROUND4_PROMPTER_NEXT_STEP.md` — Historie der Candidate-A/B-Zusammenführung.
+5. `INTEGRATIONSPROTOKOLL.md` / `QUELLEN.md` — ursprünglicher Scoutstand und Quellenregister; frühere Aussagen wie „Handler nicht identifiziert“ sind historisch.
 
-## WICHTIG — NEUESTE REIHENFOLGE
+## Aktueller kanonischer Stand
 
-1. **`ROUND4_PROMPTER_NEXT_STEP.md` zuerst lesen.** Dort sind der konfliktfreie BIRDIE-3-Mergepfad auf Candidate A und das Ergebnis der letzten Originalsource-Suche dokumentiert.
-2. `ROUND3_ORIGINAL_DEPLOYED_BUNDLE_MATCH.md` lesen: ungepatchter 59.338-Byte-Gameplay-Bundle stimmt exakt mit dem historischen Recovery-Deployment-Manifest überein.
-3. `ROUND2_RECOVERED_HANDLER.md` lesen: zusätzlicher später gehärteter Founder-Test-Host und Meter-/Input-Härtung.
-4. `INTEGRATIONSPROTOKOLL.md` ist der ursprüngliche Scoutstand; Aussagen wie „v2 fehlt“ oder „Handler nicht identifiziert“ sind historisch und durch Round 2–4 superseded.
-5. `QUELLEN.md` bleibt Quellenregister des ersten Scoutlaufs.
+### Course Candidate B
+Für gemeinsame Canyon-QA gilt ausschließlich der Master-Candidate:
 
-## Aktueller Integrationsbefund
+- `BirdieWorld_Emerald_Canyon_v3_Candidate_B.html`
+- 637136 Bytes
+- SHA-256 `b4181a38e5eac1b1455c180443d4f89df4aad73e94ac3bed3308762f8eea9e1f`
 
-Der historische recovered compiled Shot-Handler ist eindeutig identifiziert:
+Der separate 637133-Byte/`a9db...` Integrator-Handoff ist nicht der kanonische Master.
 
-`/spiel` → `game-app-D-PPPVPB.js` → `GameApp` (`Xe`) → `kn()` bei `TIMING` → `On()` → genau ein tatsächlicher Engine-Resolve → vorhandene PICK-UP-Normalisierung → Result-/Position-/Stroke-/Remaining-/Lie-State-Commits.
+### Recovered-host Bridge
+Die bisherige `BirdieWorld_Canyon_v3_Candidate_B_RecoveredHost_Bridge.zip` ist **SUPERSEDED — DO NOT PROMOTE**.
 
-Der ungepatchte Gameplay-Bundle aus `birdie-score-full-recovery.zip` hat SHA-256 `1a3efa0dc9a03ac597b8856fc9c2692071fbbb917b56cae1d3d8f8cb0f42981c` und stimmt exakt mit dem GitHub-Recovery-Manifest überein. Engine `game-engine-BHNViZ1-.js`: SHA-256 `ad735b5f4c93573505257cd55ba86355f9d5c8c22f8c3721ce5db608cba9e42b`.
+Grund: Sie erbte aus einem älteren Canyon-v2-RecoveredHost-Kandidaten eine Host-Re-Registrierung von Tee/Cup-Koordinaten. Diese Konstanten werden im recovered Host auch durch `Fe(...)` zur Berechnung von `aimLateral` und `targetDistance` verwendet und sind daher nicht rein dekorativ.
 
-Während `PLAN` existiert zusätzlich eine Engine-Vorsimulation mit Timing 50. **Sie ist nicht der akzeptierte Shot und darf keinen Canyon-Snapshot auslösen.** `prepareCourseShot(...)` gehört ausschließlich einmal in `On()` nach dem echten Resolve und der vorhandenen Result-Normalisierung.
+Neuer kanonischer BIRDIE-5-Bridge-Kandidat:
 
-Am Resolve-Punkt sind aktuelles Hole und Setup-Restdistanz vorhanden. Eine autoritative Shot-ID ist im historischen Bundle nicht belegt; eine lokale Sequence-ID wäre nur Presentation Identity, falls der Originalworkspace keine echte Event-ID besitzt.
+- `BirdieWorld_Canyon_v3_Candidate_B_RecoveredHost_Bridge_R2_SAFE.zip`
+- ZIP SHA-256 `c1451dd959d3aea8700341f3f383e7959f6e904280f8d420c5f3bdcb78e22175`
+- Drive: https://drive.google.com/file/d/1wgTKxvKBtF5rOlLRwrXJ-f4G74gXj3AP/view
 
-## Gemeinsame Canyon-Kandidatin
+R2 startet erneut vom unveränderten Founder-v5.4-Recovery-Host. In beiden `game-app-D-PPPVPB.js`-Kopien besteht der semantische Unterschied zur Baseline aus exakt **einer Insert-Operation**: dem optionalen Präsentationscallback nach dem vorhandenen Engine-Resolve + PICK-UP-Normalisierung und vor den bestehenden State-Commits. Die ursprüngliche Host-Geometrie bleibt bytegleich erhalten. Die Engine ist byte-identisch zur Baseline.
 
-`BirdieWorld_Emerald_Canyon_v3_Candidate_A.zip` enthält BIRDIE 1 + 2. BIRDIE 3 traf danach ein.
+R2 fügt bewusst kein lokales Ersatzbild für den recovered Host hinzu. Es ist ein sauberer **Shot -> Presentation Bridge Proof**, kein behaupteter finaler Artwork-Transplant.
 
-BIRDIE 3 ändert ausschließlich `preview/course-canyon-v2.html`. Sein Baseline-Hash `faef7185a50d6cdbafb57d91b10b4fb854a0e0857a95f3bc9c8a2db474cb09f5` ist exakt der Hash, den Candidate A für dieselbe Datei als unverändert pinnt. Deshalb ist der Mergepfad konfliktfrei: Candidate A + exakt BIRDIE-3-Diff → neu bauen → gemeinsame Prüfungen → BIRDIE 4 auf genau diese neue Kandidatenkennung ansetzen.
+## Recovered Handler
 
-Candidate A nicht als finale gemeinsame v3 ausgeben.
+Historisch belegt:
 
-## Was weiterhin fehlt
+`/spiel` → `game-app-D-PPPVPB.js` → `GameApp` (`Xe`) → `kn()` bei `TIMING` → `On()` → genau ein Engine-Resolve → vorhandene PICK-UP-Normalisierung → Result-/Position-/Stroke-/Remaining-/Lie-State-Commits.
 
-Die gezielte Library-/GitHub-Suche nach den eindeutigen Originalstrings ergab keine lesbare Original-Next/Vinext/Codex-Sites-Quelldatei. Der maintainable Originalsource und die heutige Live-Revision bleiben unbewiesen. Deshalb kein Patch gegen minifiziertes Output und kein Deployment.
+Die PLAN-Vorsimulation mit Timing 50 ist ausdrücklich **nicht** der akzeptierte Shot und darf keinen Canyon-Snapshot/Bridge-Callback auslösen.
 
-Noch benötigt:
+## R2-Prüfung
 
-- Original-Quelldatei, die zu `game-app-D-PPPVPB.js` gebaut wurde,
-- statischer Asset-Source-/Public-Ordner,
-- Vinext/Vite/Sites-Buildkonfiguration.
+- JS/MJS Syntax: **50/50 PASS**
+- Founder Preflight: **PASS**
+- Canyon Runtime: **6/6 PASS**
+- Bridge Boundary: **10/10 PASS**
+- Recovered Gameplay: **32 PASS / 1 FAIL Result accessibility**
+- unveränderte Founder-v5.4-Baseline: **derselbe 32 PASS / 1 FAIL**
 
-## Kanonische Ablagen
+Der einzelne Accessibility-Fail ist damit reproduziert vorbestehend und keine Canyon-Regression.
 
-### Google Drive
-`Emerald_Canyon_v2__Chat_Birdies / 03_ERGEBNISSE / BIRDIE_5_App_Integration`
+## Candidate C
 
-Neuester Prompter-Handoff: `ROUND4_PROMPTER_NEXT_STEP.md`
+`BirdieWorld_Canyon_v3_Candidate_C_RecoveredHost.zip` ist ein separater BIRDIE-6/BIRDIE-SWING-Spielmechanik-Kandidat. Er verändert über `window.__birdieSwingTimingOverride` den an den bestehenden `On()`-Pfad übergebenen Timingwert und übernimmt außerdem die ältere Host-Re-Registrierung. Er gehört in die BIRDIE-6-Interaction-QA und ersetzt den minimal-invasiven BIRDIE-5-R2-Bridge nicht.
 
-### GitHub
-Repository: `zm56snbdvp-hash/birdie-agent`
-Branch: `handoff/birdie5-canyon-v2-integration-20260910`
-Pfad: `integration/canyon-v2/`
+## Weiterhin offen
+
+- originaler lesbarer Next/Vinext/Codex-Sites-Quellbaum
+- heutige Live-Revision
+- finaler maintainable Artwork-Asset-Transplant
+- Safari / physische Geräte
+- Production / Deployment
 
 Feature-Branch und Produktionscode bleiben unverändert.
 
-## Status
-
-`BIRDIE3_MERGE_PATH_PROVEN` · `CANDIDATE_A_INTERMEDIATE` · `HISTORICAL_DEPLOYED_BUNDLE_MATCHED` · `RECOVERED_HANDLER_IDENTIFIED` · `ORIGINAL_MAINTAINABLE_SOURCE_UNPROVEN` · `CURRENT_LIVE_REVISION_UNPROVEN` · `NO_DEPLOYMENT`.
+**Status:** `RECOVERED_HANDLER_IDENTIFIED` · `MASTER_CANDIDATE_B_PINNED` · `R2_SAFE_BRIDGE_READY_FOR_INDEPENDENT_QA` · `OLD_BRIDGE_SUPERSEDED` · `ORIGINAL_SOURCE_UNPROVEN` · `CURRENT_LIVE_UNPROVEN` · `NO_DEPLOYMENT`.
