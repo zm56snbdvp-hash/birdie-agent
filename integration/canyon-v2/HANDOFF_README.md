@@ -4,11 +4,14 @@ Stand: 10.09.2026
 
 ## WICHTIG — zuerst lesen
 
-1. **`ROUND5_BRIDGE_AUDIT_AND_R2.md`** — aktueller kanonischer BIRDIE-5-Stand.
-2. `ROUND3_ORIGINAL_DEPLOYED_BUNDLE_MATCH.md` — historischer ungepatchter 59.338-Byte-Gameplay-Bundle und Recovery-Fingerprint.
-3. `ROUND2_RECOVERED_HANDLER.md` — exakter recovered Shot-Handler `On()` und Integrationsslot.
-4. `ROUND4_PROMPTER_NEXT_STEP.md` — Historie der Candidate-A/B-Zusammenführung.
-5. `INTEGRATIONSPROTOKOLL.md` / `QUELLEN.md` — ursprünglicher Scoutstand und Quellenregister; frühere Aussagen wie „Handler nicht identifiziert“ sind historisch.
+1. **`ROUND6_RECOVERED_HOST_PATCH_MANIFEST.md`** — exakter, nicht angewendeter recovered-host Patch-Manifest: baseline-hashgebunden, genau eine 159-Byte-Insertion.
+2. **`ROUND5_BRIDGE_AUDIT_AND_R2.md`** — aktueller kanonischer BIRDIE-5-Bridge-Stand und Begründung für R2 SAFE.
+3. `ROUND3_ORIGINAL_DEPLOYED_BUNDLE_MATCH.md` — historischer ungepatchter 59.338-Byte-Gameplay-Bundle und Recovery-Fingerprint.
+4. `ROUND2_RECOVERED_HANDLER.md` — exakter recovered Shot-Handler `On()` und Integrationsslot.
+5. `ROUND4_PROMPTER_NEXT_STEP.md` — Historie der Candidate-A/B-Zusammenführung.
+6. `INTEGRATIONSPROTOKOLL.md` / `QUELLEN.md` — ursprünglicher Scoutstand und Quellenregister; frühere Aussagen wie „Handler nicht identifiziert“ sind historisch.
+
+Maschinenlesbar zusätzlich: `RECOVERED_HOST_R2_SAFE.patch.json`.
 
 ## Aktueller kanonischer Stand
 
@@ -32,7 +35,11 @@ Neuer kanonischer BIRDIE-5-Bridge-Kandidat:
 - ZIP SHA-256 `c1451dd959d3aea8700341f3f383e7959f6e904280f8d420c5f3bdcb78e22175`
 - Drive: https://drive.google.com/file/d/1wgTKxvKBtF5rOlLRwrXJ-f4G74gXj3AP/view
 
-R2 startet erneut vom unveränderten Founder-v5.4-Recovery-Host. In beiden `game-app-D-PPPVPB.js`-Kopien besteht der semantische Unterschied zur Baseline aus exakt **einer Insert-Operation**: dem optionalen Präsentationscallback nach dem vorhandenen Engine-Resolve + PICK-UP-Normalisierung und vor den bestehenden State-Commits. Die ursprüngliche Host-Geometrie bleibt bytegleich erhalten. Die Engine ist byte-identisch zur Baseline.
+R2 startet erneut vom unveränderten Founder-v5.4-Recovery-Host. In beiden `game-app-D-PPPVPB.js`-Kopien besteht der semantische Unterschied zur Baseline aus exakt **einer 159-Byte-Insert-Operation**: dem optionalen Präsentationscallback nach dem vorhandenen Engine-Resolve + PICK-UP-Normalisierung und vor den bestehenden State-Commits. Die ursprüngliche Host-Geometrie bleibt bytegleich erhalten. Die Engine ist byte-identisch zur Baseline.
+
+Baseline GameApp SHA-256: `5e20cd816850ab60fc6a66ac9eaeac77963f1de764bed63fe0921a4660e964b2`.  
+R2 GameApp SHA-256: `58ef56b562407cb685800044b4acd67fd7c7ce7a121d99f108f425c7215bb3b6`.  
+Passive Runtime SHA-256: `812cd459ee3de2ce3e46d4727b8274a83245b53bd238ecf021337a9713a331a3`.
 
 R2 fügt bewusst kein lokales Ersatzbild für den recovered Host hinzu. Es ist ein sauberer **Shot -> Presentation Bridge Proof**, kein behaupteter finaler Artwork-Transplant.
 
@@ -69,4 +76,4 @@ Der einzelne Accessibility-Fail ist damit reproduziert vorbestehend und keine Ca
 
 Feature-Branch und Produktionscode bleiben unverändert.
 
-**Status:** `RECOVERED_HANDLER_IDENTIFIED` · `MASTER_CANDIDATE_B_PINNED` · `R2_SAFE_BRIDGE_READY_FOR_INDEPENDENT_QA` · `OLD_BRIDGE_SUPERSEDED` · `ORIGINAL_SOURCE_UNPROVEN` · `CURRENT_LIVE_UNPROVEN` · `NO_DEPLOYMENT`.
+**Status:** `RECOVERED_HANDLER_IDENTIFIED` · `MASTER_CANDIDATE_B_PINNED` · `R2_SAFE_BRIDGE_READY_FOR_INDEPENDENT_QA` · `PATCH_MANIFEST_PINNED` · `OLD_BRIDGE_SUPERSEDED` · `ORIGINAL_SOURCE_UNPROVEN` · `CURRENT_LIVE_UNPROVEN` · `NO_DEPLOYMENT`.
