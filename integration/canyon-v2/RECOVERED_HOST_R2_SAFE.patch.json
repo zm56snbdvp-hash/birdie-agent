@@ -1,0 +1,24 @@
+{
+  "status": "NOT_APPLIED_PATCH_MANIFEST",
+  "scope": "recovered founder-v5.4 host only; presentation bridge proof",
+  "baseline_game_app_sha256": "5e20cd816850ab60fc6a66ac9eaeac77963f1de764bed63fe0921a4660e964b2",
+  "target_game_app_sha256": "58ef56b562407cb685800044b4acd67fd7c7ce7a121d99f108f425c7215bb3b6",
+  "runtime_sha256": "812cd459ee3de2ce3e46d4727b8274a83245b53bd238ecf021337a9713a331a3",
+  "baseline_bytes": 64769,
+  "target_bytes": 64928,
+  "insert_bytes": 159,
+  "targets": [
+    "build/assets/game-app-D-PPPVPB.js",
+    "build/game-app-D-PPPVPB.js"
+  ],
+  "unique_anchor": "if(wt(t),Tt({club:z.name,from:m,cards:a,mode:k,aim:U.lateral,targetDistance:U.distance,start:s,target:j,flightEnd:l,end:u,curve:V?.curve,output:t}),bt(u),Te(r),pe(t.remaining),we(t.lie)",
+  "insert_before_anchor": "window.__birdieCanyonRuntime?.play?.({holeId:R.id,holeDistance:R.distance,remainingBefore:c,from:m,putt:z.kind===`PUTTER`,start:s,flightEnd:l,end:u,result:t});",
+  "constraints": [
+    "Reject if baseline SHA-256 differs.",
+    "Reject if anchor occurrence count is not exactly 1.",
+    "Do not alter host tee/cup geometry constants.",
+    "Do not alter game-engine-BHNViZ1-.js.",
+    "Do not apply to current production or unknown live revision.",
+    "Presentation callback must remain after PICK-UP normalization and before state commits."
+  ]
+}
