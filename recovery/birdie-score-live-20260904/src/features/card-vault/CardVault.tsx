@@ -3,6 +3,7 @@ import type { CanonicalCard } from "../../domain/card-catalog";
 import { STARTER_DECK } from "../../domain/starter-deck";
 import { CardArtwork } from "../../components/CardArtwork";
 import { EmeraldWorldSkin } from "../../components/EmeraldWorldSkin";
+import { EmeraldWorldNav } from "../../components/EmeraldWorldNav";
 import { applyBoosterOpening, applyStarterSet, collectionPercent, ownedCollection, playableCollection, type BoosterOpening, type BoosterOpenResponse } from "./model";
 
 export interface CardVaultProps {
@@ -59,7 +60,7 @@ export function CardVault({ cards, initialBalance, initialOwnedCardIds, priceCoi
     finally { setOpeningBooster(false); }
   }
 
-  return <main className="bw-world score-shell min-h-dvh overflow-x-hidden text-foreground" data-design-pass="emerald-world-pass-01">
+  return <main className="bw-world score-shell min-h-dvh overflow-x-hidden text-foreground" data-design-pass="emerald-world-pass-02">
     <EmeraldWorldSkin/>
     <div className="bw-page safe-page">
       <header className="bw-topbar">
@@ -70,7 +71,7 @@ export function CardVault({ cards, initialBalance, initialOwnedCardIds, priceCoi
       <section className="bw-hero">
         <p className="bw-kicker">First Edition · Deine Sammlung</p>
         <h1 className="bw-title">The Nest</h1>
-        <p className="bw-copy">Deine Karten gehören jetzt sichtbar in dieselbe Welt wie die neuen Golfbahnen: tiefes Emerald, dunkle Schluchten und Gold nur dort, wo etwas Bedeutung hat. Ungültiges Artwork bleibt fail-safe und wird als kanonische Textkarte gezeigt.</p>
+        <p className="bw-copy">Deine Karten gehören sichtbar in dieselbe Welt wie die neuen Golfbahnen: tiefes Emerald, dunkle Schluchten und Gold nur dort, wo etwas Bedeutung hat. Ungültiges Artwork bleibt fail-safe und wird als kanonische Textkarte gezeigt.</p>
       </section>
 
       <nav className="bw-segment mt-6" aria-label="Kartenbereich">
@@ -91,7 +92,7 @@ export function CardVault({ cards, initialBalance, initialOwnedCardIds, priceCoi
 
         <div className="bw-panel p-5 sm:p-7">
           <div className="flex items-end justify-between gap-3">
-            <div><p className="bw-kicker">Collection progress</p><h2 className="mt-2 text-2xl font-semibold">{ownedCards.length} von {collectibleCards.length} Karten</h2></div>
+            <div><p className="bw-kicker">Sammlungsfortschritt</p><h2 className="mt-2 text-2xl font-semibold">{ownedCards.length} von {collectibleCards.length} Karten</h2></div>
             <strong className="text-gold-soft">{percent}%</strong>
           </div>
           <div className="bw-progress mt-4" aria-label={`${percent}% der Sammlung freigeschaltet`} role="progressbar" aria-valuenow={percent} aria-valuemin={0} aria-valuemax={100}>
@@ -135,6 +136,8 @@ export function CardVault({ cards, initialBalance, initialOwnedCardIds, priceCoi
           </>}
         </div>
       </section>}
+
+      <EmeraldWorldNav active="cards"/>
     </div>
   </main>;
 }
