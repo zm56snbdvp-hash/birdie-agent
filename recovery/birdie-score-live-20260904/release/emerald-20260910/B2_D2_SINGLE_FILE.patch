@@ -1,0 +1,32 @@
+--- a/src/features/game/course-shot-effects.ts
++++ b/src/features/game/course-shot-effects.ts
+@@ -157,16 +157,19 @@
+   const k = clamp(ballRadiusPx / 5.2, 0.72, 1.65);
+   const pivotX = ball.x - 28 * k, pivotY = ball.y - 52 * k;
+   ctx.save();
+-  ctx.translate(pivotX, pivotY); ctx.rotate(angle);
+-  ctx.strokeStyle = "rgba(236,238,229,.92)"; ctx.lineWidth = 2.25 * k;
+-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 59 * k); ctx.stroke();
+-  ctx.strokeStyle = "rgba(14,31,24,.98)"; ctx.lineWidth = 4.7 * k;
+-  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 14 * k); ctx.stroke();
+-  const head = ctx.createLinearGradient(-5 * k, 52 * k, 18 * k, 62 * k);
+-  head.addColorStop(0, "#806a35"); head.addColorStop(.45, "#e4cf8e"); head.addColorStop(1, "#7d6938");
+-  ctx.fillStyle = head;
+-  ctx.beginPath(); ctx.roundRect(-4 * k, 53 * k, 21 * k, 9.5 * k, 2.8 * k); ctx.fill();
+-  ctx.restore();
++  try {
++    ctx.translate(pivotX, pivotY); ctx.rotate(angle);
++    ctx.strokeStyle = "rgba(236,238,229,.92)"; ctx.lineWidth = 2.25 * k;
++    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 59 * k); ctx.stroke();
++    ctx.strokeStyle = "rgba(14,31,24,.98)"; ctx.lineWidth = 4.7 * k;
++    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, 14 * k); ctx.stroke();
++    const head = ctx.createLinearGradient(-5 * k, 52 * k, 18 * k, 62 * k);
++    head.addColorStop(0, "#806a35"); head.addColorStop(.45, "#e4cf8e"); head.addColorStop(1, "#7d6938");
++    ctx.fillStyle = head;
++    ctx.beginPath(); ctx.roundRect(-4 * k, 53 * k, 21 * k, 9.5 * k, 2.8 * k); ctx.fill();
++  } finally {
++    ctx.restore();
++  }
+ 
+   const contactDistance = Math.abs(t - contact);
+   if (contactDistance < (low ? .035 : .055)) {
