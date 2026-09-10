@@ -1,4 +1,14 @@
-import React,{useEffect,useState}from"react";import type{CourseShot}from"../features/game/course-flight";
-export type EmeraldShotPhase="idle"|"swing"|"flight"|"settle"|"result";
-export function useEmeraldShotPhase(shot?:CourseShot,reducedMotion=false):EmeraldShotPhase{const[phase,setPhase]=useState<EmeraldShotPhase>(shot?"result":"idle");useEffect(()=>{if(!shot){setPhase("idle");return}if(reducedMotion){setPhase("result");return}setPhase("swing");const flight=window.setTimeout(()=>setPhase("flight"),shot.swingMs);const settle=window.setTimeout(()=>setPhase("settle"),shot.swingMs+shot.flightMs);const result=window.setTimeout(()=>setPhase("result"),shot.totalMs);return()=>{clearTimeout(flight);clearTimeout(settle);clearTimeout(result)}},[shot?.id,reducedMotion]);return phase}
-export function EmeraldShotAtmosphere({phase}:{phase:EmeraldShotPhase}){return <div className="bw-shot-atmosphere" data-shot-phase={phase} aria-hidden="true"><span className="bw-shot-vein vein-a"/><span className="bw-shot-vein vein-b"/><span className="bw-shot-pulse"/></div>}
+import React from "react";
+import type { CourseShot } from "../features/game/course-flight";
+import { phaseForShot, type EmeraldPresentation, type EmeraldShotPhase } from "../features/game/emerald-presentation";
+export type { EmeraldShotPhase } from "../features/game/emerald-presentation";
+
+/** Backward-named adapter: deliberately no timers, effects or animation clock. */
+export function useEmeraldShotPhase(shot?: CourseShot, snapshot: EmeraldPresentation | null = null): EmeraldShotPhase {
+  return phaseForShot(shot, snapshot);
+}
+export function EmeraldShotAtmosphere({ phase }: { phase: EmeraldShotPhase }) {
+  return <div className="bw-shot-atmosphere" data-shot-phase={phase} aria-hidden="true">
+    <span className="bw-shot-vein vein-a"/><span className="bw-shot-vein vein-b"/><span className="bw-shot-pulse"/>
+  </div>;
+}

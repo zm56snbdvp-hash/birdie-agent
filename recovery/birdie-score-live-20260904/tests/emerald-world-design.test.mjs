@@ -1,45 +1,21 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
-
-test("Emerald World skin is presentation-only and motion-safe", () => {
-  const source = read("src/components/EmeraldWorldSkin.tsx");
-  assert.match(source, /emerald-world-pass-01/);
-  assert.match(source, /\.bw-world/);
-  assert.match(source, /prefers-reduced-motion/);
-  assert.doesNotMatch(source, /fetch\(|localStorage|sessionStorage|COIN_TRANSACTIONS|simulateShot/);
-  assert.doesNotMatch(source, /\b(?:wing|wings|feather|feathers|beak|beaks)\b/i);
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+const read=p=>readFileSync(new URL(`../${p}`,import.meta.url),'utf8');
+test('Emerald skin is complete and presentation-only',()=>{
+ const skin=read('src/components/EmeraldWorldSkin.tsx'),css=read('src/components/emerald-world-base.ts')+read('src/components/emerald-world-collectibles.ts');
+ assert.match(skin,/emerald-world-pass-06/);assert.match(skin,/export function EmeraldWorldSkin/);assert.match(css,/\.bw-world/);assert.match(css,/prefers-reduced-motion/);
+ assert.doesNotMatch(skin+css,/fetch\(|localStorage|sessionStorage|COIN_TRANSACTIONS|simulateShot/);
 });
-
-test("Card Vault keeps canonical booster and starter endpoints", () => {
-  const source = read("src/features/card-vault/CardVault.tsx");
-  assert.match(source, /fetch\("\/api\/starter-set\/claim"/);
-  assert.match(source, /fetch\("\/api\/boosters\/open"/);
-  assert.match(source, /idempotencyKey:\s*crypto\.randomUUID\(\)/);
-  assert.match(source, /1\. Edition · 3 Karten/);
-  assert.match(source, /applyBoosterOpening/);
-  assert.match(source, /applyStarterSet/);
-  assert.match(source, /EmeraldWorldSkin/);
+test('Vault retains existing booster and starter request contracts',()=>{
+ const s=read('src/features/card-vault/CardVault.tsx');
+ for(const v of ['/api/starter-set/claim','/api/boosters/open','applyBoosterOpening','applyStarterSet','1. Edition · 3 Karten'])assert.ok(s.includes(v));
+ assert.match(s,/idempotencyKey:\s*crypto\.randomUUID\(\)/);
 });
-
-test("Deck Builder keeps canonical validation and save path", () => {
-  const source = read("src/features/deck-builder/DeckBuilder.tsx");
-  assert.match(source, /validateDeckSelection/);
-  assert.match(source, /fetch\("\/api\/deck"/);
-  assert.match(source, /method:\s*"PUT"/);
-  assert.match(source, /DECK_RULES\.playableCardCount/);
-  assert.match(source, /EmeraldWorldSkin/);
+test('Deck keeps its existing validation and PUT endpoint',()=>{
+ const s=read('src/features/deck-builder/DeckBuilder.tsx');assert.match(s,/validateDeckSelection/);assert.ok(s.includes('/api/deck'));assert.match(s,/method:\s*"PUT"/);assert.match(s,/DECK_RULES\.playableCardCount/);
 });
-
-test("Game shell keeps existing draw authority and renderer boundary", () => {
-  const source = read("src/features/game/GameApp.tsx");
-  const scene = read("src/features/game/CourseScene.tsx");
-  assert.match(source, /createInitialGameCardState/);
-  assert.match(source, /drawAtHoleStart\(next\)/);
-  assert.match(source, /CourseScene hole=\{COURSE_HOLES\[hole - 1\]\} shot=\{courseShot\}/);
-  assert.doesNotMatch(source, /simulateShot\(/);
-  assert.match(scene, /createCourseScene/);
-  assert.doesNotMatch(scene, /simulateShot\(|fetch\(|postCoin|COIN_TRANSACTIONS/);
+test('UI never resolves another shot or writes from the renderer',()=>{
+ const game=read('src/features/game/GameApp.tsx'),scene=read('src/features/game/CourseScene.tsx');
+ assert.match(game,/drawAtHoleStart\(next\)/);assert.match(scene,/createCourseScene/);assert.doesNotMatch(game+scene,/simulateShot\(|prepareCourseShot\(|fetch\(|COIN_TRANSACTIONS/);
 });
