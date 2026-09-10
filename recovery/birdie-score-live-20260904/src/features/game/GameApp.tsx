@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import type { CanonicalCard } from "../../domain/card-catalog";
 import { CARD_BY_ID } from "../../domain/card-catalog";
 import { CardArtwork } from "../../components/CardArtwork";
+import { EmeraldWorldSkin } from "../../components/EmeraldWorldSkin";
 import { createInitialGameCardState, drawAtHoleStart, type GameCardState } from "./card-state";
 
 import { CourseScene } from "./CourseScene";
@@ -25,15 +26,8 @@ function cardsFromIds(ids: readonly string[]): CanonicalCard[] {
 /**
  * Maintainable reconstruction of the deployed GameApp card layer.
  *
- * Proven/recovered here:
- * - equipment auto-installs when drawn;
- * - equipment immediately triggers a replacement draw;
- * - the opening action hand is filled to five;
- * - one resolved draw happens at hole start;
- * - every visible card uses the fail-safe CardArtwork component.
- *
- * The full shot simulator/physics UI is intentionally not claimed as fully
- * decompiled maintainable source in this checkpoint.
+ * This pass changes presentation only. Card draw, installed equipment, hole
+ * progression and course-shot authority remain exactly where they were.
  */
 export function GameApp({ loadout, courseShot }: { loadout: RecoveredGameLoadout; courseShot?: CourseShot }) {
   const [cardState, setCardState] = useState<GameCardState>(() => createInitialGameCardState(loadout));
@@ -70,13 +64,46 @@ export function GameApp({ loadout, courseShot }: { loadout: RecoveredGameLoadout
     setHole((value) => Math.min(6, value + 1));
   }
 
-  return <main className="min-h-screen bg-[#030a07] p-4 text-[#f5ecd5]" data-recovery-status="CARD_LAYER_RECOVERED"><div className="mx-auto max-w-[1200px]">
-    <header className="flex flex-wrap items-center justify-between gap-4 border-b border-[#bea052]/20 pb-4"><div><p className="font-serif text-lg tracking-[.2em] text-[#dfc477]">BIRDIEWORLD</p><p className="text-xs text-[#8ea396]">First Edition · Recoverable Card Layer</p></div><div className="text-right"><strong>Loch {hole}/6</strong><p className="text-xs text-[#8ea396]">{message}</p></div></header>
-    <CourseScene hole={COURSE_HOLES[hole - 1]} shot={courseShot}/>
-    <section className="mt-5 grid gap-5 lg:grid-cols-[220px_1fr]"><aside className="panel rounded-2xl p-4"><p className="eyebrow">Spieler</p><CardArtwork id={loadout.player.id} physicalNumber={loadout.player.physicalNumber} name={loadout.player.name} className="mt-3"/><h1 className="mt-3 font-serif text-xl">{loadout.playerName}</h1><p className="text-xs text-moss">{loadout.deckName}</p></aside>
-      <div className="grid gap-5"><section className="panel rounded-2xl p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Aktives Bag</h2><span className="text-xs text-moss">{installedClubs.length} Schläger · {installedBalls.length} Bälle</span></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">{[...installedClubs, ...installedBalls].map((card) => <div key={card.id}><CardArtwork id={card.id} physicalNumber={card.physicalNumber} name={card.name} decorative/><p className="mt-1 truncate text-xs">{card.name}</p></div>)}</div></section>
-      <section className="panel rounded-2xl p-4"><div className="flex items-center justify-between"><h2 className="font-semibold">Aktionshand</h2><span className="text-xs text-moss">{hand.length} Karten</span></div><div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">{hand.map((card) => <div key={card.id}><CardArtwork id={card.id} physicalNumber={card.physicalNumber} name={card.name} decorative/><p className="mt-1 truncate text-xs">{card.name}</p></div>)}</div></section>
-      <div className="flex justify-end"><button type="button" onClick={drawForNextHole} disabled={hole >= 6} className="gold-action min-h-12 rounded-xl px-5 text-ink disabled:opacity-50">{hole >= 6 ? "Loch 6 erreicht" : "Nächstes Loch · Draw"}</button></div></div>
-    </section>
-  </div></main>;
+  return <main className="bw-world min-h-screen text-[#f5ecd5]" data-recovery-status="CARD_LAYER_RECOVERED" data-design-pass="emerald-world-pass-01">
+    <EmeraldWorldSkin/>
+    <div className="bw-page">
+      <header className="bw-topbar">
+        <div className="bw-brand">BIRDIEWORLD<small>PLAY · COLLECT · IMPROVE</small></div>
+        <div className="text-right"><strong className="text-gold-soft">Loch {hole}/6</strong><p className="bw-note mt-1">{message}</p></div>
+      </header>
+
+      <section className="bw-hero">
+        <p className="bw-kicker">Jeder Schlag zählt</p>
+        <h1 className="bw-title text-5xl">{COURSE_HOLES[hole - 1]?.name ?? "Emerald Course"}</h1>
+        <p className="bw-copy">Die Landschaft ist nicht mehr Kulisse. Sie ist die Bühne für deinen Schlag, deine Karten und das Ergebnis.</p>
+      </section>
+
+      <CourseScene hole={COURSE_HOLES[hole - 1]} shot={courseShot}/>
+
+      <section className="mt-5 grid gap-5 lg:grid-cols-[220px_1fr]">
+        <aside className="bw-panel p-4">
+          <p className="bw-kicker">Spieler</p>
+          <CardArtwork id={loadout.player.id} physicalNumber={loadout.player.physicalNumber} name={loadout.player.name} className="mt-3"/>
+          <h1 className="mt-3 font-serif text-xl">{loadout.playerName}</h1>
+          <p className="text-xs text-moss">{loadout.deckName}</p>
+        </aside>
+
+        <div className="grid gap-5">
+          <section className="bw-panel p-4">
+            <div className="flex items-center justify-between"><div><p className="bw-kicker">Equipment</p><h2 className="mt-1 font-semibold">Aktives Bag</h2></div><span className="text-xs text-moss">{installedClubs.length} Schläger · {installedBalls.length} Bälle</span></div>
+            <div className="bw-game-card-strip mt-4">{[...installedClubs, ...installedBalls].map((card) => <div className="bw-card p-2" key={card.id}><CardArtwork id={card.id} physicalNumber={card.physicalNumber} name={card.name} decorative/><p className="mt-2 truncate text-xs">{card.name}</p></div>)}</div>
+          </section>
+
+          <section className="bw-panel p-4">
+            <div className="flex items-center justify-between"><div><p className="bw-kicker">Deine Optionen</p><h2 className="mt-1 font-semibold">Aktionshand</h2></div><span className="text-xs text-moss">{hand.length} Karten</span></div>
+            <div className="bw-game-card-strip mt-4">{hand.map((card) => <div className="bw-card p-2" key={card.id}><CardArtwork id={card.id} physicalNumber={card.physicalNumber} name={card.name} decorative/><p className="mt-2 truncate text-xs">{card.name}</p></div>)}</div>
+          </section>
+
+          <div className="flex justify-end">
+            <button type="button" onClick={drawForNextHole} disabled={hole >= 6} className="bw-gold-button">{hole >= 6 ? "Loch 6 erreicht" : "Nächstes Loch · Draw"}</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>;
 }
