@@ -6,7 +6,9 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 
 test("global emerald navigation uses only known product routes", () => {
   const source = read("src/components/EmeraldWorldNav.tsx");
-  for (const route of ["/", "/spiel", "/scorecard", "/karten", "/fortschritt"]) assert.match(source, new RegExp(`href: \\\"${route === "/" ? "\\/" : route.replaceAll("/", "\\/")}\\\"`));
+  for (const route of ["/", "/spiel", "/scorecard", "/karten", "/fortschritt"]) {
+    assert.ok(source.includes(`href: "${route}"`), `missing route ${route}`);
+  }
   assert.match(source, /data-authority="presentation-only"/);
   assert.doesNotMatch(source, /fetch\(|localStorage|sessionStorage|COIN_TRANSACTIONS|simulateShot/);
 });
