@@ -10,11 +10,13 @@ const routerPath = fileURLToPath(new URL("../src/framer-router.mjs", import.meta
 const source = fs.readFileSync(servicePath, "utf8");
 const routerSource = fs.readFileSync(routerPath, "utf8");
 
-test("Birdie brand preview is isolated and cannot deploy production", () => {
+test("Birdie brand preview cannot deploy production and has a safe draft fallback", () => {
   const policy = getBirdieBrandPreviewPolicy();
-  assert.equal(policy.mode, "ISOLATED_BRANCH_PREVIEW_ONLY");
+  assert.equal(policy.mode, "SAFE_PREVIEW_WITH_DRAFT_FALLBACK");
+  assert.deepEqual(policy.supportedModes, ["ISOLATED_BRANCH_PREVIEW_ONLY", "MAIN_DRAFT_ONLY"]);
   assert.equal(policy.productionDeployed, false);
   assert.equal(policy.productionDeployAllowed, false);
+  assert.equal(policy.publishOnMainAllowed, false);
   assert.equal(policy.replacesLiveHome, false);
   assert.equal(policy.coinShopIncluded, false);
   assert.equal(policy.path, "/new-birdie");
@@ -29,8 +31,18 @@ test("Birdie brand preview uses the new four-pillar positioning", () => {
 test("Birdie brand preview never calls Framer production deploy", () => {
   assert.doesNotMatch(source, /\.deploy\s*\(/);
   assert.match(source, /createBranch/);
+  assert.match(source, /MAIN_DRAFT_ONLY/);
+  assert.match(source, /draft:\s*true/);
+  assert.match(source, /execution\.mode === "ISOLATED_BRANCH_PREVIEW_ONLY"/);
   assert.match(source, /await framer\.publish\(\)/);
-  assert.match(source, /await main\.switch\(\)/);
+  assert.match(source, /editorOnly:\s*draftOnly/);
+});
+
+test("main-project fallback is draft-only and never publishes on main", () => {
+  assert.match(source, /publishOnMainAllowed:\s*false/);
+  assert.match(source, /if \(execution\.mode === "ISOLATED_BRANCH_PREVIEW_ONLY"\)/);
+  assert.match(source, /FRAMER_DRAFT_READBACK_FAILED/);
+  assert.match(source, /readback\.draft !== true/);
 });
 
 test("Birdie brand preview creates a dedicated page and code component", () => {
@@ -47,7 +59,6 @@ test("Birdie brand preview contains no Coin Shop navigation", () => {
   assert.match(source, /Community/);
   assert.match(source, /Wohlgefühl/);
 });
-
 
 test("Birdie brand preview route is founder-gated", () => {
   assert.match(routerSource, /\/framer\/v5\/brand-preview/);
