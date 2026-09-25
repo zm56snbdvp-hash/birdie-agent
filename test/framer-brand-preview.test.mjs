@@ -37,10 +37,14 @@ test("Birdie brand preview never calls Framer production deploy", () => {
   assert.match(source, /await main\.switch\(\)/);
 });
 
-test("Birdie brand preview creates a dedicated page and code component", () => {
+test("Birdie brand preview creates a dedicated page and mounts inside the primary breakpoint", () => {
   assert.match(source, /createWebPage\(PREVIEW_PATH\)/);
   assert.match(source, /createCodeFile\("BirdieBrandHome\.tsx"/);
-  assert.match(source, /addComponentInstance/);
+  assert.match(source, /getNodesWithType\("FrameNode"\)/);
+  assert.match(source, /frame\?\.isPrimaryBreakpoint/);
+  assert.match(source, /parentId:\s*primary\.id/);
+  assert.doesNotMatch(source, /parentId:\s*page\.id/);
+  assert.match(source, /FRAMER_BRAND_PARENT_READBACK_FAILED/);
   assert.match(source, /BirdieBrandHome/);
 });
 
@@ -63,4 +67,12 @@ test("Birdie brand preview route is founder-gated", () => {
 test("Birdie brand preview does not interpolate an undefined HERO symbol", () => {
   assert.doesNotMatch(source, /url\("\$\{HERO\}"\)/);
   assert.match(source, /url\("\$\{HERO_IMAGE\}"\)/);
+});
+
+
+test("Birdie brand component declares responsive Framer sizing", () => {
+  assert.match(source, /@framerSupportedLayoutWidth fixed/);
+  assert.match(source, /@framerSupportedLayoutHeight auto/);
+  assert.match(source, /width:\s*"1fr"/);
+  assert.match(source, /height:\s*"fit-content"/);
 });
