@@ -17,6 +17,10 @@ import {
   applyFramerV4TextPreview,
   applyFramerV4CmsPreview
 } from "./framer-v4-service.mjs";
+import {
+  getBirdieBrandPreviewPolicy,
+  buildBirdieBrandPreview
+} from "./framer-brand-preview.mjs";
 
 function requireConfirmation(body, expected) {
   if (body?.confirmation !== expected) {
@@ -107,6 +111,21 @@ export async function routeFramerRequest({ req, res, url, json, readBody }) {
 
   if (req.method === "POST" && url.pathname === "/framer/v4/cms/apply-preview") {
     const data = await applyFramerV4CmsPreview(await readBody(req));
+    return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
+  }
+
+  if (req.method === "GET" && url.pathname === "/framer/v5/brand-policy") {
+    return json(res, 200, {
+      success: true,
+      source: "BIRDIE_BRAND_GOVERNANCE",
+      data: getBirdieBrandPreviewPolicy()
+    });
+  }
+
+  if (req.method === "POST" && url.pathname === "/framer/v5/brand-preview") {
+    const body = await readBody(req);
+    requireConfirmation(body, "BUILD_BIRDIE_FRAMER_BRAND_PREVIEW");
+    const data = await buildBirdieBrandPreview();
     return json(res, 200, { success: true, source: "FRAMER_SERVER_API", data });
   }
 

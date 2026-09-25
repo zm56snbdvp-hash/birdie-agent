@@ -1,0 +1,162 @@
+name: Framer Birdie Brand Preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/framer-brand-preview.mjs
+      - scripts/framer-brand-preview.mjs
+      - test/framer-brand-preview.test.mjs
+      - .github/workflows/framer-brand-preview.yml
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type BUILD_BIRDIE_FRAMER_BRAND_PREVIEW"
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: birdie-framer-brand-preview
+  cancel-in-progress: false
+
+env:
+  GCP_PROJECT_ID: gen-lang-client-0251788487
+  GCP_REGION: europe-west3
+  CLOUD_RUN_SERVICE: birdie-agent
+  EXPECTED_WIF_PROVIDER: projects/893591677320/locations/global/workloadIdentityPools/github-birdie-agent/providers/github-birdie-agent
+  EXPECTED_DEPLOYER_SERVICE_ACCOUNT: birdie-github-deployer@gen-lang-client-0251788487.iam.gserviceaccount.com
+
+jobs:
+  build-preview:
+    name: Build isolated Framer brand preview
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: birdie-cloud-run-no-traffic
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: Validate invocation
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_CONFIRMATION: ${{ inputs.confirmation }}
+          WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "zm56snbdvp-hash/birdie-agent"
+          test "$WIF_PROVIDER" = "$EXPECTED_WIF_PROVIDER"
+          test "$DEPLOYER_SERVICE_ACCOUNT" = "$EXPECTED_DEPLOYER_SERVICE_ACCOUNT"
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            test "$MANUAL_CONFIRMATION" = "BUILD_BIRDIE_FRAMER_BRAND_PREVIEW"
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install and test
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm test
+          node --check src/framer-brand-preview.mjs
+          node --check scripts/framer-brand-preview.mjs
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+          token_format: access_token
+          access_token_scopes: https://www.googleapis.com/auth/cloud-platform
+          create_credentials_file: true
+          export_environment_variables: true
+          cleanup_credentials: true
+
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          version: "577.0.0"
+          project_id: ${{ env.GCP_PROJECT_ID }}
+
+      - name: Resolve existing Framer runtime credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud run services describe "$CLOUD_RUN_SERVICE"             --project "$GCP_PROJECT_ID"             --region "$GCP_REGION"             --platform managed             --format=json > "$RUNNER_TEMP/birdie-service.json"
+
+          resolve_runtime_env() {
+            local name="$1"
+            local direct secret version
+            direct="$(jq -r --arg name "$name" '[.spec.template.spec.containers[0].env[]? | select(.name == $name)][0].value // empty' "$RUNNER_TEMP/birdie-service.json")"
+            if [ -n "$direct" ]; then
+              printf '%s' "$direct"
+              return 0
+            fi
+
+            secret="$(jq -r --arg name "$name" '[.spec.template.spec.containers[0].env[]? | select(.name == $name)][0].valueFrom.secretKeyRef.name // [.spec.template.spec.containers[0].env[]? | select(.name == $name)][0].valueFrom.secretKeyRef.secret // empty' "$RUNNER_TEMP/birdie-service.json")"
+            version="$(jq -r --arg name "$name" '[.spec.template.spec.containers[0].env[]? | select(.name == $name)][0].valueFrom.secretKeyRef.key // [.spec.template.spec.containers[0].env[]? | select(.name == $name)][0].valueFrom.secretKeyRef.version // "latest"' "$RUNNER_TEMP/birdie-service.json")"
+            if [ -z "$secret" ]; then
+              return 1
+            fi
+            gcloud secrets versions access "$version" --secret "$secret" --project "$GCP_PROJECT_ID"
+          }
+
+          FRAMER_PROJECT_URL="$(resolve_runtime_env FRAMER_PROJECT_URL)"
+          FRAMER_API_KEY="$(resolve_runtime_env FRAMER_API_KEY)"
+          test -n "$FRAMER_PROJECT_URL"
+          test -n "$FRAMER_API_KEY"
+
+          echo "::add-mask::$FRAMER_PROJECT_URL"
+          echo "::add-mask::$FRAMER_API_KEY"
+          {
+            echo "FRAMER_PROJECT_URL=$FRAMER_PROJECT_URL"
+            echo "FRAMER_API_KEY=$FRAMER_API_KEY"
+            echo "BIRDIE_FRAMER_PREVIEW_CONFIRMATION=BUILD_BIRDIE_FRAMER_BRAND_PREVIEW"
+          } >> "$GITHUB_ENV"
+
+      - name: Build and publish isolated preview branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/framer-brand-preview.mjs > "$RUNNER_TEMP/framer-brand-preview.json"
+          jq -e '
+            .mode == "ISOLATED_BRANCH_PREVIEW_ONLY"
+            and .productionDeployed == false
+            and .productionDeployAllowed == false
+            and .page.path == "/new-birdie"
+            and .branch.id != null
+          ' "$RUNNER_TEMP/framer-brand-preview.json" > /dev/null
+
+          {
+            echo "## Birdie & Breakfast Framer brand preview"
+            echo ""
+            echo "- Production touched: **no**"
+            echo "- Preview page: `/new-birdie`"
+            echo "- Branch: `$(jq -r '.branch.id' "$RUNNER_TEMP/framer-brand-preview.json")`"
+            echo "- Deployment: `$(jq -r '.preview.deployment.id // .preview.deployment // "created"' "$RUNNER_TEMP/framer-brand-preview.json")`"
+            echo ""
+            echo "The workflow created and published an isolated Framer branch only."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload sanitized preview receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: birdie-framer-brand-preview-${{ github.sha }}
+          path: ${{ runner.temp }}/framer-brand-preview.json
+          if-no-files-found: error
+          retention-days: 30
