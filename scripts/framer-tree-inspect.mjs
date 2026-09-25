@@ -56,10 +56,32 @@ try {
   const page = (pages || []).find(p => p?.path === "/new-birdie");
   if (!page) throw new Error("/new-birdie not found");
 
+  const codeFile = typeof framer.getCodeFile === "function"
+    ? await framer.getCodeFile("BirdieBrandHome.tsx")
+    : null;
+
+  let versions = [];
+  if (codeFile && typeof codeFile.getVersions === "function") {
+    try {
+      versions = await codeFile.getVersions();
+    } catch {}
+  }
+
   const result = {
     projectInfo: typeof framer.getProjectInfo === "function" ? await framer.getProjectInfo() : null,
     publishInfo: typeof framer.getPublishInfo === "function" ? await framer.getPublishInfo() : null,
     page: await describe(page),
+    codeFile: codeFile ? {
+      id: codeFile.id || null,
+      name: codeFile.name || null,
+      path: codeFile.path || null,
+      content: codeFile.content || null,
+      exports: codeFile.exports || [],
+      versions: (versions || []).slice(0,10).map(v => ({
+        id: v?.id || null,
+        createdAt: v?.createdAt || null
+      }))
+    } : null,
     allFrames: [],
     allInstances: []
   };
