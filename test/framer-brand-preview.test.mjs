@@ -43,7 +43,7 @@ test("Birdie brand preview clones the working home page and replaces its breakpo
   assert.match(source, /createCodeFile\("BirdieBrandHome\.tsx"/);
   assert.match(source, /getNodesWithType\("FrameNode"\)/);
   assert.match(source, /frame\?\.isBreakpoint/);
-  assert.match(source, /parentId:\s*frame\.id/);
+  assert.match(source, /frame\?\.isPrimaryBreakpoint/);\n  assert.match(source, /parentId:\s*primary\.id/);\n  assert.match(source, /FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED/);
   assert.match(source, /FRAMER_BRAND_PARENT_READBACK_FAILED/);
   assert.match(source, /FRAMER_OLD_SITE_STILL_PRESENT/);
   assert.match(source, /BirdieNocturnalSite/);
