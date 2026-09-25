@@ -55,7 +55,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          FRAMER_PROJECT_URL="${FRAMER_PROJECT_URL_SECRET:-${FRAMER_PROJECT_URL_VAR:-}}"
+          FRAMER_PROJECT_URL="${FRAMER_PROJECT_URL_SECRET:-${FRAMER_PROJECT_URL_VAR:-$(cat config/framer-project-url.txt 2>/dev/null || true)}}"
           FRAMER_API_KEY="${FRAMER_API_KEY_SECRET:-}"
 
           if [ -z "$FRAMER_API_KEY" ]; then
