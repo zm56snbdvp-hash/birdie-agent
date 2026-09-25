@@ -8,6 +8,7 @@ on:
       - scripts/framer-brand-preview.mjs
       - test/framer-brand-preview.test.mjs
       - .github/workflows/framer-brand-preview.yml
+      - config/framer-project-url.txt
   workflow_dispatch:
     inputs:
       confirmation:
