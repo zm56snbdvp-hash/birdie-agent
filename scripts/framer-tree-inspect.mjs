@@ -70,6 +70,7 @@ try {
   const result = {
     projectInfo: typeof framer.getProjectInfo === "function" ? await framer.getProjectInfo() : null,
     publishInfo: typeof framer.getPublishInfo === "function" ? await framer.getPublishInfo() : null,
+    customCode: typeof framer.getCustomCode === "function" ? await framer.getCustomCode() : null,
     page: await describe(page),
     codeFile: codeFile ? {
       id: codeFile.id || null,
