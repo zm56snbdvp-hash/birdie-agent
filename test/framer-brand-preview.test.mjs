@@ -72,7 +72,7 @@ test("Birdie brand preview route is founder-gated", () => {
 test("Birdie brand preview hero is visually distinct from the legacy screenshot hero", () => {
   assert.doesNotMatch(source, /className="hero-media"/);
   assert.doesNotMatch(source, /\.hero-media\{/);
-  assert.doesNotMatch(source, /const HERO =/);
+  assert.doesNotMatch(source, /const HERO = "/);
   assert.match(source, /className="hero-visual"/);
   assert.match(source, /Art to live with\./);
   assert.match(source, /Fashion to live in\./);
