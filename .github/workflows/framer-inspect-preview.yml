@@ -1,0 +1,50 @@
+name: Framer Preview Inspector
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/framer-inspect-preview.mjs
+      - .github/workflows/framer-inspect-preview.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Resolve Framer credentials
+        env:
+          FRAMER_API_KEY_SECRET: ${{ secrets.FRAMER_API_KEY }}
+          FRAMER_PROJECT_URL_SECRET: ${{ secrets.FRAMER_PROJECT_URL }}
+          FRAMER_PROJECT_URL_VAR: ${{ vars.FRAMER_PROJECT_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          FRAMER_PROJECT_URL="${FRAMER_PROJECT_URL_SECRET:-${FRAMER_PROJECT_URL_VAR:-$(cat config/framer-project-url.txt 2>/dev/null || true)}}"
+          FRAMER_API_KEY="${FRAMER_API_KEY_SECRET:-}"
+          test -n "$FRAMER_PROJECT_URL"
+          test -n "$FRAMER_API_KEY"
+          echo "::add-mask::$FRAMER_PROJECT_URL"
+          echo "::add-mask::$FRAMER_API_KEY"
+          echo "FRAMER_PROJECT_URL=$FRAMER_PROJECT_URL" >> "$GITHUB_ENV"
+          echo "FRAMER_API_KEY=$FRAMER_API_KEY" >> "$GITHUB_ENV"
+      - name: Install
+        run: npm ci
+      - name: Inspect
+        run: node scripts/framer-inspect-preview.mjs > "$RUNNER_TEMP/framer-inspect.json"
+      - name: Upload inspection
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: framer-inspect-${{ github.sha }}
+          path: ${{ runner.temp }}/framer-inspect.json
+          retention-days: 7
