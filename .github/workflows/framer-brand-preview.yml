@@ -52,6 +52,7 @@ jobs:
           FRAMER_API_KEY_SECRET: ${{ secrets.FRAMER_API_KEY }}
           FRAMER_PROJECT_URL_SECRET: ${{ secrets.FRAMER_PROJECT_URL }}
           FRAMER_PROJECT_URL_VAR: ${{ vars.FRAMER_PROJECT_URL }}
+          FRAMER_PROJECT_URL_KNOWN: https://framer.com/projects/Birdie-Breakfast--mPpX09LJtc1GJZuBy69q-iPGjg
         shell: bash
         run: |
           set -euo pipefail
@@ -63,7 +64,7 @@ jobs:
             exit 42
           fi
           if [ -z "$FRAMER_PROJECT_URL" ]; then
-            echo "::error::FRAMER_PROJECT_URL is not available as a GitHub repository secret or variable."
+            echo "::error::FRAMER_PROJECT_URL could not be resolved."
             exit 43
           fi
 
