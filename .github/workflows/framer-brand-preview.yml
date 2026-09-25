@@ -53,7 +53,7 @@ jobs:
           FRAMER_API_KEY_SECRET: ${{ secrets.FRAMER_API_KEY }}
           FRAMER_PROJECT_URL_SECRET: ${{ secrets.FRAMER_PROJECT_URL }}
           FRAMER_PROJECT_URL_VAR: ${{ vars.FRAMER_PROJECT_URL }}
-          FRAMER_PROJECT_URL_KNOWN: https://framer.com/projects/Birdie-Breakfast--mPpX09LJtc1GJZuBy69q-iPGjg
+          FRAMER_PROJECT_URL_KNOWN: https://framer.com/projects/mPpX09LJtc1GJZuBy69q-iPGjg
         shell: bash
         run: |
           set -euo pipefail
