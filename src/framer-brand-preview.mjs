@@ -291,6 +291,29 @@ async function createPreviewBranch(framer) {
   return active;
 }
 
+async function resolvePreviewTarget(framer, main) {
+  try {
+    const branch = await createPreviewBranch(framer);
+    return {
+      target: branch,
+      executionMode: "ISOLATED_BRANCH_PREVIEW",
+      branchingAvailable: true
+    };
+  } catch (error) {
+    const message = String(error?.message || error || "");
+    if (!/Branching is not available/i.test(message)) throw error;
+
+    const active = await framer.getActiveBranch();
+    if (!active || active.id !== "main") await main.switch();
+
+    return {
+      target: main,
+      executionMode: "DEDICATED_MAIN_PAGE_PREVIEW",
+      branchingAvailable: false
+    };
+  }
+}
+
 async function upsertCodeFile(framer, content) {
   const files = typeof framer.getCodeFiles === "function" ? await framer.getCodeFiles() : [];
   let file = (files || []).find((candidate) =>
@@ -356,7 +379,9 @@ export function getBirdieBrandPreviewPolicy() {
   return {
     version: VERSION,
     path: PREVIEW_PATH,
-    mode: "ISOLATED_BRANCH_PREVIEW_ONLY",
+    mode: "PREVIEW_ONLY_NO_PRODUCTION_DEPLOY",
+    preferredIsolation: "FRAMER_BRANCH",
+    fallbackIsolation: "DEDICATED_MAIN_PAGE",
     productionDeployed: false,
     productionDeployAllowed: false,
     replacesLiveHome: false,
@@ -372,13 +397,18 @@ export async function buildBirdieBrandPreview() {
   const { connect } = await import("framer-api");
   const framer = await connect(projectUrl, apiKey);
   let main = null;
-  let branch = null;
+  let previewTarget = null;
+  let executionMode = null;
+  let branchingAvailable = null;
   let result = null;
   let operationError = null;
 
   try {
     main = await ensureMain(framer);
-    branch = await createPreviewBranch(framer);
+    const target = await resolvePreviewTarget(framer, main);
+    previewTarget = target.target;
+    executionMode = target.executionMode;
+    branchingAvailable = target.branchingAvailable;
 
     const content = buildComponentSource();
     const { file, componentExport } = await upsertCodeFile(framer, content);
@@ -388,7 +418,9 @@ export async function buildBirdieBrandPreview() {
     result = {
       ...getBirdieBrandPreviewPolicy(),
       writePerformed: true,
-      branch: branchIdentity(branch),
+      executionMode,
+      branchingAvailable,
+      branch: branchIdentity(previewTarget),
       page: { id: page.id, path: page.path || PREVIEW_PATH },
       component: { fileId: file.id || null, instanceId: instance.id },
       preview: {
