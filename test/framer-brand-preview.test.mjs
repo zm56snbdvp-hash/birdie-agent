@@ -58,3 +58,9 @@ test("Birdie brand preview route is founder-gated", () => {
   assert.match(routerSource, /BUILD_BIRDIE_FRAMER_BRAND_PREVIEW/);
   assert.match(routerSource, /\/framer\/v5\/brand-policy/);
 });
+
+
+test("Birdie brand preview does not interpolate an undefined HERO symbol", () => {
+  assert.doesNotMatch(source, /url\("\$\{HERO\}"\)/);
+  assert.match(source, /url\("\$\{HERO_IMAGE\}"\)/);
+});
