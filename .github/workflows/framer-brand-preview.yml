@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   build-preview:
-    name: Build isolated Framer brand preview
+    name: Build safe Framer brand preview
     runs-on: ubuntu-24.04
     timeout-minutes: 20
 
@@ -92,13 +92,14 @@ jobs:
           node --check src/framer-brand-preview.mjs
           node --check scripts/framer-brand-preview.mjs
 
-      - name: Build and publish isolated preview branch
+      - name: Build and publish safe preview
         shell: bash
         run: |
           set -euo pipefail
           node scripts/framer-brand-preview.mjs > "$RUNNER_TEMP/framer-brand-preview.json"
           jq -e '
-            .mode == "ISOLATED_BRANCH_PREVIEW_ONLY"
+            .mode == "PREVIEW_ONLY_NO_PRODUCTION_DEPLOY"
+            and (.executionMode == "ISOLATED_BRANCH_PREVIEW" or .executionMode == "DEDICATED_MAIN_PAGE_PREVIEW")
             and .productionDeployed == false
             and .productionDeployAllowed == false
             and .page.path == "/new-birdie"
@@ -110,10 +111,11 @@ jobs:
             echo ""
             echo "- Production touched: **no**"
             echo "- Preview page: `/new-birdie`"
-            echo "- Branch: `$(jq -r '.branch.id' "$RUNNER_TEMP/framer-brand-preview.json")`"
+            echo "- Execution mode: `$(jq -r '.executionMode' "$RUNNER_TEMP/framer-brand-preview.json")`"
+            echo "- Framer target: `$(jq -r '.branch.id' "$RUNNER_TEMP/framer-brand-preview.json")`"
             echo "- Deployment: `$(jq -r '.preview.deployment.id // .preview.deployment // "created"' "$RUNNER_TEMP/framer-brand-preview.json")`"
             echo ""
-            echo "The workflow created and published an isolated Framer branch only."
+            echo "The workflow created a preview deployment only. It never calls Framer production deploy."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload sanitized preview receipt
