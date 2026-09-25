@@ -379,73 +379,59 @@ async function replacePreviewPage(framer, insertURL) {
 
   const frames = await page.getNodesWithType("FrameNode");
   const breakpoints = (frames || []).filter((frame) => frame?.isBreakpoint);
+  const primary = breakpoints.find((frame) => frame?.isPrimaryBreakpoint)
+    || breakpoints[0]
+    || null;
 
-  if (!breakpoints.length) {
+  if (!primary?.id) {
     throw fail(
       "FRAMER_BRAND_BREAKPOINT_MISSING",
-      "The cloned preview page has no publishable breakpoint frames",
+      "The cloned preview page has no primary publishable breakpoint",
       503
     );
   }
-
-  const createdInstances = [];
 
   for (const frame of breakpoints) {
     if (typeof frame.setAttributes === "function") {
       await frame.setAttributes({ height: "fit-content" });
     }
+  }
 
-    const existingInstances = await frame.getNodesWithType("ComponentInstanceNode");
-    for (const node of existingInstances || []) {
-      if (typeof node.remove === "function") await node.remove();
+  // Framer's responsive breakpoints share a linked component tree. Mutate the
+  // primary breakpoint only; Framer mirrors the component across derived
+  // breakpoints (for example Phone).
+  const primaryInstances = await primary.getNodesWithType("ComponentInstanceNode");
+  for (const node of primaryInstances || []) {
+    if (typeof node.remove === "function") await node.remove();
+  }
+
+  const instance = await framer.addComponentInstance({
+    url: insertURL,
+    parentId: primary.id,
+    attributes: {
+      name: "Birdie Brand Home",
+      width: "1fr",
+      height: "fit-content"
     }
+  });
 
-    const instance = await framer.addComponentInstance({
-      url: insertURL,
-      parentId: frame.id,
-      attributes: {
-        name: "Birdie Brand Home",
-        width: "1fr",
-        height: "fit-content"
-      }
-    });
+  if (!instance?.id) {
+    throw fail(
+      "FRAMER_BRAND_INSTANCE_FAILED",
+      "Could not insert BirdieBrandHome into the primary breakpoint",
+      503
+    );
+  }
 
-    if (!instance?.id) {
-      throw fail(
-        "FRAMER_BRAND_INSTANCE_FAILED",
-        `Could not insert BirdieBrandHome into breakpoint ${frame?.name || frame?.id}`,
-        503
-      );
-    }
-
-    const parent = typeof instance.getParent === "function"
-      ? await instance.getParent()
-      : null;
-    if (!parent || parent.id !== frame.id) {
-      throw fail(
-        "FRAMER_BRAND_PARENT_READBACK_FAILED",
-        `BirdieBrandHome is not parented to breakpoint ${frame?.name || frame?.id}`,
-        502
-      );
-    }
-
-    if (typeof instance.getRuntimeError === "function") {
-      const runtimeError = await instance.getRuntimeError();
-      if (runtimeError) {
-        throw fail(
-          "FRAMER_BRAND_RUNTIME_ERROR",
-          `BirdieBrandHome runtime error in breakpoint ${frame?.name || frame?.id}: ${String(runtimeError?.message || runtimeError)}`,
-          422
-        );
-      }
-    }
-
-    createdInstances.push({
-      id: instance.id,
-      breakpointId: frame.id,
-      breakpointName: frame?.name || null,
-      primary: Boolean(frame?.isPrimaryBreakpoint)
-    });
+  const parent = typeof instance.getParent === "function"
+    ? await instance.getParent()
+    : null;
+  if (!parent || parent.id !== primary.id) {
+    throw fail(
+      "FRAMER_BRAND_PARENT_READBACK_FAILED",
+      "BirdieBrandHome is not parented to the primary breakpoint",
+      502
+    );
   }
 
   const readbackInstances = await page.getNodesWithType("ComponentInstanceNode");
@@ -464,18 +450,52 @@ async function replacePreviewPage(framer, insertURL) {
     );
   }
 
-  if (brandInstances.length !== breakpoints.length) {
+  if (!brandInstances.length) {
     throw fail(
       "FRAMER_BRAND_INSTANCE_READBACK_FAILED",
-      "The redesign component count does not match the page breakpoint count",
+      "BirdieBrandHome was not found on the cloned preview page",
       502
     );
   }
 
+  const breakpointCoverage = [];
+  for (const frame of breakpoints) {
+    const responsiveInstances = await frame.getNodesWithType("ComponentInstanceNode");
+    const matches = (responsiveInstances || []).filter((node) =>
+      node?.componentName === "BirdieBrandHome"
+    );
+    if (!matches.length) {
+      throw fail(
+        "FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED",
+        `BirdieBrandHome is missing from breakpoint ${frame?.name || frame?.id}`,
+        502
+      );
+    }
+    breakpointCoverage.push({
+      breakpointId: frame.id,
+      breakpointName: frame?.name || null,
+      primary: Boolean(frame?.isPrimaryBreakpoint),
+      instanceIds: matches.map((node) => node.id)
+    });
+  }
+
+  for (const node of brandInstances) {
+    if (typeof node.getRuntimeError === "function") {
+      const runtimeError = await node.getRuntimeError();
+      if (runtimeError) {
+        throw fail(
+          "FRAMER_BRAND_RUNTIME_ERROR",
+          `BirdieBrandHome runtime error: ${String(runtimeError?.message || runtimeError)}`,
+          422
+        );
+      }
+    }
+  }
+
   return {
     page,
-    instances: createdInstances,
-    breakpointIds: breakpoints.map((frame) => frame.id)
+    instances: brandInstances.map((node) => ({ id: node.id })),
+    breakpointCoverage
   };
 }
 
@@ -516,7 +536,7 @@ export async function buildBirdieBrandPreview() {
 
     const content = buildComponentSource();
     const { file, componentExport } = await upsertCodeFile(framer, content);
-    const { page, instances, breakpointIds } = await replacePreviewPage(framer, componentExport.insertURL);
+    const { page, instances, breakpointCoverage } = await replacePreviewPage(framer, componentExport.insertURL);
 
     const publishResult = await framer.publish();
     result = {
@@ -528,7 +548,7 @@ export async function buildBirdieBrandPreview() {
       page: {
         id: page.id,
         path: page.path || PREVIEW_PATH,
-        breakpointIds
+        breakpointCoverage
       },
       component: {
         fileId: file.id || null,
