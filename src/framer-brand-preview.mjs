@@ -83,13 +83,19 @@ export default function BirdieBrandHome() {
         .navlinks{display:flex;align-items:center;gap:28px}
         .navlinks a{font-size:12px;color:rgba(255,255,255,.8);text-decoration:none;letter-spacing:.08em}
         .pill{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;background:var(--ivory);color:var(--ink)!important;font-weight:700;letter-spacing:.04em!important}
-        .hero{min-height:100svh;position:relative;display:flex;align-items:flex-end;background:#071018}
-        .hero-media{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(2,8,13,.94) 0%,rgba(2,8,13,.72) 34%,rgba(2,8,13,.2) 70%,rgba(2,8,13,.08) 100%),linear-gradient(0deg,rgba(7,16,24,.65),transparent 42%),url("${HERO_IMAGE}");background-size:cover;background-position:center}
-        .hero-copy{position:relative;z-index:2;width:min(760px,86vw);padding:0 4.5vw 8.5vh}
+        .hero{min-height:100svh;position:relative;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);background:#071018;padding-top:101px}
+        .hero-copy{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;padding:9vh 5vw 8vh}
+        .hero-visual{position:relative;min-height:calc(100svh - 101px);overflow:hidden;background:#0d1a23}
+        .hero-art-main{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+        .hero-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,16,24,.42),transparent 28%),linear-gradient(0deg,rgba(7,16,24,.28),transparent 48%)}
+        .hero-hoodie-card{position:absolute;z-index:2;left:5%;bottom:5%;width:min(330px,38%);padding:14px;background:rgba(241,236,226,.95);box-shadow:0 24px 70px rgba(0,0,0,.38)}
+        .hero-hoodie-card img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover}
+        .hero-hoodie-card span{display:block;margin-top:10px;color:#071018;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+        .hero-mark{position:absolute;z-index:2;right:4%;top:5%;border:1px solid rgba(241,236,226,.36);border-radius:999px;padding:10px 14px;color:var(--ivory);font-size:10px;letter-spacing:.16em;text-transform:uppercase;backdrop-filter:blur(8px)}
+        .hero p{max-width:560px;font-size:clamp(17px,1.35vw,21px);line-height:1.6;color:rgba(241,236,226,.72);margin:0 0 32px}
         .eyebrow{display:flex;align-items:center;gap:12px;color:var(--gold-soft);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px}
         .eyebrow:before{content:"";width:36px;height:1px;background:var(--gold)}
-        h1{font-size:clamp(58px,8.2vw,132px);line-height:.84;margin:0 0 28px;max-width:920px}
-        .hero p{max-width:560px;font-size:clamp(17px,1.35vw,21px);line-height:1.6;color:rgba(241,236,226,.72);margin:0 0 32px}
+        h1{font-size:clamp(58px,7.4vw,116px);line-height:.88;margin:0 0 28px;max-width:820px}
         .actions{display:flex;gap:12px;flex-wrap:wrap}
         .button{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border:1px solid rgba(255,255,255,.22);border-radius:999px;color:var(--ivory);text-decoration:none;font-size:12px;letter-spacing:.08em;text-transform:uppercase;transition:.25s ease}
         .button.primary{background:var(--ivory);color:var(--ink);border-color:var(--ivory)}
@@ -144,9 +150,12 @@ export default function BirdieBrandHome() {
         .footer-bottom{display:flex;justify-content:space-between;gap:20px;border-top:1px solid rgba(255,255,255,.1);padding-top:24px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.42)}
         @media(max-width:900px){
           .nav{padding:22px 22px}.navlinks a:not(.pill){display:none}
-          .hero-media{background-image:linear-gradient(0deg,rgba(2,8,13,.93) 0%,rgba(2,8,13,.28) 68%),url("${HERO_IMAGE}");background-position:67% center}
-          .hero-copy{padding:0 22px 56px;width:100%}
-          h1{font-size:clamp(56px,18vw,92px)}
+          .hero{display:flex;flex-direction:column;padding-top:82px;min-height:auto}
+          .hero-copy{padding:70px 22px 56px;width:100%}
+          .hero-visual{width:100%;min-height:72svh}
+          .hero-hoodie-card{width:44%;left:5%;bottom:5%;padding:10px}
+          .hero-mark{top:4%;right:5%}
+          h1{font-size:clamp(52px,16vw,84px)}
           .manifesto,.origin{grid-template-columns:1fr;padding:90px 22px;gap:42px}
           .fashion,.art-section{padding:90px 22px}
           .section-head{display:block}.section-head p{margin-top:24px}
@@ -407,9 +416,25 @@ async function replacePreviewPage(framer, insertURL) {
   // Framer's responsive breakpoints share a linked component tree. Mutate the
   // primary breakpoint only; Framer mirrors the component across derived
   // breakpoints (for example Phone).
-  const primaryInstances = await primary.getNodesWithType("ComponentInstanceNode");
-  for (const node of primaryInstances || []) {
-    if (typeof node.remove === "function") await node.remove();
+  const primaryChildren = await primary.getChildren();
+  for (const node of primaryChildren || []) {
+    if (typeof node.remove !== "function") {
+      throw fail(
+        "FRAMER_PRIMARY_CHILD_REMOVE_UNAVAILABLE",
+        `Cannot remove legacy node ${node?.name || node?.id || "unknown"} from the cloned primary breakpoint`,
+        503
+      );
+    }
+    await node.remove();
+  }
+
+  const remainingChildren = await primary.getChildren();
+  if ((remainingChildren || []).length !== 0) {
+    throw fail(
+      "FRAMER_PRIMARY_NOT_EMPTY",
+      "The cloned primary breakpoint still contains legacy nodes before redesign insertion",
+      502
+    );
   }
 
   const instance = await framer.addComponentInstance({
@@ -461,6 +486,17 @@ async function replacePreviewPage(framer, insertURL) {
     throw fail(
       "FRAMER_BRAND_INSTANCE_READBACK_FAILED",
       "BirdieBrandHome was not found on the cloned preview page",
+      502
+    );
+  }
+
+  const foreignInstances = (readbackInstances || []).filter((node) =>
+    node?.componentName !== "BirdieBrandHome"
+  );
+  if (foreignInstances.length !== 0) {
+    throw fail(
+      "FRAMER_FOREIGN_INSTANCE_STILL_PRESENT",
+      "The cloned preview page still contains a legacy component instance",
       502
     );
   }
