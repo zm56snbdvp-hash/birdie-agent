@@ -66,9 +66,13 @@ test("Birdie brand preview route is founder-gated", () => {
   assert.match(routerSource, /\/framer\/v5\/brand-policy/);
 });
 
-test("Birdie brand preview does not interpolate an undefined HERO symbol", () => {
-  assert.doesNotMatch(source, /url\("\$\{HERO\}"\)/);
-  assert.match(source, /url\("\$\{HERO_IMAGE\}"\)/);
+test("Birdie brand preview hero is visually distinct from the legacy screenshot hero", () => {
+  assert.doesNotMatch(source, /className="hero-media"/);
+  assert.match(source, /className="hero-visual"/);
+  assert.match(source, /Art to live with\./);
+  assert.match(source, /Fashion to live in\./);
+  assert.match(source, /src="\$\{IMAGE_GOLDEN\}"/);
+  assert.match(source, /src="\$\{IMAGE_ART_REMIX\}"/);
 });
 
 test("Birdie brand component declares responsive Framer sizing", () => {
