@@ -89,7 +89,7 @@ export default function BirdieBrandHome() {
         .eyebrow{display:flex;align-items:center;gap:12px;color:var(--gold-soft);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px}
         .eyebrow:before{content:"";width:36px;height:1px;background:var(--gold)}
         h1{font-size:clamp(58px,8.2vw,132px);line-height:.84;margin:0 0 28px;max-width:920px}
-        .hero p{max-width:610px;font-size:clamp(17px,1.45vw,22px);line-height:1.5;color:rgba(241,236,226,.77);margin:0 0 32px}
+        .hero p{max-width:560px;font-size:clamp(17px,1.35vw,21px);line-height:1.6;color:rgba(241,236,226,.72);margin:0 0 32px}
         .actions{display:flex;gap:12px;flex-wrap:wrap}
         .button{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 26px;border:1px solid rgba(255,255,255,.22);border-radius:999px;color:var(--ivory);text-decoration:none;font-size:12px;letter-spacing:.08em;text-transform:uppercase;transition:.25s ease}
         .button.primary{background:var(--ivory);color:var(--ink);border-color:var(--ivory)}
@@ -171,14 +171,21 @@ export default function BirdieBrandHome() {
       </nav>
 
       <section className="hero">
-        <div className="hero-media" />
         <div className="hero-copy">
-          <div className="eyebrow">Birdie & Breakfast · New Era</div>
-          <h1 className="serif">Wear the art.<br/>Live the feeling.</h1>
-          <p>Birdie & Breakfast wird eine Welt aus Kunst, Fashion und gutem Gefühl. Dieselbe Formsprache an der Wand, auf Stoff und in den Momenten dazwischen.</p>
+          <div className="eyebrow">Birdie & Breakfast · Art / Fashion / Living</div>
+          <h1 className="serif">Art to live with.<br/>Fashion to live in.</h1>
+          <p>Eine neue Birdie & Breakfast Welt: Kunst für Räume, tragbare Editionen und Dinge, die sich gut anfühlen — kuratiert in einer gemeinsamen visuellen Sprache.</p>
           <div className="actions">
-            <a className="button primary" href={SHOP}>Shop the new world</a>
-            <a className="button" href="#art">Discover the art</a>
+            <a className="button primary" href={SHOP}>Enter the Shop</a>
+            <a className="button" href="#art">Explore the Editions</a>
+          </div>
+        </div>
+        <div className="hero-visual">
+          <img className="hero-art-main" src="${IMAGE_GOLDEN}" alt="Golden Sanctuary BirdieWorld wall art" />
+          <div className="hero-mark">BirdieWorld · Edition 01</div>
+          <div className="hero-hoodie-card">
+            <img src="${IMAGE_ART_REMIX}" alt="Birdie & Breakfast Art Remix hoodie" />
+            <span>Same universe · different object</span>
           </div>
         </div>
       </section>
@@ -509,7 +516,7 @@ export function getBirdieBrandPreviewPolicy() {
     productionDeployed: false,
     productionDeployAllowed: false,
     replacesLiveHome: false,
-    heroAsset: HERO_IMAGE,
+    heroAsset: IMAGE_GOLDEN,
     commerceTarget: SHOP_URL,
     coinShopIncluded: false,
     primaryPillars: ["Art", "Fashion", "Wellbeing", "Community"]

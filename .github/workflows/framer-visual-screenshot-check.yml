@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/framer-visual-screenshot-check.yml
+      - src/framer-brand-preview.mjs
 
 permissions:
   contents: read
