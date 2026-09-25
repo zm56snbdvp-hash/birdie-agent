@@ -263,32 +263,77 @@ export default function BirdieBrandHome() {
 `;
 }
 
-async function ensureMain(framer) {
-  for (const method of ["getActiveBranch", "getBranch", "createBranch", "publish", "createWebPage", "createCodeFile", "addComponentInstance"]) {
+function isBranchingUnavailable(error) {
+  return /branching is not available/i.test(String(error?.message || error || ""));
+}
+
+function assertBaseRuntime(framer) {
+  for (const method of ["createWebPage", "createCodeFile", "addComponentInstance", "getNodesWithType"]) {
     if (typeof framer?.[method] !== "function") {
       throw fail("FRAMER_BRAND_RUNTIME_UNAVAILABLE", `Framer runtime method ${method} is required`, 503);
     }
   }
-
-  const main = await framer.getBranch("main");
-  if (!main || typeof main.switch !== "function") {
-    throw fail("FRAMER_MAIN_UNAVAILABLE", "Main branch could not be resolved", 503);
-  }
-
-  const active = await framer.getActiveBranch();
-  if (!active || active.id !== "main") await main.switch();
-  return main;
 }
 
-async function createPreviewBranch(framer) {
-  const branch = await framer.createBranch({
-    title: `Birdie Brand Overhaul ${new Date().toISOString().slice(0, 16).replace("T", " ")}`
-  });
-  const active = await framer.getActiveBranch();
-  if (!branch?.id || !active || active.id !== branch.id || active.base === null) {
-    throw fail("FRAMER_BRAND_BRANCH_ISOLATION_FAILED", "Could not establish an isolated Framer branch", 503);
+async function establishPreviewExecution(framer) {
+  assertBaseRuntime(framer);
+
+  const branchMethodsAvailable = ["getActiveBranch", "getBranch", "createBranch", "publish"]
+    .every((method) => typeof framer?.[method] === "function");
+
+  if (!branchMethodsAvailable) {
+    return { mode: "MAIN_DRAFT_ONLY", main: null, branch: null };
   }
-  return active;
+
+  let main = null;
+  try {
+    main = await framer.getBranch("main");
+  } catch (error) {
+    if (isBranchingUnavailable(error)) {
+      return { mode: "MAIN_DRAFT_ONLY", main: null, branch: null };
+    }
+    throw error;
+  }
+
+  // Framer documents getBranch("main") returning null when branching is unavailable.
+  if (!main || typeof main.switch !== "function") {
+    return { mode: "MAIN_DRAFT_ONLY", main: null, branch: null };
+  }
+
+  const active = await framer.getActiveBranch();
+  if (!active || active.id !== main.id) await main.switch();
+
+  let branch = null;
+  try {
+    branch = await framer.createBranch({
+      title: `Birdie Brand Overhaul ${new Date().toISOString().slice(0, 16).replace("T", " ")}`
+    });
+  } catch (error) {
+    if (isBranchingUnavailable(error)) {
+      return { mode: "MAIN_DRAFT_ONLY", main: null, branch: null };
+    }
+    throw error;
+  }
+
+  const activeAfterCreate = await framer.getActiveBranch();
+  if (
+    !branch?.id ||
+    !activeAfterCreate ||
+    activeAfterCreate.id !== branch.id ||
+    !activeAfterCreate.baseId
+  ) {
+    throw fail(
+      "FRAMER_BRAND_BRANCH_ISOLATION_FAILED",
+      "Could not establish a verifiably isolated Framer branch",
+      503
+    );
+  }
+
+  return {
+    mode: "ISOLATED_BRANCH_PREVIEW_ONLY",
+    main,
+    branch: activeAfterCreate
+  };
 }
 
 async function upsertCodeFile(framer, content) {
@@ -325,14 +370,47 @@ async function upsertCodeFile(framer, content) {
   return { file, componentExport };
 }
 
-async function replacePreviewPage(framer, insertURL) {
+async function replacePreviewPage(framer, insertURL, { draft }) {
   const pages = await framer.getNodesWithType("WebPageNode");
   const existing = (pages || []).find((page) => page?.path === PREVIEW_PATH);
-  if (existing && typeof existing.remove === "function") await existing.remove();
 
-  const page = await framer.createWebPage(PREVIEW_PATH);
-  if (typeof page?.setAttributes === "function") {
-    await page.setAttributes({ draft: false });
+  if (existing) {
+    if (draft) {
+      if (typeof existing.setAttributes !== "function") {
+        throw fail(
+          "FRAMER_DRAFT_PAGE_UNAVAILABLE",
+          "Framer cannot mark the existing preview page as draft; refusing a main-project preview write",
+          503
+        );
+      }
+      await existing.setAttributes({ draft: true });
+    }
+    if (typeof existing.remove === "function") await existing.remove();
+  }
+
+  let page = await framer.createWebPage(PREVIEW_PATH);
+  if (typeof page?.setAttributes !== "function") {
+    throw fail(
+      "FRAMER_DRAFT_ATTRIBUTE_UNAVAILABLE",
+      "Framer WebPageNode draft attributes are required for the safe preview workflow",
+      503
+    );
+  }
+
+  const updatedPage = await page.setAttributes({ draft });
+  if (updatedPage) page = updatedPage;
+
+  if (draft) {
+    const readbackPages = await framer.getNodesWithType("WebPageNode");
+    const readback = (readbackPages || []).find((candidate) => candidate?.path === PREVIEW_PATH);
+    if (!readback || readback.draft !== true) {
+      throw fail(
+        "FRAMER_DRAFT_READBACK_FAILED",
+        "Preview page was not confirmed as draft; refusing to continue",
+        502
+      );
+    }
+    page = readback;
   }
 
   const instance = await framer.addComponentInstance({
@@ -356,9 +434,11 @@ export function getBirdieBrandPreviewPolicy() {
   return {
     version: VERSION,
     path: PREVIEW_PATH,
-    mode: "ISOLATED_BRANCH_PREVIEW_ONLY",
+    mode: "SAFE_PREVIEW_WITH_DRAFT_FALLBACK",
+    supportedModes: ["ISOLATED_BRANCH_PREVIEW_ONLY", "MAIN_DRAFT_ONLY"],
     productionDeployed: false,
     productionDeployAllowed: false,
+    publishOnMainAllowed: false,
     replacesLiveHome: false,
     heroAsset: HERO_IMAGE,
     commerceTarget: SHOP_URL,
@@ -371,37 +451,75 @@ export async function buildBirdieBrandPreview() {
   const { projectUrl, apiKey } = requireConfig();
   const { connect } = await import("framer-api");
   const framer = await connect(projectUrl, apiKey);
-  let main = null;
-  let branch = null;
+  let execution = null;
   let result = null;
   let operationError = null;
 
   try {
-    main = await ensureMain(framer);
-    branch = await createPreviewBranch(framer);
+    execution = await establishPreviewExecution(framer);
+    const draftOnly = execution.mode === "MAIN_DRAFT_ONLY";
 
     const content = buildComponentSource();
     const { file, componentExport } = await upsertCodeFile(framer, content);
-    const { page, instance } = await replacePreviewPage(framer, componentExport.insertURL);
+    const { page, instance } = await replacePreviewPage(
+      framer,
+      componentExport.insertURL,
+      { draft: draftOnly }
+    );
 
-    const publishResult = await framer.publish();
+    let preview = {
+      deployment: null,
+      hostnames: null,
+      published: false,
+      editorOnly: draftOnly
+    };
+
+    if (execution.mode === "ISOLATED_BRANCH_PREVIEW_ONLY") {
+      const active = await framer.getActiveBranch();
+      if (
+        !active ||
+        active.id !== execution.branch?.id ||
+        !active.baseId
+      ) {
+        throw fail(
+          "FRAMER_BRAND_PREVIEW_BRANCH_GUARD",
+          "Refusing publish because the active branch is not the isolated brand-preview branch",
+          409
+        );
+      }
+
+      const publishResult = await framer.publish();
+      preview = {
+        deployment: publishResult?.deployment || null,
+        hostnames: publishResult?.hostnames || null,
+        published: true,
+        editorOnly: false
+      };
+    }
+
     result = {
       ...getBirdieBrandPreviewPolicy(),
+      mode: execution.mode,
       writePerformed: true,
-      branch: branchIdentity(branch),
-      page: { id: page.id, path: page.path || PREVIEW_PATH },
+      branch: branchIdentity(execution.branch),
+      page: {
+        id: page.id,
+        path: page.path || PREVIEW_PATH,
+        draft: draftOnly
+      },
       component: { fileId: file.id || null, instanceId: instance.id },
-      preview: {
-        deployment: publishResult?.deployment || null,
-        hostnames: publishResult?.hostnames || null
-      }
+      preview
     };
   } catch (error) {
     operationError = error;
   } finally {
-    if (main && typeof main.switch === "function") {
+    if (
+      execution?.mode === "ISOLATED_BRANCH_PREVIEW_ONLY" &&
+      execution?.main &&
+      typeof execution.main.switch === "function"
+    ) {
       try {
-        await main.switch();
+        await execution.main.switch();
       } catch (restoreError) {
         if (!operationError) {
           operationError = fail(
