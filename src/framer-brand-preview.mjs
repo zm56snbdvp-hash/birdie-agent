@@ -40,7 +40,6 @@ function buildComponentSource() {
   return `import * as React from "react"
 
 const SHOP = "${SHOP_URL}"
-const HERO = "${HERO_IMAGE}"
 
 const art = [
   { title: "The Way Home", image: "${IMAGE_WAY_HOME}", tone: "Cinematic Wall Art" },
