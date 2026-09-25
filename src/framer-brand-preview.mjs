@@ -79,7 +79,7 @@ export default function BirdieBrandHome() {
         .navlinks a{font-size:12px;color:rgba(255,255,255,.8);text-decoration:none;letter-spacing:.08em}
         .pill{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;background:var(--ivory);color:var(--ink)!important;font-weight:700;letter-spacing:.04em!important}
         .hero{min-height:100svh;position:relative;display:flex;align-items:flex-end;background:#071018}
-        .hero-media{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(2,8,13,.94) 0%,rgba(2,8,13,.72) 34%,rgba(2,8,13,.2) 70%,rgba(2,8,13,.08) 100%),linear-gradient(0deg,rgba(7,16,24,.65),transparent 42%),url("${HERO}");background-size:cover;background-position:center}
+        .hero-media{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(2,8,13,.94) 0%,rgba(2,8,13,.72) 34%,rgba(2,8,13,.2) 70%,rgba(2,8,13,.08) 100%),linear-gradient(0deg,rgba(7,16,24,.65),transparent 42%),url("${HERO_IMAGE}");background-size:cover;background-position:center}
         .hero-copy{position:relative;z-index:2;width:min(760px,86vw);padding:0 4.5vw 8.5vh}
         .eyebrow{display:flex;align-items:center;gap:12px;color:var(--gold-soft);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px}
         .eyebrow:before{content:"";width:36px;height:1px;background:var(--gold)}
@@ -139,7 +139,7 @@ export default function BirdieBrandHome() {
         .footer-bottom{display:flex;justify-content:space-between;gap:20px;border-top:1px solid rgba(255,255,255,.1);padding-top:24px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.42)}
         @media(max-width:900px){
           .nav{padding:22px 22px}.navlinks a:not(.pill){display:none}
-          .hero-media{background-image:linear-gradient(0deg,rgba(2,8,13,.93) 0%,rgba(2,8,13,.28) 68%),url("${HERO}");background-position:67% center}
+          .hero-media{background-image:linear-gradient(0deg,rgba(2,8,13,.93) 0%,rgba(2,8,13,.28) 68%),url("${HERO_IMAGE}");background-position:67% center}
           .hero-copy{padding:0 22px 56px;width:100%}
           h1{font-size:clamp(56px,18vw,92px)}
           .manifesto,.origin{grid-template-columns:1fr;padding:90px 22px;gap:42px}
@@ -285,7 +285,7 @@ async function createPreviewBranch(framer) {
     title: `Birdie Brand Overhaul ${new Date().toISOString().slice(0, 16).replace("T", " ")}`
   });
   const active = await framer.getActiveBranch();
-  if (!branch?.id || !active || active.id !== branch.id || active.base === null) {
+  if (!branch?.id || !active || active.id !== branch.id || !active.baseId) {
     throw fail("FRAMER_BRAND_BRANCH_ISOLATION_FAILED", "Could not establish an isolated Framer branch", 503);
   }
   return active;
@@ -308,7 +308,7 @@ async function resolvePreviewTarget(framer, main) {
 
     return {
       target: main,
-      executionMode: "DEDICATED_MAIN_PAGE_PREVIEW",
+      executionMode: "MAIN_DRAFT_ONLY",
       branchingAvailable: false
     };
   }
@@ -348,14 +348,47 @@ async function upsertCodeFile(framer, content) {
   return { file, componentExport };
 }
 
-async function replacePreviewPage(framer, insertURL) {
+async function replacePreviewPage(framer, insertURL, { draft }) {
   const pages = await framer.getNodesWithType("WebPageNode");
   const existing = (pages || []).find((page) => page?.path === PREVIEW_PATH);
-  if (existing && typeof existing.remove === "function") await existing.remove();
 
-  const page = await framer.createWebPage(PREVIEW_PATH);
-  if (typeof page?.setAttributes === "function") {
-    await page.setAttributes({ draft: false });
+  if (existing) {
+    if (draft) {
+      if (typeof existing.setAttributes !== "function") {
+        throw fail(
+          "FRAMER_DRAFT_PAGE_UNAVAILABLE",
+          "Framer cannot mark the existing preview page as draft; refusing a main-project preview write",
+          503
+        );
+      }
+      await existing.setAttributes({ draft: true });
+    }
+    if (typeof existing.remove === "function") await existing.remove();
+  }
+
+  let page = await framer.createWebPage(PREVIEW_PATH);
+  if (typeof page?.setAttributes !== "function") {
+    throw fail(
+      "FRAMER_DRAFT_ATTRIBUTE_UNAVAILABLE",
+      "Framer WebPageNode draft attributes are required for the safe preview workflow",
+      503
+    );
+  }
+
+  const updatedPage = await page.setAttributes({ draft });
+  if (updatedPage) page = updatedPage;
+
+  if (draft) {
+    const readbackPages = await framer.getNodesWithType("WebPageNode");
+    const readback = (readbackPages || []).find((candidate) => candidate?.path === PREVIEW_PATH);
+    if (!readback || readback.draft !== true) {
+      throw fail(
+        "FRAMER_DRAFT_READBACK_FAILED",
+        "Preview page was not confirmed as draft; refusing to continue",
+        502
+      );
+    }
+    page = readback;
   }
 
   const instance = await framer.addComponentInstance({
@@ -381,9 +414,10 @@ export function getBirdieBrandPreviewPolicy() {
     path: PREVIEW_PATH,
     mode: "PREVIEW_ONLY_NO_PRODUCTION_DEPLOY",
     preferredIsolation: "FRAMER_BRANCH",
-    fallbackIsolation: "DEDICATED_MAIN_PAGE",
+    fallbackIsolation: "MAIN_DRAFT_PAGE",
     productionDeployed: false,
     productionDeployAllowed: false,
+    publishOnMainAllowed: false,
     replacesLiveHome: false,
     heroAsset: HERO_IMAGE,
     commerceTarget: SHOP_URL,
@@ -410,28 +444,63 @@ export async function buildBirdieBrandPreview() {
     executionMode = target.executionMode;
     branchingAvailable = target.branchingAvailable;
 
+    const draftOnly = executionMode === "MAIN_DRAFT_ONLY";
     const content = buildComponentSource();
     const { file, componentExport } = await upsertCodeFile(framer, content);
-    const { page, instance } = await replacePreviewPage(framer, componentExport.insertURL);
+    const { page, instance } = await replacePreviewPage(
+      framer,
+      componentExport.insertURL,
+      { draft: draftOnly }
+    );
 
-    const publishResult = await framer.publish();
+    let preview = {
+      deployment: null,
+      hostnames: null,
+      published: false,
+      editorOnly: draftOnly
+    };
+
+    if (executionMode === "ISOLATED_BRANCH_PREVIEW") {
+      const active = await framer.getActiveBranch();
+      if (!active || active.id !== previewTarget?.id || !active.baseId) {
+        throw fail(
+          "FRAMER_BRAND_PREVIEW_BRANCH_GUARD",
+          "Refusing publish because the active target is not an isolated Framer branch",
+          409
+        );
+      }
+
+      const publishResult = await framer.publish();
+      preview = {
+        deployment: publishResult?.deployment || null,
+        hostnames: publishResult?.hostnames || null,
+        published: true,
+        editorOnly: false
+      };
+    }
+
     result = {
       ...getBirdieBrandPreviewPolicy(),
       writePerformed: true,
       executionMode,
       branchingAvailable,
       branch: branchIdentity(previewTarget),
-      page: { id: page.id, path: page.path || PREVIEW_PATH },
+      page: {
+        id: page.id,
+        path: page.path || PREVIEW_PATH,
+        draft: draftOnly
+      },
       component: { fileId: file.id || null, instanceId: instance.id },
-      preview: {
-        deployment: publishResult?.deployment || null,
-        hostnames: publishResult?.hostnames || null
-      }
+      preview
     };
   } catch (error) {
     operationError = error;
   } finally {
-    if (main && typeof main.switch === "function") {
+    if (
+      executionMode === "ISOLATED_BRANCH_PREVIEW" &&
+      main &&
+      typeof main.switch === "function"
+    ) {
       try {
         await main.switch();
       } catch (restoreError) {
