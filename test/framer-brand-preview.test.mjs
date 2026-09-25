@@ -47,6 +47,9 @@ test("Birdie brand preview clones the working home page and replaces its respons
   assert.match(source, /parentId:\s*primary\.id/);
   assert.match(source, /FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED/);
   assert.match(source, /FRAMER_BRAND_PARENT_READBACK_FAILED/);
+  assert.match(source, /primary\.getChildren\(\)/);
+  assert.match(source, /FRAMER_PRIMARY_NOT_EMPTY/);
+  assert.match(source, /FRAMER_FOREIGN_INSTANCE_STILL_PRESENT/);
   assert.match(source, /FRAMER_OLD_SITE_STILL_PRESENT/);
   assert.match(source, /BirdieNocturnalSite/);
   assert.match(source, /BirdieBrandHome/);
@@ -68,6 +71,8 @@ test("Birdie brand preview route is founder-gated", () => {
 
 test("Birdie brand preview hero is visually distinct from the legacy screenshot hero", () => {
   assert.doesNotMatch(source, /className="hero-media"/);
+  assert.doesNotMatch(source, /\.hero-media\{/);
+  assert.doesNotMatch(source, /const HERO =/);
   assert.match(source, /className="hero-visual"/);
   assert.match(source, /Art to live with\./);
   assert.match(source, /Fashion to live in\./);
