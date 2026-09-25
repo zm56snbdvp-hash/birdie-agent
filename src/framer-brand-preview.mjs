@@ -358,73 +358,125 @@ async function replacePreviewPage(framer, insertURL) {
   const existing = (pages || []).find((page) => page?.path === PREVIEW_PATH);
   if (existing && typeof existing.remove === "function") await existing.remove();
 
-  const page = await framer.createWebPage(PREVIEW_PATH);
-  if (typeof page?.setAttributes === "function") {
-    await page.setAttributes({ draft: false });
-  }
-
-  const frames = await page.getNodesWithType("FrameNode");
-  let primary = (frames || []).find((frame) => frame?.isPrimaryBreakpoint)
-    || (frames || [])[0]
-    || null;
-
-  if (!primary?.id) {
+  const home = (pages || []).find((page) => page?.path === "/");
+  if (!home || typeof home.clone !== "function") {
     throw fail(
-      "FRAMER_BRAND_BREAKPOINT_MISSING",
-      "The new preview page does not have a publishable breakpoint frame",
+      "FRAMER_HOME_CLONE_UNAVAILABLE",
+      "The existing home page cannot be cloned for the redesign preview",
       503
     );
   }
 
-  if (typeof primary.setAttributes === "function") {
-    const updated = await primary.setAttributes({
-      name: "Desktop",
-      height: "fit-content"
-    });
-    if (updated) primary = updated;
+  let page = await home.clone({ path: PREVIEW_PATH });
+  if (!page?.id) {
+    throw fail("FRAMER_BRAND_PAGE_CLONE_FAILED", "Could not clone the existing home page", 503);
   }
 
-  const instance = await framer.addComponentInstance({
-    url: insertURL,
-    parentId: primary.id,
-    attributes: {
-      name: "Birdie Brand Home",
-      width: "1fr",
-      height: "fit-content"
+  if (typeof page.setAttributes === "function") {
+    const updatedPage = await page.setAttributes({ draft: false });
+    if (updatedPage) page = updatedPage;
+  }
+
+  const frames = await page.getNodesWithType("FrameNode");
+  const breakpoints = (frames || []).filter((frame) => frame?.isBreakpoint);
+
+  if (!breakpoints.length) {
+    throw fail(
+      "FRAMER_BRAND_BREAKPOINT_MISSING",
+      "The cloned preview page has no publishable breakpoint frames",
+      503
+    );
+  }
+
+  const createdInstances = [];
+
+  for (const frame of breakpoints) {
+    if (typeof frame.setAttributes === "function") {
+      await frame.setAttributes({ height: "fit-content" });
     }
-  });
 
-  if (!instance?.id) {
-    throw fail("FRAMER_BRAND_INSTANCE_FAILED", "Could not insert BirdieBrandHome into the preview breakpoint", 503);
+    const existingInstances = await frame.getNodesWithType("ComponentInstanceNode");
+    for (const node of existingInstances || []) {
+      if (typeof node.remove === "function") await node.remove();
+    }
+
+    const instance = await framer.addComponentInstance({
+      url: insertURL,
+      parentId: frame.id,
+      attributes: {
+        name: "Birdie Brand Home",
+        width: "1fr",
+        height: "fit-content"
+      }
+    });
+
+    if (!instance?.id) {
+      throw fail(
+        "FRAMER_BRAND_INSTANCE_FAILED",
+        `Could not insert BirdieBrandHome into breakpoint ${frame?.name || frame?.id}`,
+        503
+      );
+    }
+
+    const parent = typeof instance.getParent === "function"
+      ? await instance.getParent()
+      : null;
+    if (!parent || parent.id !== frame.id) {
+      throw fail(
+        "FRAMER_BRAND_PARENT_READBACK_FAILED",
+        `BirdieBrandHome is not parented to breakpoint ${frame?.name || frame?.id}`,
+        502
+      );
+    }
+
+    if (typeof instance.getRuntimeError === "function") {
+      const runtimeError = await instance.getRuntimeError();
+      if (runtimeError) {
+        throw fail(
+          "FRAMER_BRAND_RUNTIME_ERROR",
+          `BirdieBrandHome runtime error in breakpoint ${frame?.name || frame?.id}: ${String(runtimeError?.message || runtimeError)}`,
+          422
+        );
+      }
+    }
+
+    createdInstances.push({
+      id: instance.id,
+      breakpointId: frame.id,
+      breakpointName: frame?.name || null,
+      primary: Boolean(frame?.isPrimaryBreakpoint)
+    });
   }
 
-  const readbackFrames = await page.getNodesWithType("FrameNode");
-  const readbackPrimary = (readbackFrames || []).find((frame) => frame?.isPrimaryBreakpoint)
-    || (readbackFrames || [])[0]
-    || null;
   const readbackInstances = await page.getNodesWithType("ComponentInstanceNode");
-  const readbackInstance = (readbackInstances || []).find((node) => node?.id === instance.id);
+  const oldSiteInstances = (readbackInstances || []).filter((node) =>
+    node?.componentName === "BirdieNocturnalSite"
+  );
+  const brandInstances = (readbackInstances || []).filter((node) =>
+    node?.componentName === "BirdieBrandHome"
+  );
 
-  if (!readbackPrimary?.id || !readbackInstance?.id) {
+  if (oldSiteInstances.length !== 0) {
     throw fail(
-      "FRAMER_BRAND_READBACK_FAILED",
-      "The preview component was not found inside the page breakpoint after insertion",
+      "FRAMER_OLD_SITE_STILL_PRESENT",
+      "The cloned preview page still contains the old BirdieNocturnalSite component",
       502
     );
   }
 
-  const parent = typeof readbackInstance.getParent === "function"
-    ? await readbackInstance.getParent()
-    : null;
-  if (!parent || parent.id !== readbackPrimary.id) {
+  if (brandInstances.length !== breakpoints.length) {
     throw fail(
-      "FRAMER_BRAND_PARENT_READBACK_FAILED",
-      "The preview component is not parented to the publishable breakpoint frame",
+      "FRAMER_BRAND_INSTANCE_READBACK_FAILED",
+      "The redesign component count does not match the page breakpoint count",
       502
     );
   }
 
-  return { page, instance: readbackInstance, breakpoint: readbackPrimary };
+  return {
+    page,
+    instances: createdInstances,
+    breakpointIds: breakpoints.map((frame) => frame.id)
+  };
 }
 
 export function getBirdieBrandPreviewPolicy() {
@@ -464,7 +516,7 @@ export async function buildBirdieBrandPreview() {
 
     const content = buildComponentSource();
     const { file, componentExport } = await upsertCodeFile(framer, content);
-    const { page, instance, breakpoint } = await replacePreviewPage(framer, componentExport.insertURL);
+    const { page, instances, breakpointIds } = await replacePreviewPage(framer, componentExport.insertURL);
 
     const publishResult = await framer.publish();
     result = {
@@ -476,9 +528,12 @@ export async function buildBirdieBrandPreview() {
       page: {
         id: page.id,
         path: page.path || PREVIEW_PATH,
-        breakpointId: breakpoint.id
+        breakpointIds
       },
-      component: { fileId: file.id || null, instanceId: instance.id },
+      component: {
+        fileId: file.id || null,
+        instances
+      },
       preview: {
         deployment: publishResult?.deployment || null,
         hostnames: publishResult?.hostnames || null
