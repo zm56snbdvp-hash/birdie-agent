@@ -14,7 +14,8 @@ test("Birdie brand preview cannot deploy production", () => {
   const policy = getBirdieBrandPreviewPolicy();
   assert.equal(policy.mode, "PREVIEW_ONLY_NO_PRODUCTION_DEPLOY");
   assert.equal(policy.preferredIsolation, "FRAMER_BRANCH");
-  assert.equal(policy.fallbackIsolation, "DEDICATED_MAIN_PAGE");
+  assert.equal(policy.fallbackIsolation, "MAIN_DRAFT_PAGE");
+  assert.equal(policy.publishOnMainAllowed, false);
   assert.equal(policy.productionDeployed, false);
   assert.equal(policy.productionDeployAllowed, false);
   assert.equal(policy.replacesLiveHome, false);
@@ -32,9 +33,19 @@ test("Birdie brand preview never calls Framer production deploy", () => {
   assert.doesNotMatch(source, /\.deploy\s*\(/);
   assert.match(source, /createBranch/);
   assert.match(source, /Branching is not available/);
-  assert.match(source, /DEDICATED_MAIN_PAGE_PREVIEW/);
+  assert.match(source, /MAIN_DRAFT_ONLY/);
+  assert.match(source, /draft:\s*true/);
+  assert.match(source, /FRAMER_DRAFT_READBACK_FAILED/);
+  assert.match(source, /if \(executionMode === "ISOLATED_BRANCH_PREVIEW"\)/);
   assert.match(source, /await framer\.publish\(\)/);
   assert.match(source, /await main\.switch\(\)/);
+});
+
+test("main fallback remains draft-only and does not publish on main", () => {
+  assert.match(source, /executionMode === "MAIN_DRAFT_ONLY"/);
+  assert.match(source, /published:\s*false/);
+  assert.match(source, /editorOnly:\s*draftOnly/);
+  assert.match(source, /publishOnMainAllowed:\s*false/);
 });
 
 test("Birdie brand preview creates a dedicated page and code component", () => {
