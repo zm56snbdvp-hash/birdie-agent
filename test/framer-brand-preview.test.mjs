@@ -37,13 +37,15 @@ test("Birdie brand preview never calls Framer production deploy", () => {
   assert.match(source, /await main\.switch\(\)/);
 });
 
-test("Birdie brand preview clones the working home page and replaces its breakpoint contents", () => {
+test("Birdie brand preview clones the working home page and replaces its responsive component tree", () => {
   assert.match(source, /home\.clone\(\{ path: PREVIEW_PATH \}\)/);
   assert.doesNotMatch(source, /createWebPage\(PREVIEW_PATH\)/);
   assert.match(source, /createCodeFile\("BirdieBrandHome\.tsx"/);
   assert.match(source, /getNodesWithType\("FrameNode"\)/);
   assert.match(source, /frame\?\.isBreakpoint/);
-  assert.match(source, /frame\?\.isPrimaryBreakpoint/);\n  assert.match(source, /parentId:\s*primary\.id/);\n  assert.match(source, /FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED/);
+  assert.match(source, /frame\?\.isPrimaryBreakpoint/);
+  assert.match(source, /parentId:\s*primary\.id/);
+  assert.match(source, /FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED/);
   assert.match(source, /FRAMER_BRAND_PARENT_READBACK_FAILED/);
   assert.match(source, /FRAMER_OLD_SITE_STILL_PRESENT/);
   assert.match(source, /BirdieNocturnalSite/);
@@ -58,19 +60,16 @@ test("Birdie brand preview contains no Coin Shop navigation", () => {
   assert.match(source, /Wohlgefühl/);
 });
 
-
 test("Birdie brand preview route is founder-gated", () => {
   assert.match(routerSource, /\/framer\/v5\/brand-preview/);
   assert.match(routerSource, /BUILD_BIRDIE_FRAMER_BRAND_PREVIEW/);
   assert.match(routerSource, /\/framer\/v5\/brand-policy/);
 });
 
-
 test("Birdie brand preview does not interpolate an undefined HERO symbol", () => {
   assert.doesNotMatch(source, /url\("\$\{HERO\}"\)/);
   assert.match(source, /url\("\$\{HERO_IMAGE\}"\)/);
 });
-
 
 test("Birdie brand component declares responsive Framer sizing", () => {
   assert.match(source, /@framerSupportedLayoutWidth fixed/);
@@ -78,7 +77,6 @@ test("Birdie brand component declares responsive Framer sizing", () => {
   assert.match(source, /width:\s*"1fr"/);
   assert.match(source, /height:\s*"fit-content"/);
 });
-
 
 test("Birdie brand preview checks code-component runtime errors before publish", () => {
   assert.match(source, /getRuntimeError/);
