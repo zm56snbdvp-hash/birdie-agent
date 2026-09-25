@@ -24,12 +24,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "https://incredible-orchid-383950-b4b003036.framer.app/new-birdie?visualcheck=1"             "$RUNNER_TEMP/new-birdie.png"
+          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "https://incredible-orchid-383950.framer.app/new-birdie?visualcheck=latest"             "$RUNNER_TEMP/new-birdie.png"
       - name: Screenshot root for comparison
         shell: bash
         run: |
           set -euo pipefail
-          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "https://incredible-orchid-383950-b4b003036.framer.app/?visualcheck=1"             "$RUNNER_TEMP/root.png"
+          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "https://incredible-orchid-383950.framer.app/?visualcheck=latest"             "$RUNNER_TEMP/root.png"
       - name: Upload screenshots
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
