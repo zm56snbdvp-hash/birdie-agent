@@ -79,7 +79,7 @@ export default function BirdieBrandHome() {
         .navlinks a{font-size:12px;color:rgba(255,255,255,.8);text-decoration:none;letter-spacing:.08em}
         .pill{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;background:var(--ivory);color:var(--ink)!important;font-weight:700;letter-spacing:.04em!important}
         .hero{min-height:100svh;position:relative;display:flex;align-items:flex-end;background:#071018}
-        .hero-media{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(2,8,13,.94) 0%,rgba(2,8,13,.72) 34%,rgba(2,8,13,.2) 70%,rgba(2,8,13,.08) 100%),linear-gradient(0deg,rgba(7,16,24,.65),transparent 42%),url("${HERO}");background-size:cover;background-position:center}
+        .hero-media{position:absolute;inset:0;background-image:linear-gradient(90deg,rgba(2,8,13,.94) 0%,rgba(2,8,13,.72) 34%,rgba(2,8,13,.2) 70%,rgba(2,8,13,.08) 100%),linear-gradient(0deg,rgba(7,16,24,.65),transparent 42%),url("${HERO_IMAGE}");background-size:cover;background-position:center}
         .hero-copy{position:relative;z-index:2;width:min(760px,86vw);padding:0 4.5vw 8.5vh}
         .eyebrow{display:flex;align-items:center;gap:12px;color:var(--gold-soft);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px}
         .eyebrow:before{content:"";width:36px;height:1px;background:var(--gold)}
@@ -139,7 +139,7 @@ export default function BirdieBrandHome() {
         .footer-bottom{display:flex;justify-content:space-between;gap:20px;border-top:1px solid rgba(255,255,255,.1);padding-top:24px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.42)}
         @media(max-width:900px){
           .nav{padding:22px 22px}.navlinks a:not(.pill){display:none}
-          .hero-media{background-image:linear-gradient(0deg,rgba(2,8,13,.93) 0%,rgba(2,8,13,.28) 68%),url("${HERO}");background-position:67% center}
+          .hero-media{background-image:linear-gradient(0deg,rgba(2,8,13,.93) 0%,rgba(2,8,13,.28) 68%),url("${HERO_IMAGE}");background-position:67% center}
           .hero-copy{padding:0 22px 56px;width:100%}
           h1{font-size:clamp(56px,18vw,92px)}
           .manifesto,.origin{grid-template-columns:1fr;padding:90px 22px;gap:42px}
