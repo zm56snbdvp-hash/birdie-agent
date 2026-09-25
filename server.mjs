@@ -438,6 +438,8 @@ const routes = [
   "POST /coin/opening-balances",
   "GET /framer/config",
   "GET /framer/status",
+  "GET /framer/v5/brand-policy",
+  "POST /framer/v5/brand-preview",
   "POST /framer/preview",
   "POST /framer/deploy"
 ];
