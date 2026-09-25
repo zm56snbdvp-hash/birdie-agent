@@ -1,0 +1,35 @@
+name: Framer Render Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/framer-render-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Fetch rendered preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL="https://incredible-orchid-383950-b4b003036.framer.app/new-birdie"
+          for i in 1 2 3 4 5; do
+            code="$(curl -L -sS -o "$RUNNER_TEMP/new-birdie.html" -w '%{http_code}' "$URL" || true)"
+            if [ "$code" = "200" ]; then break; fi
+            sleep 5
+          done
+          test "$code" = "200"
+          grep -Fq "Wear the art." "$RUNNER_TEMP/new-birdie.html"
+          grep -Fq "Artwear" "$RUNNER_TEMP/new-birdie.html"
+          grep -Fq "BirdieWorld Editions" "$RUNNER_TEMP/new-birdie.html"
+          if grep -Fq "Golf &amp; Hotel" "$RUNNER_TEMP/new-birdie.html"; then
+            echo "::error::Old homepage content detected in new preview"
+            exit 1
+          fi
+          echo "Rendered /new-birdie contains the new brand copy and not the old homepage marker."
