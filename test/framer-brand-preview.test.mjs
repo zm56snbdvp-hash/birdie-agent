@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 import { getBirdieBrandPreviewPolicy } from "../src/framer-brand-preview.mjs";
 
 const servicePath = fileURLToPath(new URL("../src/framer-brand-preview.mjs", import.meta.url));
+const routerPath = fileURLToPath(new URL("../src/framer-router.mjs", import.meta.url));
 const source = fs.readFileSync(servicePath, "utf8");
+const routerSource = fs.readFileSync(routerPath, "utf8");
 
 test("Birdie brand preview is isolated and cannot deploy production", () => {
   const policy = getBirdieBrandPreviewPolicy();
@@ -44,4 +46,11 @@ test("Birdie brand preview contains no Coin Shop navigation", () => {
   assert.match(source, /Wall Art/);
   assert.match(source, /Community/);
   assert.match(source, /Wohlgefühl/);
+});
+
+
+test("Birdie brand preview route is founder-gated", () => {
+  assert.match(routerSource, /\/framer\/v5\/brand-preview/);
+  assert.match(routerSource, /BUILD_BIRDIE_FRAMER_BRAND_PREVIEW/);
+  assert.match(routerSource, /\/framer\/v5\/brand-policy/);
 });
