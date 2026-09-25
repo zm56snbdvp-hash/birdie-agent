@@ -1,0 +1,39 @@
+name: Framer Visual Screenshot Check
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/framer-visual-screenshot-check.yml
+
+permissions:
+  contents: read
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx -y playwright@1.55.0 install --with-deps chromium
+      - name: Screenshot new Birdie preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "https://incredible-orchid-383950-b4b003036.framer.app/new-birdie?visualcheck=1"             "$RUNNER_TEMP/new-birdie.png"
+      - name: Screenshot root for comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "https://incredible-orchid-383950-b4b003036.framer.app/?visualcheck=1"             "$RUNNER_TEMP/root.png"
+      - name: Upload screenshots
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: framer-visual-check-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/new-birdie.png
+            ${{ runner.temp }}/root.png
+          retention-days: 7
