@@ -92,30 +92,50 @@ jobs:
           node --check src/framer-brand-preview.mjs
           node --check scripts/framer-brand-preview.mjs
 
-      - name: Build and publish safe preview
+      - name: Build safe Framer preview
         shell: bash
         run: |
           set -euo pipefail
           node scripts/framer-brand-preview.mjs > "$RUNNER_TEMP/framer-brand-preview.json"
           jq -e '
             .mode == "PREVIEW_ONLY_NO_PRODUCTION_DEPLOY"
-            and (.executionMode == "ISOLATED_BRANCH_PREVIEW" or .executionMode == "DEDICATED_MAIN_PAGE_PREVIEW")
             and .productionDeployed == false
             and .productionDeployAllowed == false
             and .page.path == "/new-birdie"
-            and .branch.id != null
+            and (
+              (
+                .executionMode == "ISOLATED_BRANCH_PREVIEW"
+                and .branch.id != null
+                and .preview.published == true
+              )
+              or
+              (
+                .executionMode == "MAIN_DRAFT_ONLY"
+                and .page.draft == true
+                and .preview.published == false
+                and .preview.editorOnly == true
+              )
+            )
           ' "$RUNNER_TEMP/framer-brand-preview.json" > /dev/null
 
+          MODE="$(jq -r '.executionMode' "$RUNNER_TEMP/framer-brand-preview.json")"
           {
             echo "## Birdie & Breakfast Framer brand preview"
             echo ""
             echo "- Production touched: **no**"
             echo "- Preview page: `/new-birdie`"
-            echo "- Execution mode: `$(jq -r '.executionMode' "$RUNNER_TEMP/framer-brand-preview.json")`"
-            echo "- Framer target: `$(jq -r '.branch.id' "$RUNNER_TEMP/framer-brand-preview.json")`"
-            echo "- Deployment: `$(jq -r '.preview.deployment.id // .preview.deployment // "created"' "$RUNNER_TEMP/framer-brand-preview.json")`"
-            echo ""
-            echo "The workflow created a preview deployment only. It never calls Framer production deploy."
+            echo "- Execution mode: `$MODE`"
+            if [ "$MODE" = "ISOLATED_BRANCH_PREVIEW" ]; then
+              echo "- Framer branch: `$(jq -r '.branch.id' "$RUNNER_TEMP/framer-brand-preview.json")`"
+              echo "- Deployment: `$(jq -r '.preview.deployment.id // .preview.deployment // "created"' "$RUNNER_TEMP/framer-brand-preview.json")`"
+              echo ""
+              echo "The workflow published an isolated branch preview."
+            else
+              echo "- Draft page: **true**"
+              echo "- Published: **no**"
+              echo ""
+              echo "Framer branching is unavailable, so the redesign was created as an editor-only draft. No publish or production deploy was called."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload sanitized preview receipt
