@@ -37,21 +37,18 @@ test("Birdie brand preview never calls Framer production deploy", () => {
   assert.match(source, /await main\.switch\(\)/);
 });
 
-test("Birdie brand preview clones the working home page and replaces its responsive component tree", () => {
-  assert.match(source, /home\.clone\(\{ path: PREVIEW_PATH \}\)/);
-  assert.doesNotMatch(source, /createWebPage\(PREVIEW_PATH\)/);
+test("Birdie brand preview builds on a clean page and mounts inside its breakpoint", () => {
+  assert.match(source, /createWebPage\(PREVIEW_PATH\)/);
+  assert.doesNotMatch(source, /home\.clone\(/);
   assert.match(source, /createCodeFile\("BirdieBrandHome\.tsx"/);
   assert.match(source, /getNodesWithType\("FrameNode"\)/);
   assert.match(source, /frame\?\.isBreakpoint/);
   assert.match(source, /frame\?\.isPrimaryBreakpoint/);
   assert.match(source, /parentId:\s*primary\.id/);
-  assert.match(source, /FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED/);
-  assert.match(source, /FRAMER_BRAND_PARENT_READBACK_FAILED/);
   assert.match(source, /primary\.getChildren\(\)/);
-  assert.match(source, /FRAMER_PRIMARY_NOT_EMPTY/);
+  assert.match(source, /FRAMER_CLEAN_PAGE_NOT_EMPTY/);
   assert.match(source, /FRAMER_FOREIGN_INSTANCE_STILL_PRESENT/);
-  assert.match(source, /FRAMER_OLD_SITE_STILL_PRESENT/);
-  assert.match(source, /BirdieNocturnalSite/);
+  assert.match(source, /FRAMER_BRAND_PARENT_READBACK_FAILED/);
   assert.match(source, /BirdieBrandHome/);
 });
 
