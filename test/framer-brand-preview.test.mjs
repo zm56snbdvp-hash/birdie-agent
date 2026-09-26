@@ -90,3 +90,10 @@ test("Birdie brand preview checks code-component runtime errors before publish",
   assert.match(source, /getRuntimeError/);
   assert.match(source, /FRAMER_BRAND_RUNTIME_ERROR/);
 });
+
+
+test("new Birdie preview hides the legacy full-screen Framer bridge", () => {
+  assert.match(source, /#birdieworld-framer-bridge\{display:none!important/);
+  assert.match(source, /visibility:hidden!important/);
+  assert.match(source, /pointer-events:none!important/);
+});
