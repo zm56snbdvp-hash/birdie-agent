@@ -129,11 +129,11 @@ jobs:
 
           for attempt in $(seq 1 24); do
             code="$(curl -L -sS -o "$RUNNER_TEMP/framer-rendered.html" -w '%{http_code}' "$VERSION_URL" || true)"
-            if [ "$code" = "200" ] && grep -Fq "Art to live with." "$RUNNER_TEMP/framer-rendered.html"; then
+            if [ "$code" = "200" ] && grep -Fq "One art." "$RUNNER_TEMP/framer-rendered.html"; then
               break
             fi
             if [ "$attempt" = "24" ]; then
-              echo "::error::Version preview did not become ready with the new hero copy."
+              echo "::error::Version preview did not become ready with the Shopify-synced hero copy."
               exit 61
             fi
             sleep 5
