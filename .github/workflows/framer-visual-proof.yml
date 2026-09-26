@@ -35,7 +35,7 @@ jobs:
           TARGET_URL: https://incredible-orchid-383950-b4b003036.framer.app/new-birdie?v=b4b003036
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/proof.mjs" <<'EOF'
+          cat > "proof.mjs" <<'EOF'
           import { chromium } from "playwright";
           import fs from "node:fs";
 
@@ -63,7 +63,7 @@ jobs:
           await browser.close();
           EOF
 
-          node "$RUNNER_TEMP/proof.mjs"
+          node "proof.mjs"
 
       - name: Upload proof
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
