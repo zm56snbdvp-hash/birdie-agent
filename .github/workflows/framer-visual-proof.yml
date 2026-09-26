@@ -1,0 +1,75 @@
+name: Framer Visual Proof
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/framer-visual-proof.yml
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "22"
+
+      - name: Install Playwright
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Capture exact rendered page
+        shell: bash
+        env:
+          TARGET_URL: https://incredible-orchid-383950-b4b003036.framer.app/new-birdie?v=b4b003036
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/proof.mjs" <<'EOF'
+          import { chromium } from "playwright";
+          import fs from "node:fs";
+
+          const target = process.env.TARGET_URL;
+          const browser = await chromium.launch({headless:true});
+          const page = await browser.newPage({ viewport: { width: 1440, height: 1200 }, deviceScaleFactor: 1 });
+          const response = await page.goto(target, { waitUntil: "networkidle", timeout: 120000 });
+
+          const result = {
+            requestedUrl: target,
+            finalUrl: page.url(),
+            status: response?.status() ?? null,
+            title: await page.title(),
+            bodyText: (await page.locator("body").innerText()).slice(0, 12000),
+            h1: await page.locator("h1").allInnerTexts(),
+            visibleTexts: {
+              wearTheArt: await page.getByText("Wear the art.", { exact: false }).count(),
+              artwear: await page.getByText("Artwear", { exact: false }).count(),
+              birdieWorldEditions: await page.getByText("BirdieWorld Editions", { exact: false }).count()
+            }
+          };
+
+          fs.writeFileSync(process.env.RUNNER_TEMP + "/visual-proof.json", JSON.stringify(result, null, 2));
+          await page.screenshot({ path: process.env.RUNNER_TEMP + "/new-birdie.png", fullPage: true });
+          await browser.close();
+          EOF
+
+          node "$RUNNER_TEMP/proof.mjs"
+
+      - name: Upload proof
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: framer-visual-proof-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/visual-proof.json
+            ${{ runner.temp }}/new-birdie.png
+          retention-days: 7
