@@ -73,8 +73,8 @@ test("Birdie brand preview hero is visually distinct from the legacy screenshot 
   assert.match(source, /className="hero-visual"/);
   assert.match(source, /Art to live with\./);
   assert.match(source, /Fashion to live in\./);
-  assert.match(source, /src="\$\{IMAGE_GOLDEN\}"/);
-  assert.match(source, /src="\$\{IMAGE_ART_REMIX\}"/);
+  assert.match(source, /src="\$\{IMAGE_CANOPY\}"/);
+  assert.match(source, /src="\$\{IMAGE_ART_REMIX\}"/);\n  assert.doesNotMatch(source, /hero-art-main" src="\$\{IMAGE_GOLDEN\}"/);
 });
 
 test("Birdie brand component declares responsive Framer sizing", () => {
