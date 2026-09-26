@@ -189,7 +189,7 @@ export default function BirdieBrandHome() {
           </div>
         </div>
         <div className="hero-visual">
-          <img className="hero-art-main" src="${IMAGE_GOLDEN}" alt="Golden Sanctuary BirdieWorld wall art" />
+          <img className="hero-art-main" src="${IMAGE_CANOPY}" alt="The Living Canopy BirdieWorld wall art" />
           <div className="hero-mark">BirdieWorld · Edition 01</div>
           <div className="hero-hoodie-card">
             <img src="${IMAGE_ART_REMIX}" alt="Birdie & Breakfast Art Remix hoodie" />
@@ -511,7 +511,7 @@ export function getBirdieBrandPreviewPolicy() {
     productionDeployed: false,
     productionDeployAllowed: false,
     replacesLiveHome: false,
-    heroAsset: IMAGE_GOLDEN,
+    heroAsset: IMAGE_CANOPY,
     commerceTarget: SHOP_URL,
     coinShopIncluded: false,
     primaryPillars: ["Art", "Fashion", "Wellbeing", "Community"]
