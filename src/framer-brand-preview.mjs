@@ -65,6 +65,7 @@ export default function BirdieBrandHome() {
   return (
     <main className="bb-root">
       <style>{\`
+        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Playfair+Display:wght@400;500&display=swap");
         :root {
           --ink:#0d1b2a;
           --ink-soft:#213547;
@@ -147,7 +148,7 @@ export default function BirdieBrandHome() {
         .wellbeing{display:grid;grid-template-columns:1fr 1fr;background:var(--paper);color:var(--ink)}
         .wellbeing-copy{padding:12vw 6vw}
         .wellbeing-copy p{font-size:20px;line-height:1.6;color:#3f4441;max-width:580px;margin:30px 0}
-        .wellbeing-visual{min-height:760px;background:linear-gradient(140deg,rgba(7,16,24,.15),rgba(7,16,24,.02)),url("${IMAGE_NEST}");background-size:cover;background-position:center}
+        .wellbeing-visual{min-height:760px;background:linear-gradient(140deg,rgba(13,27,42,.15),rgba(13,27,42,.02)),url("${SHOPIFY_DRAFT_HERO}");background-size:cover;background-position:center}
         .origin{padding:140px 5vw;background:var(--ink);display:grid;grid-template-columns:1fr 1fr;gap:10vw;align-items:start}
         .origin .big{font-size:clamp(46px,6vw,86px);line-height:.96;margin:0}
         .origin p{font-size:18px;line-height:1.7;color:rgba(241,236,226,.74);margin:0;max-width:680px}
@@ -244,7 +245,7 @@ export default function BirdieBrandHome() {
         </div>
       </section>
 
-      <section className="fashion" id="fashion">
+      <section className="fashion" id="wear-story">
         <div className="section-head">
           <div><div className="kicker">Wearable Art</div><h2 className="serif">The same language.<br/>A moving canvas.</h2></div>
           <p>The artwork does not stop at the frame. Selected motifs become wearable editions — designed as fashion first, connected to the same visual world.</p>
@@ -259,7 +260,7 @@ export default function BirdieBrandHome() {
         </div>
       </section>
 
-      <section className="art-section" id="art">
+      <section className="art-section" id="art-story">
         <div className="section-head">
           <div><div className="kicker">Wall Art</div><h2 className="serif">Created to change<br/>the atmosphere.</h2></div>
           <p>Exceptional works for modern spaces — created to change the atmosphere of a room, not simply fill a wall.</p>
@@ -298,7 +299,7 @@ export default function BirdieBrandHome() {
         <p>Discover new editions, stories from the studio and the spaces and people shaping BirdieWorld.</p>
         <div className="actions" style={{justifyContent:"center"}}>
           <a className="button primary" href={SHOP}>Visit the Shop</a>
-          <a className="button" style={{borderColor:"rgba(7,16,24,.2)",color:"#071018"}} href="https://instagram.com/birdieandbreakfast">Follow the World</a>
+          <a className="button" style={{borderColor:"rgba(16,46,36,.25)",color:"#102e24"}} href="https://instagram.com/birdieandbreakfast">Follow the World</a>
         </div>
       </section>
 
