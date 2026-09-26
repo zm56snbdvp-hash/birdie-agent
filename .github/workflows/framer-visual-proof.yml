@@ -32,7 +32,7 @@ jobs:
       - name: Diagnose exact rendered page
         shell: bash
         env:
-          TARGET_URL: https://incredible-orchid-383950-64c1b6424.framer.app/new-birdie?diag=64c1b6424
+          TARGET_URL: https://incredible-orchid-383950-b4fdf0090.framer.app/new-birdie?diag=b4fdf0090
         run: |
           set -euo pipefail
           cat > "proof.mjs" <<'EOF'
