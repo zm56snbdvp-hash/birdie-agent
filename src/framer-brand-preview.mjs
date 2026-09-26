@@ -73,6 +73,7 @@ export default function BirdieBrandHome() {
           --line:rgba(235,221,195,.24);
         }
         *{box-sizing:border-box}
+        #birdieworld-framer-bridge{display:none!important;visibility:hidden!important;pointer-events:none!important}
         html{scroll-behavior:smooth}
         body{margin:0;background:var(--ink);color:var(--ivory)}
         .bb-root{width:100%;min-height:100%;background:var(--ink);color:var(--ivory);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden}
