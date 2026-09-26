@@ -22,9 +22,10 @@ test("Birdie brand preview cannot deploy production", () => {
   assert.equal(policy.path, "/new-birdie");
 });
 
-test("Birdie brand preview uses the new four-pillar positioning", () => {
+test("Birdie brand preview follows the current Shopify Art & Wear positioning", () => {
   const policy = getBirdieBrandPreviewPolicy();
-  assert.deepEqual(policy.primaryPillars, ["Art", "Fashion", "Wellbeing", "Community"]);
+  assert.equal(policy.version, "BIRDIE_BRAND_PREVIEW_V2_SHOPIFY_SYNC");
+  assert.deepEqual(policy.primaryPillars, ["Art", "Wear", "World", "Community"]);
   assert.match(policy.commerceTarget, /^https:\/\/shop\.birdieandbreakfast\.de/);
 });
 
@@ -52,12 +53,14 @@ test("Birdie brand preview builds on a clean page and mounts inside its breakpoi
   assert.match(source, /BirdieBrandHome/);
 });
 
-test("Birdie brand preview contains no Coin Shop navigation", () => {
+test("Birdie brand preview contains no Coin Shop and uses Shopify draft language", () => {
   assert.doesNotMatch(source, />Coin Shop</);
-  assert.match(source, /Fashion/);
-  assert.match(source, /Wall Art/);
-  assert.match(source, /Community/);
-  assert.match(source, /Wohlgefühl/);
+  assert.match(source, /Art for a Brighter World/);
+  assert.match(source, /One art\.<br\/>Two canvases\./);
+  assert.match(source, /The original canvas/);
+  assert.match(source, /The second canvas/);
+  assert.match(source, /A brighter world<br\/>through art\./);
+  assert.match(source, /Join our world/);
 });
 
 test("Birdie brand preview route is founder-gated", () => {
@@ -66,18 +69,21 @@ test("Birdie brand preview route is founder-gated", () => {
   assert.match(routerSource, /\/framer\/v5\/brand-policy/);
 });
 
-test("Birdie brand preview hero is visually distinct from the legacy screenshot hero", () => {
-  assert.doesNotMatch(source, /className="hero-media"/);
-  assert.doesNotMatch(source, /\.hero-media\{/);
-  assert.doesNotMatch(source, /const HERO = "/);
-  assert.match(source, /className="hero-visual"/);
-  assert.match(source, /Art to live with\./);
-  assert.match(source, /Fashion to live in\./);
-  assert.match(source, /hero-art-main" src="\$\{IMAGE_ART_REMIX\}"/);
-  assert.match(source, /src="\$\{IMAGE_GRAVITY\}"/);
-  assert.doesNotMatch(source, /hero-art-main" src="\$\{IMAGE_GOLDEN\}"/);
-  assert.doesNotMatch(source, /hero-art-main" src="\$\{IMAGE_CANOPY\}"/);
+test("Birdie brand preview uses the exact current Shopify draft hero and tiles", () => {
+  assert.match(source, /birdieworld-hero-lounge-artwear\.png/);
+  assert.match(source, /birdieworld-art-tile-light-gold\.png/);
+  assert.match(source, /birdieworld-wear-tile-blue-green\.png/);
+  assert.match(source, /hero-art-main" src="\$\{SHOPIFY_DRAFT_HERO\}"/);
+  assert.match(source, /src="\$\{SHOPIFY_ART_TILE\}"/);
+  assert.match(source, /src="\$\{SHOPIFY_WEAR_TILE\}"/);
+  assert.match(source, /Playfair Display/);
+  assert.match(source, /#0d1b2a/);
+  assert.match(source, /#102e24/);
+  assert.match(source, /#f5f2eb/);
+  assert.match(source, /#b99a5d/);
+  assert.doesNotMatch(source, /border-radius:999px;background:var\(--ivory\)/);
 });
+
 
 test("Birdie brand component declares responsive Framer sizing", () => {
   assert.match(source, /@framerSupportedLayoutWidth fixed/);
@@ -96,4 +102,13 @@ test("new Birdie preview hides the legacy full-screen Framer bridge", () => {
   assert.match(source, /#birdieworld-framer-bridge\{display:none!important/);
   assert.match(source, /visibility:hidden!important/);
   assert.match(source, /pointer-events:none!important/);
+});
+
+test("Shopify-synced preview keeps square editorial controls and clean anchors", () => {
+  assert.match(source, /border-radius:0/);
+  assert.match(source, /id="world"/);
+  assert.match(source, /id="wear-story"/);
+  assert.match(source, /id="art-story"/);
+  assert.doesNotMatch(source, /<section className="fashion" id="fashion">/);
+  assert.doesNotMatch(source, /<section className="art-section" id="art">/);
 });
