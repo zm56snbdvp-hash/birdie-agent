@@ -84,12 +84,12 @@ export default function BirdieBrandHome() {
         .pill{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 20px;border-radius:999px;background:var(--ivory);color:var(--ink)!important;font-weight:700;letter-spacing:.04em!important}
         .hero{min-height:100svh;position:relative;display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);background:#071018;padding-top:101px}
         .hero-copy{position:relative;z-index:2;display:flex;flex-direction:column;justify-content:center;padding:9vh 5vw 8vh}
-        .hero-visual{position:relative;min-height:calc(100svh - 101px);overflow:hidden;background:#0d1a23}
-        .hero-art-main{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-        .hero-visual:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(7,16,24,.42),transparent 28%),linear-gradient(0deg,rgba(7,16,24,.28),transparent 48%)}
-        .hero-hoodie-card{position:absolute;z-index:2;left:5%;bottom:5%;width:min(330px,38%);padding:14px;background:rgba(241,236,226,.95);box-shadow:0 24px 70px rgba(0,0,0,.38)}
-        .hero-hoodie-card img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover}
-        .hero-hoodie-card span{display:block;margin-top:10px;color:#071018;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+        .hero-visual{position:relative;min-height:calc(100svh - 101px);overflow:hidden;background:radial-gradient(circle at 72% 24%,rgba(201,156,88,.18),transparent 31%),linear-gradient(145deg,#173a32 0%,#0d1a23 52%,#071018 100%)}
+        .hero-art-main{position:absolute;right:7%;top:6%;width:64%;height:88%;object-fit:contain;object-position:center;filter:drop-shadow(0 34px 70px rgba(0,0,0,.44))}
+        .hero-visual:after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(90deg,rgba(7,16,24,.28),transparent 24%),linear-gradient(0deg,rgba(7,16,24,.34),transparent 44%)}
+        .hero-hoodie-card{position:absolute;z-index:2;left:5%;bottom:6%;width:min(300px,34%);padding:12px;background:rgba(7,16,24,.9);border:1px solid rgba(228,201,152,.34);box-shadow:0 24px 70px rgba(0,0,0,.42);backdrop-filter:blur(10px)}
+        .hero-hoodie-card img{display:block;width:100%;aspect-ratio:4/5;object-fit:contain;background:#0b151b}
+        .hero-hoodie-card span{display:block;margin-top:10px;color:var(--gold-soft);font-size:10px;letter-spacing:.16em;text-transform:uppercase}
         .hero-mark{position:absolute;z-index:2;right:4%;top:5%;border:1px solid rgba(241,236,226,.36);border-radius:999px;padding:10px 14px;color:var(--ivory);font-size:10px;letter-spacing:.16em;text-transform:uppercase;backdrop-filter:blur(8px)}
         .hero p{max-width:560px;font-size:clamp(17px,1.35vw,21px);line-height:1.6;color:rgba(241,236,226,.72);margin:0 0 32px}
         .eyebrow{display:flex;align-items:center;gap:12px;color:var(--gold-soft);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-bottom:20px}
@@ -189,11 +189,11 @@ export default function BirdieBrandHome() {
           </div>
         </div>
         <div className="hero-visual">
-          <img className="hero-art-main" src="${IMAGE_CANOPY}" alt="The Living Canopy BirdieWorld wall art" />
-          <div className="hero-mark">BirdieWorld · Edition 01</div>
+          <img className="hero-art-main" src="${IMAGE_ART_REMIX}" alt="Birdie & Breakfast Art Remix hoodie" />
+          <div className="hero-mark">Artwear · Edition 01</div>
           <div className="hero-hoodie-card">
-            <img src="${IMAGE_ART_REMIX}" alt="Birdie & Breakfast Art Remix hoodie" />
-            <span>Same universe · different object</span>
+            <img src="${IMAGE_GRAVITY}" alt="Birdie & Breakfast GRAVITY hoodie" />
+            <span>Dark artwear · Birdie & Breakfast</span>
           </div>
         </div>
       </section>
@@ -511,7 +511,7 @@ export function getBirdieBrandPreviewPolicy() {
     productionDeployed: false,
     productionDeployAllowed: false,
     replacesLiveHome: false,
-    heroAsset: IMAGE_CANOPY,
+    heroAsset: IMAGE_ART_REMIX,
     commerceTarget: SHOP_URL,
     coinShopIncluded: false,
     primaryPillars: ["Art", "Fashion", "Wellbeing", "Community"]
