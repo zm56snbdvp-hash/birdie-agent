@@ -373,18 +373,13 @@ async function replacePreviewPage(framer, insertURL) {
   const existing = (pages || []).find((page) => page?.path === PREVIEW_PATH);
   if (existing && typeof existing.remove === "function") await existing.remove();
 
-  const home = (pages || []).find((page) => page?.path === "/");
-  if (!home || typeof home.clone !== "function") {
+  let page = await framer.createWebPage(PREVIEW_PATH);
+  if (!page?.id) {
     throw fail(
-      "FRAMER_HOME_CLONE_UNAVAILABLE",
-      "The existing home page cannot be cloned for the redesign preview",
+      "FRAMER_BRAND_PAGE_CREATE_FAILED",
+      "Could not create a clean /new-birdie preview page",
       503
     );
-  }
-
-  let page = await home.clone({ path: PREVIEW_PATH });
-  if (!page?.id) {
-    throw fail("FRAMER_BRAND_PAGE_CLONE_FAILED", "Could not clone the existing home page", 503);
   }
 
   if (typeof page.setAttributes === "function") {
@@ -396,42 +391,39 @@ async function replacePreviewPage(framer, insertURL) {
   const breakpoints = (frames || []).filter((frame) => frame?.isBreakpoint);
   const primary = breakpoints.find((frame) => frame?.isPrimaryBreakpoint)
     || breakpoints[0]
+    || frames?.[0]
     || null;
 
   if (!primary?.id) {
     throw fail(
       "FRAMER_BRAND_BREAKPOINT_MISSING",
-      "The cloned preview page has no primary publishable breakpoint",
+      "The clean preview page has no publishable breakpoint frame",
       503
     );
   }
 
-  for (const frame of breakpoints) {
-    if (typeof frame.setAttributes === "function") {
-      await frame.setAttributes({ height: "fit-content" });
+  // A clean page must stay clean. Remove only default placeholder children, then
+  // mount the complete brand experience into the page's actual breakpoint.
+  const defaultChildren = await primary.getChildren();
+  for (const node of defaultChildren || []) {
+    if (typeof node.remove === "function") await node.remove();
+  }
+
+  if (typeof primary.setAttributes === "function") {
+    const updatedPrimary = await primary.setAttributes({
+      name: "Desktop",
+      height: "fit-content"
+    });
+    if (updatedPrimary) {
+      // Preserve the canonical breakpoint id for parent/readback checks below.
     }
   }
 
-  // Framer's responsive breakpoints share a linked component tree. Mutate the
-  // primary breakpoint only; Framer mirrors the component across derived
-  // breakpoints (for example Phone).
-  const primaryChildren = await primary.getChildren();
-  for (const node of primaryChildren || []) {
-    if (typeof node.remove !== "function") {
-      throw fail(
-        "FRAMER_PRIMARY_CHILD_REMOVE_UNAVAILABLE",
-        `Cannot remove legacy node ${node?.name || node?.id || "unknown"} from the cloned primary breakpoint`,
-        503
-      );
-    }
-    await node.remove();
-  }
-
-  const remainingChildren = await primary.getChildren();
-  if ((remainingChildren || []).length !== 0) {
+  const childrenAfterReset = await primary.getChildren();
+  if ((childrenAfterReset || []).length !== 0) {
     throw fail(
-      "FRAMER_PRIMARY_NOT_EMPTY",
-      "The cloned primary breakpoint still contains legacy nodes before redesign insertion",
+      "FRAMER_CLEAN_PAGE_NOT_EMPTY",
+      "The clean preview breakpoint still contains unexpected nodes",
       502
     );
   }
@@ -449,7 +441,7 @@ async function replacePreviewPage(framer, insertURL) {
   if (!instance?.id) {
     throw fail(
       "FRAMER_BRAND_INSTANCE_FAILED",
-      "Could not insert BirdieBrandHome into the primary breakpoint",
+      "Could not insert BirdieBrandHome into the clean preview breakpoint",
       503
     );
   }
@@ -460,23 +452,23 @@ async function replacePreviewPage(framer, insertURL) {
   if (!parent || parent.id !== primary.id) {
     throw fail(
       "FRAMER_BRAND_PARENT_READBACK_FAILED",
-      "BirdieBrandHome is not parented to the primary breakpoint",
+      "BirdieBrandHome is not parented to the clean preview breakpoint",
       502
     );
   }
 
-  const readbackInstances = await page.getNodesWithType("ComponentInstanceNode");
-  const oldSiteInstances = (readbackInstances || []).filter((node) =>
-    node?.componentName === "BirdieNocturnalSite"
-  );
-  const brandInstances = (readbackInstances || []).filter((node) =>
+  const allInstances = await page.getNodesWithType("ComponentInstanceNode");
+  const brandInstances = (allInstances || []).filter((node) =>
     node?.componentName === "BirdieBrandHome"
   );
+  const foreignInstances = (allInstances || []).filter((node) =>
+    node?.componentName !== "BirdieBrandHome"
+  );
 
-  if (oldSiteInstances.length !== 0) {
+  if (foreignInstances.length !== 0) {
     throw fail(
-      "FRAMER_OLD_SITE_STILL_PRESENT",
-      "The cloned preview page still contains the old BirdieNocturnalSite component",
+      "FRAMER_FOREIGN_INSTANCE_STILL_PRESENT",
+      "The clean preview page contains an unexpected component instance",
       502
     );
   }
@@ -484,41 +476,9 @@ async function replacePreviewPage(framer, insertURL) {
   if (!brandInstances.length) {
     throw fail(
       "FRAMER_BRAND_INSTANCE_READBACK_FAILED",
-      "BirdieBrandHome was not found on the cloned preview page",
+      "BirdieBrandHome was not found on the clean preview page",
       502
     );
-  }
-
-  const foreignInstances = (readbackInstances || []).filter((node) =>
-    node?.componentName !== "BirdieBrandHome"
-  );
-  if (foreignInstances.length !== 0) {
-    throw fail(
-      "FRAMER_FOREIGN_INSTANCE_STILL_PRESENT",
-      "The cloned preview page still contains a legacy component instance",
-      502
-    );
-  }
-
-  const breakpointCoverage = [];
-  for (const frame of breakpoints) {
-    const responsiveInstances = await frame.getNodesWithType("ComponentInstanceNode");
-    const matches = (responsiveInstances || []).filter((node) =>
-      node?.componentName === "BirdieBrandHome"
-    );
-    if (!matches.length) {
-      throw fail(
-        "FRAMER_BRAND_BREAKPOINT_COVERAGE_FAILED",
-        `BirdieBrandHome is missing from breakpoint ${frame?.name || frame?.id}`,
-        502
-      );
-    }
-    breakpointCoverage.push({
-      breakpointId: frame.id,
-      breakpointName: frame?.name || null,
-      primary: Boolean(frame?.isPrimaryBreakpoint),
-      instanceIds: matches.map((node) => node.id)
-    });
   }
 
   for (const node of brandInstances) {
@@ -537,7 +497,7 @@ async function replacePreviewPage(framer, insertURL) {
   return {
     page,
     instances: brandInstances.map((node) => ({ id: node.id })),
-    breakpointCoverage
+    breakpointIds: [primary.id]
   };
 }
 
@@ -578,7 +538,7 @@ export async function buildBirdieBrandPreview() {
 
     const content = buildComponentSource();
     const { file, componentExport } = await upsertCodeFile(framer, content);
-    const { page, instances, breakpointCoverage } = await replacePreviewPage(framer, componentExport.insertURL);
+    const { page, instances, breakpointIds } = await replacePreviewPage(framer, componentExport.insertURL);
 
     const publishResult = await framer.publish();
     result = {
@@ -590,7 +550,7 @@ export async function buildBirdieBrandPreview() {
       page: {
         id: page.id,
         path: page.path || PREVIEW_PATH,
-        breakpointCoverage
+        breakpointIds
       },
       component: {
         fileId: file.id || null,

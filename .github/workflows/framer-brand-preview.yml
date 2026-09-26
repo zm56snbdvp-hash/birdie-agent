@@ -118,10 +118,37 @@ jobs:
             echo "The workflow created a preview deployment only. It never calls Framer production deploy."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload sanitized preview receipt
+      - name: Capture version-specific visual proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION_HOST="$(jq -r '.preview.hostnames[]? | select(.type == "version") | .hostname' "$RUNNER_TEMP/framer-brand-preview.json" | head -n1)"
+          test -n "$VERSION_HOST"
+          VERSION_URL="https://$VERSION_HOST/new-birdie?proof=$GITHUB_SHA"
+          echo "$VERSION_URL" > "$RUNNER_TEMP/framer-preview-url.txt"
+
+          for attempt in $(seq 1 24); do
+            code="$(curl -L -sS -o "$RUNNER_TEMP/framer-rendered.html" -w '%{http_code}' "$VERSION_URL" || true)"
+            if [ "$code" = "200" ] && grep -Fq "Art to live with." "$RUNNER_TEMP/framer-rendered.html"; then
+              break
+            fi
+            if [ "$attempt" = "24" ]; then
+              echo "::error::Version preview did not become ready with the new hero copy."
+              exit 61
+            fi
+            sleep 5
+          done
+
+          npx -y playwright@1.55.0 install --with-deps chromium
+          npx -y playwright@1.55.0 screenshot             --device="Desktop Chrome"             --full-page             "$VERSION_URL"             "$RUNNER_TEMP/framer-brand-preview.png"
+
+      - name: Upload sanitized preview receipt and visual proof
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: birdie-framer-brand-preview-${{ github.sha }}
-          path: ${{ runner.temp }}/framer-brand-preview.json
+          path: |
+            ${{ runner.temp }}/framer-brand-preview.json
+            ${{ runner.temp }}/framer-preview-url.txt
+            ${{ runner.temp }}/framer-brand-preview.png
           if-no-files-found: error
           retention-days: 30
