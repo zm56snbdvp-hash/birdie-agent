@@ -32,7 +32,7 @@ jobs:
       - name: Diagnose exact rendered page
         shell: bash
         env:
-          TARGET_URL: https://incredible-orchid-383950-b4fdf0090.framer.app/new-birdie?diag=b4fdf0090
+          TARGET_URL: https://incredible-orchid-383950-fff11016c.framer.app/new-birdie?diag=fff11016c
         run: |
           set -euo pipefail
           cat > "proof.mjs" <<'EOF'
@@ -58,41 +58,86 @@ jobs:
                 return {
                   display:s.display, position:s.position, zIndex:s.zIndex,
                   width:s.width, height:s.height, overflow:s.overflow,
-                  backgroundImage:s.backgroundImage
+                  backgroundImage:s.backgroundImage, opacity:s.opacity,
+                  transform:s.transform
                 };
               }).catch(()=>null)
             };
           };
 
-          const bodyText = (await page.locator("body").innerText()).slice(0, 16000);
+          const inspectPoints = await page.evaluate(() => {
+            const points = [[80,80],[120,220],[200,420],[640,220],[1000,220],[640,620],[100,680]];
+            const serialize = (el) => {
+              const s = getComputedStyle(el);
+              const r = el.getBoundingClientRect();
+              return {
+                tag:el.tagName,
+                id:el.id || null,
+                className:typeof el.className === "string" ? el.className : null,
+                src:el.getAttribute?.("src") || null,
+                alt:el.getAttribute?.("alt") || null,
+                text:(el.innerText || "").slice(0,160),
+                position:s.position,
+                zIndex:s.zIndex,
+                opacity:s.opacity,
+                backgroundImage:s.backgroundImage,
+                box:{x:r.x,y:r.y,width:r.width,height:r.height}
+              };
+            };
+            return points.map(([x,y]) => ({
+              x,y,
+              stack:document.elementsFromPoint(x,y).slice(0,12).map(serialize)
+            }));
+          });
+
+          const images = await page.evaluate(() => Array.from(document.images).map((el) => {
+            const r=el.getBoundingClientRect();
+            const s=getComputedStyle(el);
+            return {
+              src:el.currentSrc || el.src,
+              alt:el.alt || null,
+              className:el.className || null,
+              parentClass:el.parentElement?.className || null,
+              box:{x:r.x,y:r.y,width:r.width,height:r.height},
+              position:s.position,zIndex:s.zIndex,opacity:s.opacity,objectFit:s.objectFit
+            };
+          }));
+
+          const topCovering = await page.evaluate(() => Array.from(document.querySelectorAll("*")).map((el) => {
+            const r=el.getBoundingClientRect();
+            const s=getComputedStyle(el);
+            return {
+              tag:el.tagName,id:el.id||null,className:typeof el.className==="string"?el.className:null,
+              backgroundImage:s.backgroundImage,position:s.position,zIndex:s.zIndex,opacity:s.opacity,
+              box:{x:r.x,y:r.y,width:r.width,height:r.height}
+            };
+          }).filter((x) =>
+            x.box.width > 900 && x.box.height > 350 && x.box.y < 650 &&
+            (x.backgroundImage !== "none" || x.position === "absolute" || x.position === "fixed")
+          ).slice(0,80));
+
           const result = {
             requestedUrl: target,
             finalUrl: page.url(),
             status: response?.status() ?? null,
             title: await page.title(),
-            bodyText,
-            oldTextCounts: {
-              coinShop: await page.getByText("COIN SHOP", {exact:false}).count(),
-              oldHeadline: await page.getByText("Hier beginnt", {exact:false}).count(),
-              golfreisen: await page.getByText("Golfreisen", {exact:false}).count()
-            },
-            newTextCounts: {
-              newHeadline: await page.getByText("Art to live with.", {exact:false}).count(),
-              fashionHeadline: await page.getByText("Fashion to live in.", {exact:false}).count()
-            },
+            bodyText: (await page.locator("body").innerText()).slice(0,16000),
             selectors: {
+              root: await bySel(".bb-root"),
               hero: await bySel(".hero"),
               heroCopy: await bySel(".hero-copy"),
               heroVisual: await bySel(".hero-visual"),
               heroArtMain: await bySel(".hero-art-main"),
               heroHoodieCard: await bySel(".hero-hoodie-card")
-            }
+            },
+            pointStacks: inspectPoints,
+            images,
+            topCovering
           };
 
           fs.writeFileSync(process.env.RUNNER_TEMP + "/visual-proof.json", JSON.stringify(result, null, 2));
           await page.screenshot({ path: process.env.RUNNER_TEMP + "/page.png", fullPage: true });
           if (await page.locator(".hero").count()) await page.locator(".hero").first().screenshot({path:process.env.RUNNER_TEMP+"/hero.png"});
-          if (await page.locator(".hero-art-main").count()) await page.locator(".hero-art-main").first().screenshot({path:process.env.RUNNER_TEMP+"/hero-art-main.png"});
           await browser.close();
           EOF
           node "proof.mjs"
@@ -105,6 +150,5 @@ jobs:
             ${{ runner.temp }}/visual-proof.json
             ${{ runner.temp }}/page.png
             ${{ runner.temp }}/hero.png
-            ${{ runner.temp }}/hero-art-main.png
           if-no-files-found: error
           retention-days: 7
